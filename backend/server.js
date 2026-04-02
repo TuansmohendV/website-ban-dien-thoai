@@ -2,37 +2,75 @@ import express from 'express';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import authRoutes from './routes/authRoutes.js';
+import userRoutes from './routes/userRoutes.js';
+import addressRoutes from './routes/addressRoutes.js';
 import productRoutes from './routes/productRoutes.js';
+import reviewRoutes from './routes/reviewRoutes.js';
+import cartRoutes from './routes/cartRoutes.js';
+import voucherRoutes from './routes/voucherRoutes.js';
+import orderRoutes from './routes/orderRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
+import { errorHandler, notFound } from './middleware/errorMiddleware.js';
 
-// 1. Cấu hình để đọc file .env
 dotenv.config();
 
 const app = express();
+
 app.use(cors());
-app.use(express.json());
-
-// 2. Lấy link DB từ file .env (Cách này bảo mật hơn file config/key)
-const db = process.env.MONGODB_URI;
-
-// 3. Kết nối Database với cấu hình chống "treo" mạng
-mongoose.connect(db, {
-    serverSelectionTimeoutMS: 5000 // Nếu sau 5 giây không thấy DB thì báo lỗi ngay, không đợi vô tận
-})
-.then(() => console.log('✅ MongoDB connected - đã thông suốt!'))
-.catch(err => {
-    console.log(' Lỗi kết nối :', err.message);
-    console.log(' Mẹo: Thử bật 4G điện thoại phát cho máy tính xem sao!');
-});
-
-// 4. Cổng chạy Server
-const PORT = process.env.PORT || 8080;
+app.use(express.json({ limit: '1mb' }));
 
 app.get('/', (req, res) => {
-    res.send("Server mobile đang chạy...");
+  res.json({
+    message: 'Server mobile backend đang chạy.',
+    modules: [
+      'auth',
+      'user',
+      'address',
+      'products',
+      'reviews',
+      'cart',
+      'voucher',
+      'orders',
+      'payment',
+    ],
+  });
 });
 
-app.use("/api/products", productRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/user', userRoutes);
+app.use('/api/address', addressRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/reviews', reviewRoutes);
+app.use('/api/cart', cartRoutes);
+app.use('/api/voucher', voucherRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/payment', paymentRoutes);
 
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+app.use(notFound);
+app.use(errorHandler);
+
+const PORT = process.env.PORT || 8080;
+
+const startServer = async () => {
+  if (!process.env.MONGODB_URI) {
+    throw new Error('Thiếu biến môi trường MONGODB_URI trong file .env');
+  }
+
+  await mongoose.connect(process.env.MONGODB_URI, {
+    serverSelectionTimeoutMS: 5000,
+  });
+
+  console.log('MongoDB connected.');
+
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+};
+
+startServer().catch((error) => {
+  console.error('Lỗi khởi động server:', error.message);
+  process.exit(1);
 });
+
+export default app;
