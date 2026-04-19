@@ -1,0 +1,612 @@
+import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { useLanguage } from '../../context/LanguageContext';
+import { useOrders } from '../../context/OrdersContext';
+import DeliveryEstimator from '../../components/DeliveryEstimator';
+
+const MapPinIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" /><circle cx="12" cy="10" r="3" /></svg>);
+const CreditCardIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></svg>);
+const TruckIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" /><path d="M15 18H9" /><path d="M19 18h2a1 1 0 0 0 1-1v-5h-7v7a1 1 0 0 0 1 1h2" /><circle cx="7" cy="18" r="2" /><circle cx="17" cy="18" r="2" /></svg>);
+
+const CheckoutPage = () => {
+    const { t, formatPrice } = useLanguage();
+    const { addOrder } = useOrders();
+    const [paymentMethod, setPaymentMethod] = useState('cod');
+    const [subMethod, setSubMethod] = useState('');
+    const [couponCode, setCouponCode] = useState('');
+    const [isApplying, setIsApplying] = useState(false);
+    const [couponStatus, setCouponStatus] = useState(null); // { type: 'success'|'error', message, discountAmount }
+    const [appliedCoupon, setAppliedCoupon] = useState(null);
+
+    // Form validation state
+    const [formData, setFormData] = useState({
+        fullName: '',
+        phoneNumber: '',
+        email: '',
+        province: '',
+        district: '',
+        ward: '',
+        address: ''
+    });
+    const [errors, setErrors] = useState({});
+    const [isSuccess, setIsSuccess] = useState(false);
+    const [isInfoVerified, setIsInfoVerified] = useState(false);
+    const [deliveryEstimate, setDeliveryEstimate] = useState('');
+
+    const calculateDelivery = (province) => {
+        const now = new Date();
+        let daysToAdd = 3;
+        if (['HN', 'HCM'].includes(province)) daysToAdd = 1;
+        else if (['DN'].includes(province)) daysToAdd = 2;
+
+        const deliveryDate = new Date(now);
+        deliveryDate.setDate(now.getDate() + daysToAdd);
+
+        return deliveryDate.toLocaleDateString('vi-VN', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+    };
+
+
+    // Regex for special characters (allow basic letters, numbers, spaces, dots, and commas)
+    const specialCharRegex = /[!@#$%^&*()_+={}\[\]|\\:;"'<>/~`]/;
+    const phoneRegex = /^0\d{9}$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+
+    // Dữ liệu giả cho đơn hàng
+    const cartItems = [
+        { id: 1, name: 'iPhone 15 Pro Max 256GB', price: 29990000, qty: 1, image: 'https://cdn.tgdd.vn/Products/Images/42/305658/iphone-15-pro-max-blue-thumb-600x600.jpg' },
+        { id: 2, name: 'Ốp lưng iPhone 15 Pro Max Silicon', price: 490000, qty: 2, image: 'https://cdn.tgdd.vn/Products/Images/60/314224/op-lung-iphone-15-pro-max-nhua-deo-catalyst-influence-clear-thumb-600x600.jpg' }
+    ];
+
+    const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.qty, 0);
+    const shippingFee = 35000;
+
+    // Referral codes give 200k, PHONESIN gives 500k
+    const VALID_COUPONS = {
+        'PHONESIN': { discount: 500000, label: 'Ưu đãi Sin', type: 'voucher' },
+        'SINPHONEAVA': { discount: 200000, label: 'Mã bạn bè giới thiệu', type: 'referral' },
+        'SINPHONETEST': { discount: 200000, label: 'Mã bạn bè giới thiệu', type: 'referral' },
+    };
+    const discount = appliedCoupon ? (VALID_COUPONS[appliedCoupon]?.discount || 0) : 0;
+    const total = subtotal + shippingFee - discount;
+
+    const handleApplyCoupon = () => {
+        if (!couponCode.trim()) return;
+        setIsApplying(true);
+        setCouponStatus(null);
+        setTimeout(() => {
+            setIsApplying(false);
+            const found = VALID_COUPONS[couponCode.trim()];
+            if (found) {
+                setAppliedCoupon(couponCode.trim());
+                setCouponStatus({
+                    type: 'success',
+                    message: found.type === 'referral'
+                        ? `✅ Mã giới thiệu hợp lệ! Bạn tiết kiệm được ${found.discount.toLocaleString('vi-VN')}đ`
+                        : `✅ Mã ${couponCode} hợp lệ! Bạn tiết kiệm được ${found.discount.toLocaleString('vi-VN')}đ`,
+                });
+            } else {
+                setAppliedCoupon(null);
+                setCouponStatus({ type: 'error', message: '❌ Mã không hợp lệ hoặc đã hết hạn.' });
+            }
+        }, 800);
+    };
+
+    const handleRemoveCoupon = () => {
+        setAppliedCoupon(null);
+        setCouponCode('');
+        setCouponStatus(null);
+    };
+
+    const validateForm = () => {
+        const newErrors = {};
+
+        // Check empty
+        if (!formData.fullName.trim()) newErrors.fullName = 'Vui lòng nhập họ tên';
+        else if (specialCharRegex.test(formData.fullName)) newErrors.fullName = 'Họ tên không được chứa ký tự đặc biệt';
+
+        if (!formData.phoneNumber.trim()) newErrors.phoneNumber = 'Vui lòng nhập số điện thoại';
+        else if (!phoneRegex.test(formData.phoneNumber)) newErrors.phoneNumber = 'Số điện thoại không hợp lệ (10 chữ số, bắt đầu bằng 0)';
+
+        if (!formData.email.trim()) newErrors.email = 'Vui lòng nhập email';
+        else if (!emailRegex.test(formData.email)) newErrors.email = 'Email không hợp lệ';
+
+        if (!formData.province) newErrors.province = 'Vui lòng chọn Tỉnh/Thành phố';
+        if (!formData.district) newErrors.district = 'Vui lòng chọn Quận/Huyện';
+        if (!formData.ward) newErrors.ward = 'Vui lòng chọn Phường/Xã';
+
+        if (!formData.address.trim()) newErrors.address = 'Vui lòng nhập địa chỉ cụ thể';
+        else if (specialCharRegex.test(formData.address.replace(/[.,]/g, ''))) newErrors.address = 'Địa chỉ chứa ký tự không hợp lệ';
+
+        setErrors(newErrors);
+        return Object.keys(newErrors).length === 0;
+    };
+
+    const handlePlaceOrder = () => {
+        if (validateForm()) {
+            // Simulate saving invoice
+            const invoice = {
+                invoiceId: `SIN-${Math.floor(Math.random() * 1000000)}`,
+                date: new Date().toLocaleString('vi-VN'),
+                customer: formData,
+                items: cartItems,
+                payment: {
+                    method: paymentMethod,
+                    subMethod: subMethod
+                },
+                totals: {
+                    subtotal,
+                    shippingFee,
+                    discount,
+                    total
+                }
+            };
+
+            console.log("Invoice Saved Successfully:", invoice);
+            localStorage.setItem('lastInvoice', JSON.stringify(invoice));
+
+            // Lưu vào OrdersContext để hiển thị ở trang lịch sử đơn hàng
+            const orderId = `PS-${Math.random().toString(36).substr(2,9).toUpperCase()}`;
+            const now = new Date().toLocaleString('vi-VN');
+            addOrder({
+                id: orderId,
+                date: now,
+                status: 'pending',
+                items: cartItems.map(item => ({
+                    name: item.name,
+                    qty: item.qty,
+                    price: item.price,
+                    image: item.image,
+                })),
+                totalAmount: total,
+                customer: {
+                    fullName: formData.fullName,
+                    phone: formData.phoneNumber,
+                    email: formData.email,
+                    address: `${formData.address}, ${formData.ward}, ${formData.district}, ${formData.province}`,
+                },
+                payment: {
+                    method: paymentMethod,
+                    methodLabel: paymentMethod === 'cod' ? 'Thanh toán khi nhận hàng'
+                               : paymentMethod === 'bank' ? 'Chuyển khoản ngân hàng'
+                               : 'Ví điện tử',
+                },
+                estimatedDelivery: estimate,
+                summary: { subtotal, shipping: shippingFee, discount },
+                timeline: [
+                    { time: now, text: 'Đặt hàng thành công', active: true },
+                    { time: '', text: 'Chờ xác nhận', active: false },
+                ],
+            });
+
+            // Calculate delivery estimate
+            const estimate = calculateDelivery(formData.province);
+            setDeliveryEstimate(estimate);
+
+            setIsSuccess(true);
+            // Redirect or show success state
+        } else {
+            const firstError = Object.keys(errors)[0];
+            const errorElement = document.getElementsByName(firstError)[0];
+            if (errorElement) errorElement.focus();
+        }
+    };
+
+    const handleVerifyInfo = () => {
+        if (validateForm()) {
+            setIsInfoVerified(true);
+            // Optional: toast or feedback could be added here
+        }
+    };
+
+
+    return (
+        <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-8 lg:px-16 xl:px-24" style={{ fontFamily: "'Times New Roman', Times, serif" }}>
+            <div className="max-w-7xl mx-auto">
+                <h1 className="text-4xl font-black mb-10 text-slate-900 flex items-center gap-4 uppercase tracking-wider">
+                    <span className="w-12 h-12 bg-black text-white rounded-full flex items-center justify-center text-2xl italic">Sin</span>
+                    Thanh toán đơn hàng
+                </h1>
+
+                <div className="flex flex-col lg:flex-row gap-10">
+                    {/* CỘT TRÁI: THÔNG TIN NHẬN HÀNG */}
+                    <div className="flex-1 space-y-8">
+
+                        {/* 1. Thông tin giao hàng */}
+                        <div className="bg-white rounded-3xl p-8 shadow-xl border border-gray-100">
+                            <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                                <MapPinIcon className="text-red-600 w-6 h-6" />
+                                <h2 className="text-2xl font-black uppercase text-slate-800">Thông tin nhận hàng</h2>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-black uppercase text-gray-400">Họ và tên</label>
+                                    <input
+                                        type="text"
+                                        name="fullName"
+                                        placeholder="Nguyễn Văn A"
+                                        value={formData.fullName}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, fullName: e.target.value });
+                                            setIsInfoVerified(false);
+                                            if (errors.fullName) setErrors({ ...errors, fullName: null });
+                                        }}
+                                        className={`w-full h-12 px-4 rounded-xl border-2 outline-none font-black text-slate-900 transition-all ${errors.fullName ? 'border-red-500 bg-red-50' : 'border-gray-50 focus:border-black'}`}
+                                    />
+                                    {errors.fullName && <p className="text-[10px] text-red-500 font-bold uppercase">{errors.fullName}</p>}
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-black uppercase text-gray-400">Số điện thoại</label>
+                                    <input
+                                        type="tel"
+                                        name="phoneNumber"
+                                        placeholder="0901 234 567"
+                                        value={formData.phoneNumber}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, phoneNumber: e.target.value });
+                                            setIsInfoVerified(false);
+                                            if (errors.phoneNumber) setErrors({ ...errors, phoneNumber: null });
+                                        }}
+                                        className={`w-full h-12 px-4 rounded-xl border-2 outline-none font-black text-slate-900 transition-all ${errors.phoneNumber ? 'border-red-500 bg-red-50' : 'border-gray-50 focus:border-black'}`}
+                                    />
+                                    {errors.phoneNumber && <p className="text-[10px] text-red-500 font-bold uppercase">{errors.phoneNumber}</p>}
+                                </div>
+                            </div>
+
+                            <div className="mt-5 space-y-2">
+                                <label className="text-sm font-black uppercase text-gray-400">Email (để nhận hóa đơn)</label>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    placeholder="example@gmail.com"
+                                    value={formData.email}
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, email: e.target.value });
+                                        setIsInfoVerified(false);
+                                        if (errors.email) setErrors({ ...errors, email: null });
+                                    }}
+                                    className={`w-full h-12 px-4 rounded-xl border-2 outline-none font-black text-slate-900 transition-all ${errors.email ? 'border-red-500 bg-red-50' : 'border-gray-50 focus:border-black'}`}
+                                />
+                                {errors.email && <p className="text-[10px] text-red-500 font-bold uppercase">{errors.email}</p>}
+                            </div>
+
+
+                            <div className="mt-8 space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <select
+                                        name="province"
+                                        value={formData.province}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, province: e.target.value });
+                                            setIsInfoVerified(false);
+                                            if (errors.province) setErrors({ ...errors, province: null });
+                                        }}
+                                        className={`h-12 border-2 rounded-xl px-4 font-black text-slate-900 appearance-none transition-all cursor-pointer ${errors.province ? 'border-red-500 bg-red-50' : 'border-gray-50 hover:border-black bg-gray-50/50'}`}
+                                    >
+                                        <option value="">Chọn Tỉnh/Thành phố</option>
+                                        <option value="HN">Hà Nội</option>
+                                        <option value="HCM">TP. Hồ Chí Minh</option>
+                                        <option value="DN">Đà Nẵng</option>
+                                    </select>
+                                    <select
+                                        name="district"
+                                        value={formData.district}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, district: e.target.value });
+                                            setIsInfoVerified(false);
+                                            if (errors.district) setErrors({ ...errors, district: null });
+                                        }}
+                                        className={`h-12 border-2 rounded-xl px-4 font-black text-slate-900 appearance-none transition-all cursor-pointer ${errors.district ? 'border-red-500 bg-red-50' : 'border-gray-50 hover:border-black bg-gray-50/50'}`}
+                                    >
+                                        <option value="">Chọn Quận/Huyện</option>
+                                        <option value="Q1">Quận 1</option>
+                                        <option value="CG">Cầu Giấy</option>
+                                    </select>
+                                    <select
+                                        name="ward"
+                                        value={formData.ward}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, ward: e.target.value });
+                                            setIsInfoVerified(false);
+                                            if (errors.ward) setErrors({ ...errors, ward: null });
+                                        }}
+                                        className={`h-12 border-2 rounded-xl px-4 font-black text-slate-900 appearance-none transition-all cursor-pointer ${errors.ward ? 'border-red-500 bg-red-50' : 'border-gray-50 hover:border-black bg-gray-50/50'}`}
+                                    >
+                                        <option value="">Chọn Phường/Xã</option>
+                                        <option value="P1">Phường 1</option>
+                                        <option value="D">Dịch Vọng</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <textarea
+                                        name="address"
+                                        placeholder="Địa chỉ cụ thể (Số nhà, tên đường...)"
+                                        rows="3"
+                                        value={formData.address}
+                                        onChange={(e) => {
+                                            setFormData({ ...formData, address: e.target.value });
+                                            setIsInfoVerified(false);
+                                            if (errors.address) setErrors({ ...errors, address: null });
+                                        }}
+                                        className={`w-full p-4 rounded-xl border-2 outline-none font-black text-slate-900 transition-all resize-none ${errors.address ? 'border-red-500 bg-red-50' : 'border-gray-50 focus:border-black'}`}
+                                    ></textarea>
+                                    {errors.address && <p className="text-[10px] text-red-500 font-bold uppercase">{errors.address}</p>}
+                                </div>
+
+                                <button
+                                    onClick={handleVerifyInfo}
+                                    className={`w-full h-12 rounded-xl font-black uppercase transition-all flex items-center justify-center gap-2 group ${isInfoVerified
+                                            ? 'bg-green-500 text-white cursor-default'
+                                            : 'bg-black text-white hover:bg-red-600 active:scale-95 shadow-lg'
+                                        }`}
+                                >
+                                    {isInfoVerified ? (
+                                        <>
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                                            ĐÃ XÁC NHẬN THÔNG TIN
+                                        </>
+                                    ) : (
+                                        <>
+                                            XÁC NHẬN THÔNG TIN
+                                            <svg className="transition-transform group-hover:translate-x-1" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6" /></svg>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+
+                        </div>
+
+                        {/* 2. Bản đồ chọn vị trí */}
+                        <div className="bg-white rounded-3xl p-8 shadow-xl border border-gray-100 overflow-hidden">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center">
+                                    <MapPinIcon className="w-5 h-5" />
+                                </div>
+                                <h2 className="text-2xl font-black uppercase text-slate-800">Định vị địa chỉ</h2>
+                            </div>
+                            <div className="w-full h-[400px] rounded-2xl overflow-hidden border-4 border-gray-50 shadow-inner relative group">
+
+                                <iframe
+                                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3725.195708298!2d105.79374!3d20.9847!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3135accdd847d7d7%3A0x29837945e9974268!2zSOG7jWMgdmnhu4duIEPDtG5n nghu4cgQuBuIGNow61uaCBWaeG7hW4gdGjDtG5n!5e0!3m2!1svi!2s!4v1712150000000!5m2!1svi!2s"
+                                    width="100%"
+                                    height="100%"
+                                    style={{ border: 0 }}
+                                    allowFullScreen=""
+                                    loading="lazy"
+                                ></iframe>
+                                <div className="absolute inset-0 pointer-events-none border-[20px] border-white/10 group-hover:border-white/5 transition-all"></div>
+                            </div>
+                        </div>
+
+                        {/* 3. Ước tính thời gian giao hàng */}
+                        <DeliveryEstimator />
+
+                    </div>
+
+                    {/* CỘT PHẢI: TÓM TẮT ĐƠN HÀNG */}
+                    <div className="lg:w-[450px] space-y-8">
+                        <div className="bg-black text-white rounded-3xl p-8 shadow-2xl sticky top-24">
+                            <h2 className="text-2xl font-black mb-8 italic flex items-center gap-3 border-b border-white/20 pb-5 uppercase tracking-tighter">
+                                <TruckIcon className="w-6 h-6" />
+                                Đơn hàng của bạn
+                            </h2>
+
+                            <div className="space-y-6 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar mb-8">
+                                {cartItems.map((item) => (
+                                    <div key={item.id} className="flex gap-4 group">
+                                        <div className="w-20 h-20 bg-white rounded-2xl p-1 overflow-hidden shrink-0 transition-transform group-hover:scale-105">
+                                            <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <h4 className="text-sm font-black leading-tight uppercase mb-1 line-clamp-2">{item.name}</h4>
+                                            <div className="flex justify-between items-center mt-2">
+                                                <span className="text-xs font-bold text-gray-400 italic">Số lượng: {item.qty}</span>
+                                                <span className="text-sm font-black">{formatPrice(item.price)}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Phương thức thanh toán nằm chung với đơn hàng */}
+                            <div className="mb-8 p-6 bg-white/5 rounded-3xl border border-white/10">
+                                <div className="flex items-center gap-2 mb-6 border-b border-white/10 pb-3">
+                                    <CreditCardIcon className="text-amber-500 w-5 h-5" />
+                                    <h3 className="text-lg font-black uppercase tracking-tighter">Hình thức thanh toán</h3>
+                                </div>
+                                <div className="space-y-3">
+                                    {[
+                                        { id: 'cod', name: 'Tiền mặt (COD)', icon: '🚚' },
+                                        { id: 'bank', name: 'Chuyển khoản', icon: '🏦' },
+                                        { id: 'momo', name: 'Ví MoMo/VNPay', icon: '💳' }
+                                    ].map((method) => (
+                                        <div key={method.id} className="space-y-3">
+                                            <label
+                                                className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer ${paymentMethod === method.id ? 'border-amber-500 bg-white/10 shadow-lg' : 'border-white/5 hover:border-white/20'
+                                                    }`}
+                                                onClick={() => {
+                                                    setPaymentMethod(method.id);
+                                                    setSubMethod('');
+                                                }}
+                                            >
+                                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${paymentMethod === method.id ? 'border-amber-500 bg-amber-500' : 'border-white/20'
+                                                    }`}>
+                                                    {paymentMethod === method.id && <div className="w-1.5 h-1.5 bg-black rounded-full"></div>}
+                                                </div>
+                                                <div className="flex items-center gap-2 flex-1">
+                                                    <span className="text-sm">{method.icon}</span>
+                                                    <span className="text-sm font-black uppercase">{method.name}</span>
+                                                </div>
+                                            </label>
+
+                                            {/* Sub-options for Bank Transfer */}
+                                            {paymentMethod === 'bank' && method.id === 'bank' && (
+                                                <div className="grid grid-cols-2 gap-2 p-3 bg-white/5 rounded-xl border border-white/10 animate-fadeIn">
+                                                    {[
+                                                        { id: 'vcb', name: 'VCB', color: 'bg-green-600' },
+                                                        { id: 'tcb', name: 'TCB', color: 'bg-red-600' },
+                                                        { id: 'mb', name: 'MB', color: 'bg-blue-800' },
+                                                        { id: 'bidv', name: 'BIDV', color: 'bg-blue-600' }
+                                                    ].map(bank => (
+                                                        <button
+                                                            key={bank.id}
+                                                            onClick={() => setSubMethod(bank.id)}
+                                                            className={`flex items-center justify-center p-2 rounded-lg border-2 transition-all gap-2 ${subMethod === bank.id ? 'border-amber-500 bg-white text-black' : 'border-transparent bg-white/10 text-white/60 hover:bg-white/20'
+                                                                }`}
+                                                        >
+                                                            <span className="text-[10px] font-black">{bank.name}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* Sub-options for E-wallets */}
+                                            {paymentMethod === 'momo' && method.id === 'momo' && (
+                                                <div className="grid grid-cols-3 gap-2 p-3 bg-white/5 rounded-xl border border-white/10 animate-fadeIn">
+                                                    {[
+                                                        { id: 'momo_sub', name: 'MoMo', icon: 'https://upload.wikimedia.org/wikipedia/vi/f/fe/MoMo_Logo.png' },
+                                                        { id: 'vnpay', name: 'VNPay', icon: 'https://vnpay.vn/wp-content/uploads/2020/07/vnpay-logo.png' },
+                                                        { id: 'zalopay', name: 'ZaloPay', icon: 'https://img.mservice.io/momo-payment/210811/momo-payment_1628675662700.png' }
+                                                    ].map(wallet => (
+                                                        <button
+                                                            key={wallet.id}
+                                                            onClick={() => setSubMethod(wallet.id)}
+                                                            className={`flex flex-col items-center justify-center p-2 rounded-lg border-2 transition-all gap-1 ${subMethod === wallet.id ? 'border-amber-500 bg-white shadow-md' : 'border-transparent bg-white/10 hover:bg-white/20'
+                                                                }`}
+                                                        >
+                                                            <div className="w-5 h-5 rounded-md overflow-hidden bg-white">
+                                                                <img src={wallet.icon} alt={wallet.name} className="w-full h-full object-cover" onError={(e) => { e.target.src = '💰' }} />
+                                                            </div>
+                                                            <span className="text-[8px] font-black uppercase text-white/80">{wallet.name}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+
+                            {/* Mã giảm giá */}
+                            <div className="mb-10">
+                                <div className="flex gap-2 h-12">
+                                    <input
+                                        type="text"
+                                        placeholder="Mã voucher hoặc giới thiệu..."
+                                        className="flex-1 bg-white/10 rounded-xl outline-none px-4 text-sm font-black border border-white/20 focus:border-white transition-all uppercase placeholder:text-gray-500"
+                                        value={couponCode}
+                                        onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponStatus(null); }}
+                                        disabled={!!appliedCoupon}
+                                    />
+                                    {appliedCoupon ? (
+                                        <button
+                                            onClick={handleRemoveCoupon}
+                                            className="bg-red-600 text-white px-6 rounded-xl font-black text-sm hover:bg-red-700 transition-all"
+                                        >
+                                            XÓA
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={handleApplyCoupon}
+                                            disabled={isApplying}
+                                            className="bg-white text-black px-6 rounded-xl font-black text-sm hover:bg-red-600 hover:text-white transition-all disabled:opacity-50"
+                                        >
+                                            {isApplying ? '...' : 'ÁP DỤNG'}
+                                        </button>
+                                    )}
+                                </div>
+                                {couponStatus && (
+                                    <p className={`text-xs mt-2 font-bold ${couponStatus.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                                        {couponStatus.message}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Tính toán */}
+                            <div className="space-y-4 border-t border-white/10 pt-6">
+                                <div className="flex justify-between text-sm font-bold opacity-70">
+                                    <span>Tạm tính ({cartItems.length} sản phẩm):</span>
+                                    <span>{formatPrice(subtotal)}</span>
+                                </div>
+                                <div className="flex justify-between text-sm font-bold opacity-70">
+                                    <span>Phí vận chuyển:</span>
+                                    <span>{formatPrice(shippingFee)}</span>
+                                </div>
+                                {discount > 0 && (
+                                    <div className="flex justify-between text-sm font-black text-green-400">
+                                        <span>Giảm giá (Ưu đãi Sin):</span>
+                                        <span>-{formatPrice(discount)}</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between items-end pt-4 border-t border-white/20">
+                                    <span className="text-lg font-black uppercase italic">TỔNG CỘNG</span>
+                                    <span className="text-3xl font-black text-red-500 tracking-tighter">{formatPrice(total)}</span>
+                                </div>
+                            </div>
+
+                            <button
+                                onClick={handlePlaceOrder}
+                                className="w-full h-16 bg-red-600 hover:bg-white hover:text-red-700 text-white font-black text-xl rounded-2xl mt-10 transition-all shadow-lg active:scale-95 uppercase tracking-widest flex items-center justify-center gap-3">
+                                HOÀN TẤT ĐẶT HÀNG
+                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+                            </button>
+
+                            <p className="text-[11px] text-center mt-5 text-gray-500 font-bold uppercase tracking-tighter italic">
+                                Bằng cách đặt hàng, bạn đồng ý với các điều khoản của Sin Store
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Success Modal */}
+            {isSuccess && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fadeIn">
+                    <div className="bg-white rounded-[40px] p-10 max-w-lg w-full text-center shadow-2xl scale-in-center">
+                        <div className="w-24 h-24 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-8 animate-bounce">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                        </div>
+                        <h2 className="text-4xl font-black uppercase text-slate-900 mb-4 tracking-tighter">Xác nhận thành công!</h2>
+                        <div className="bg-gray-50 rounded-3xl p-6 mb-8 border border-gray-100">
+                            <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-2">Thời gian giao hàng dự kiến</p>
+                            <p className="text-xl font-black text-[#008d71] italic">{deliveryEstimate}</p>
+                            <p className="text-xs font-bold text-gray-400 mt-2">* Nhân viên sẽ gọi xác nhận trong 15 phút</p>
+                        </div>
+                        <p className="text-lg font-bold text-slate-500 mb-10 italic">Cảm ơn bạn đã lựa chọn PhoneSin. Chúng tôi đã lưu hóa đơn và sẽ sớm liên hệ xác nhận đơn hàng.</p>
+
+                        <div className="space-y-4">
+                            <Link
+                                to="/orders"
+                                className="block w-full py-5 bg-black text-white font-black uppercase tracking-widest rounded-2xl hover:bg-slate-800 transition-all"
+                            >
+                                Xem lịch sử đơn hàng
+                            </Link>
+                            <Link
+                                to="/invoice/DEMO"
+                                className="block w-full py-5 bg-red-600 text-white font-black uppercase tracking-widest rounded-2xl hover:bg-red-700 transition-all shadow-lg"
+                            >
+                                Xem hóa đơn VAT
+                            </Link>
+                            <Link
+                                to="/"
+                                className="block w-full py-5 border-2 border-black text-black font-black uppercase tracking-widest rounded-2xl hover:bg-gray-50 transition-all"
+                            >
+                                Tiếp tục mua sắm
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+
+    );
+};
+
+export default CheckoutPage;
