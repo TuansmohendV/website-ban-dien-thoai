@@ -42,9 +42,32 @@ const userSchema = new mongoose.Schema(
       enum: ['local', 'google', 'facebook'],
       default: 'local',
     },
+    googleId: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+    },
+    facebookId: {
+      type: String,
+      trim: true,
+      unique: true,
+      sparse: true,
+    },
+    role: {
+      type: String,
+      enum: ['user', 'admin'],
+      default: 'user',
+    },
     isActive: {
       type: Boolean,
       default: true,
+    },
+    tokenVersion: {
+      type: Number,
+      default: 0,
+      min: 0,
+      select: false,
     },
     lastLoginAt: Date,
     resetPasswordToken: {
@@ -61,6 +84,9 @@ const userSchema = new mongoose.Schema(
     toJSON: {
       transform(doc, ret) {
         delete ret.password;
+        delete ret.tokenVersion;
+        delete ret.googleId;
+        delete ret.facebookId;
         delete ret.resetPasswordToken;
         delete ret.resetPasswordExpiresAt;
         return ret;

@@ -34,12 +34,10 @@ const brandSchema = new mongoose.Schema(
   }
 );
 
-brandSchema.pre('validate', function buildSlug(next) {
+brandSchema.pre('validate', function buildSlug() {
   if (this.name && (!this.slug || this.isModified('name'))) {
     this.slug = toSlug(this.name);
   }
-
-  next();
 });
 
 const Brand = mongoose.model('Brand', brandSchema);

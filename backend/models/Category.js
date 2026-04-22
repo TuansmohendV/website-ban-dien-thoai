@@ -30,12 +30,10 @@ const categorySchema = new mongoose.Schema(
   }
 );
 
-categorySchema.pre('validate', function buildSlug(next) {
+categorySchema.pre('validate', function buildSlug() {
   if (this.name && (!this.slug || this.isModified('name'))) {
     this.slug = toSlug(this.name);
   }
-
-  next();
 });
 
 const Category = mongoose.model('Category', categorySchema);

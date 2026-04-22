@@ -1,0 +1,273 @@
+DAH SACH API BACKEND DA LAM
+
+Base URL mac dinh: http://localhost:8080
+
+Ghi chu:
+- Public: khong can dang nhap
+- User: can Bearer token nguoi dung
+- Admin: can Bearer token admin
+- Optional Auth: cho phep user dang nhap hoac guest thong qua x-guest-id
+
+1. HEALTH CHECK
+
+GET /
+- Quyen: Public
+- Mo ta: Kiem tra server backend dang chay va liet ke cac module chinh
+
+2. AUTH API
+
+POST /api/auth/register
+- Quyen: Public
+- Mo ta: Dang ky tai khoan moi
+
+POST /api/auth/login
+- Quyen: Public
+- Mo ta: Dang nhap bang email, so dien thoai hoac identifier
+
+POST /api/auth/logout
+- Quyen: User
+- Mo ta: Dang xuat tai khoan
+
+POST /api/auth/forgot-password
+- Quyen: Public
+- Mo ta: Tao yeu cau quen mat khau
+
+POST /api/auth/reset-password
+- Quyen: Public
+- Mo ta: Dat lai mat khau bang token
+
+PUT /api/auth/change-password
+- Quyen: User
+- Mo ta: Doi mat khau khi da dang nhap
+
+3. USER PROFILE API
+
+GET /api/user/profile
+- Quyen: User
+- Mo ta: Lay thong tin ho so ca nhan
+
+PUT /api/user/profile
+- Quyen: User
+- Mo ta: Cap nhat thong tin ho so ca nhan
+
+4. ADDRESS API
+
+POST /api/address
+- Quyen: User
+- Mo ta: Them dia chi giao hang moi
+
+GET /api/address
+- Quyen: User
+- Mo ta: Lay danh sach dia chi cua nguoi dung
+
+PUT /api/address/:id
+- Quyen: User
+- Mo ta: Cap nhat dia chi giao hang
+
+DELETE /api/address/:id
+- Quyen: User
+- Mo ta: Xoa dia chi giao hang
+
+5. PRODUCT API
+
+GET /api/products
+- Quyen: Public
+- Mo ta: Lay danh sach san pham, ho tro tim kiem, loc, sap xep, phan trang
+
+GET /api/products/suggest
+- Quyen: Public
+- Mo ta: Goi y tim kiem san pham theo tu khoa
+
+GET /api/products/:id
+- Quyen: Public
+- Mo ta: Lay chi tiet san pham theo id hoac slug
+
+6. REVIEW API
+
+POST /api/reviews
+- Quyen: User
+- Mo ta: Tao danh gia san pham
+
+GET /api/reviews/:productId
+- Quyen: Public
+- Mo ta: Lay danh sach danh gia theo san pham
+
+7. CART API
+
+GET /api/cart
+- Quyen: Optional Auth
+- Mo ta: Lay thong tin gio hang hien tai
+
+POST /api/cart
+- Quyen: Optional Auth
+- Mo ta: Them san pham vao gio hang
+
+PUT /api/cart
+- Quyen: Optional Auth
+- Mo ta: Cap nhat so luong hoac bien the san pham trong gio hang
+
+DELETE /api/cart
+- Quyen: Optional Auth
+- Mo ta: Xoa san pham khoi gio hang hoac xoa toan bo gio hang
+
+GET /api/cart/count
+- Quyen: Optional Auth
+- Mo ta: Dem tong so luong san pham trong gio hang
+
+8. VOUCHER API
+
+POST /api/voucher/apply
+- Quyen: Optional Auth
+- Mo ta: Ap ma giam gia vao gio hang hoac don hang
+
+9. ORDER API
+
+POST /api/orders
+- Quyen: Optional Auth
+- Mo ta: Tao don hang tu gio hang
+
+GET /api/orders/user
+- Quyen: User
+- Mo ta: Lay danh sach don hang cua nguoi dung dang nhap
+
+PUT /api/orders/cancel/:id
+- Quyen: Optional Auth
+- Mo ta: Huy don hang theo id
+
+GET /api/orders/:id
+- Quyen: Optional Auth
+- Mo ta: Lay chi tiet don hang
+
+10. PAYMENT API
+
+POST /api/payment
+- Quyen: Optional Auth
+- Mo ta: Xu ly thanh toan cho don hang
+
+11. ADMIN DASHBOARD API
+
+GET /api/admin/dashboard
+- Quyen: Admin
+- Mo ta: Lay tong quan dashboard quan tri
+
+12. ADMIN USER API
+
+GET /api/admin/users
+- Quyen: Admin
+- Mo ta: Lay danh sach nguoi dung
+
+GET /api/admin/users/:id
+- Quyen: Admin
+- Mo ta: Lay chi tiet nguoi dung
+
+PATCH /api/admin/users/:id
+- Quyen: Admin
+- Mo ta: Cap nhat thong tin nguoi dung
+
+PATCH /api/admin/users/:id/role
+- Quyen: Admin
+- Mo ta: Cap nhat vai tro user/admin
+
+DELETE /api/admin/users/:id
+- Quyen: Admin
+- Mo ta: Khoa hoac deactivate tai khoan nguoi dung
+
+13. ADMIN CATEGORY API
+
+GET /api/admin/categories
+- Quyen: Admin
+- Mo ta: Lay danh sach danh muc
+
+POST /api/admin/categories
+- Quyen: Admin
+- Mo ta: Tao danh muc moi
+
+GET /api/admin/categories/:id
+- Quyen: Admin
+- Mo ta: Lay chi tiet danh muc
+
+PUT /api/admin/categories/:id
+- Quyen: Admin
+- Mo ta: Cap nhat danh muc
+
+DELETE /api/admin/categories/:id
+- Quyen: Admin
+- Mo ta: Ngung kich hoat danh muc
+
+14. ADMIN PRODUCT API
+
+GET /api/admin/products
+- Quyen: Admin
+- Mo ta: Lay danh sach san pham de quan tri
+
+POST /api/admin/products
+- Quyen: Admin
+- Mo ta: Tao san pham moi
+
+GET /api/admin/products/:id
+- Quyen: Admin
+- Mo ta: Lay chi tiet san pham trong admin
+
+PUT /api/admin/products/:id
+- Quyen: Admin
+- Mo ta: Cap nhat san pham
+
+DELETE /api/admin/products/:id
+- Quyen: Admin
+- Mo ta: Chuyen san pham sang trang thai ngung kinh doanh
+
+15. ADMIN ORDER API
+
+GET /api/admin/orders
+- Quyen: Admin
+- Mo ta: Lay danh sach don hang
+
+GET /api/admin/orders/:id
+- Quyen: Admin
+- Mo ta: Lay chi tiet don hang va lich su payment
+
+PATCH /api/admin/orders/:id
+- Quyen: Admin
+- Mo ta: Cap nhat trang thai don hang, thanh toan va ghi chu
+
+16. ADMIN VOUCHER API
+
+GET /api/admin/vouchers
+- Quyen: Admin
+- Mo ta: Lay danh sach voucher
+
+POST /api/admin/vouchers
+- Quyen: Admin
+- Mo ta: Tao voucher moi
+
+GET /api/admin/vouchers/:id
+- Quyen: Admin
+- Mo ta: Lay chi tiet voucher
+
+PATCH /api/admin/vouchers/:id
+- Quyen: Admin
+- Mo ta: Cap nhat voucher
+
+DELETE /api/admin/vouchers/:id
+- Quyen: Admin
+- Mo ta: Ngung kich hoat voucher
+
+TONG KET SO LUONG API
+- Health check: 1
+- Auth: 6
+- User profile: 2
+- Address: 4
+- Product: 3
+- Review: 2
+- Cart: 5
+- Voucher: 1
+- Order: 4
+- Payment: 1
+- Admin dashboard: 1
+- Admin user: 5
+- Admin category: 5
+- Admin product: 5
+- Admin order: 3
+- Admin voucher: 5
+
+Tong cong: 53 endpoint

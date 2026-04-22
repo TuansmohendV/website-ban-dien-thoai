@@ -224,6 +224,7 @@ export const updateCart = asyncHandler(async (req, res) => {
 export const removeCartItem = asyncHandler(async (req, res) => {
   const owner = getRequestOwner(req, { allowGuest: true });
   const cart = await Cart.findOne(buildOwnerQuery(owner));
+  const payload = req.body || {};
 
   if (!cart) {
     return res.json({
@@ -232,10 +233,10 @@ export const removeCartItem = asyncHandler(async (req, res) => {
     });
   }
 
-  const itemId = req.body.itemId || req.query.itemId;
-  const productId = req.body.productId || req.query.productId;
-  const variantId = req.body.variantId || req.query.variantId;
-  const clearAll = req.body.clearAll === true || req.query.clearAll === 'true';
+  const itemId = payload.itemId || req.query.itemId;
+  const productId = payload.productId || req.query.productId;
+  const variantId = payload.variantId || req.query.variantId;
+  const clearAll = payload.clearAll === true || req.query.clearAll === 'true';
 
   if (clearAll) {
     cart.items = [];

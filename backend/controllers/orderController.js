@@ -8,6 +8,7 @@ import Voucher from '../models/Voucher.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import AppError from '../utils/appError.js';
 import { recalculateCart } from '../utils/cart.js';
+import { createOrderStatusNotification } from '../utils/notification.js';
 import { createTimelineEntry } from '../utils/order.js';
 import { buildOwnerQuery, getRequestOwner } from '../utils/requestOwner.js';
 import { calculateVoucherDiscount, isVoucherActive } from '../utils/voucher.js';
@@ -327,6 +328,10 @@ export const createOrder = asyncHandler(async (req, res) => {
   cart.voucherSnapshot = undefined;
   recalculateCart(cart);
   await cart.save();
+  await createOrderStatusNotification(
+    order,
+    'Đơn hàng của bạn đã được tạo thành công và đang chờ xử lý.'
+  );
 
   res.status(201).json({
     message: 'Tạo đơn hàng thành công.',
@@ -403,6 +408,12 @@ export const processPayment = asyncHandler(async (req, res) => {
 
   order.paymentMethod = method;
   await order.save();
+  await createOrderStatusNotification(
+    order,
+    simulateSuccess
+      ? `Thanh toán đơn hàng qua ${method} đã được xác nhận.`
+      : `Thanh toán đơn hàng qua ${method} chưa thành công.`
+  );
 
   res.json({
     message: 'Xử lý thanh toán thành công.',
@@ -469,6 +480,10 @@ export const cancelOrder = asyncHandler(async (req, res) => {
   await order.save();
   await adjustInventory(order.items, 1);
   await rollbackVoucherUsage(order.voucherCode, order.user);
+  await createOrderStatusNotification(
+    order,
+    'Đơn hàng của bạn đã được hủy theo yêu cầu.'
+  );
 
   res.json({
     message: 'Hủy đơn hàng thành công.',
