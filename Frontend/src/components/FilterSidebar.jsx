@@ -125,8 +125,8 @@ const categoryConfigs = {
   'dien-thoai': {
     brands: phoneBrands,
     priceRanges: [
-      '1 đến 3 triệu', 'Dưới 1 triệu', '3 đến 5 triệu', '5 đến 10 triệu', 
-      '10 đến 15 triệu', '15 đến 20 triệu', '20 đến 25 triệu', 
+      '1 đến 3 triệu', 'Dưới 1 triệu', '3 đến 5 triệu', '5 đến 10 triệu',
+      '10 đến 15 triệu', '15 đến 20 triệu', '20 đến 25 triệu',
       '25 đến 30 triệu', '30 đến 50 triệu', '50 đến 85 triệu', 'Trên 85 triệu'
     ],
     sections: ['network', 'rom', 'nfc', 'refreshRate', 'battery', 'screenSize']
@@ -139,8 +139,8 @@ const categoryConfigs = {
   'tablet': {
     brands: tabletBrands,
     priceRanges: [
-      '2 đến 3 triệu', '3 đến 5 triệu', '5 đến 8 triệu', '8 đến 10 triệu', 
-      '10 đến 12 triệu', '12 đến 15 triệu', '15 đến 20 triệu', 
+      '2 đến 3 triệu', '3 đến 5 triệu', '5 đến 8 triệu', '8 đến 10 triệu',
+      '10 đến 12 triệu', '12 đến 15 triệu', '15 đến 20 triệu',
       '20 đến 30 triệu', '30 đến 50 triệu'
     ],
     sections: ['rom', 'refreshRate', 'screenSize']
@@ -187,7 +187,7 @@ const categoryConfigs = {
       { name: 'Đồng hồ trẻ em', logo: '' }
     ],
     priceRanges: [
-      '1 đến 3 triệu', 'Dưới 1 triệu', '3 đến 5 triệu', '5 đến 10 triệu', 
+      '1 đến 3 triệu', 'Dưới 1 triệu', '3 đến 5 triệu', '5 đến 10 triệu',
       '10 đến 15 triệu', '20 đến 25 triệu', '25 đến 30 triệu'
     ],
     sections: ['screenTech', 'wristSize', 'watchFace', 'batteryLife', 'strapMaterial']
@@ -216,21 +216,21 @@ const categoryConfigs = {
       { name: 'MIC', logo: '' }
     ],
     priceRanges: [
-      '1 đến 3 triệu', 'Dưới 1 triệu', '3 đến 5 triệu', '5 đến 10 triệu', 
+      '1 đến 3 triệu', 'Dưới 1 triệu', '3 đến 5 triệu', '5 đến 10 triệu',
       '10 đến 15 triệu', 'Trên 15 triệu'
     ],
     sections: ['audioUsage', 'headphoneType']
   },
   'smart-home': {
-    brands: [], 
+    brands: [],
     priceRanges: [
-      'Dưới 5 triệu', 'Dưới 7 triệu', '1 đến 2 triệu', '1 đến 3 triệu', 'Dưới 1 triệu', 
-      'Từ 0-200k', 'Từ 200-500k', 'Từ 500-1000k', '2 đến 3 triệu', '3 đến 4 triệu', 
-      '3 đến 5 triệu', '4 đến 5 triệu', '5 đến 10 triệu', '5 đến 6 triệu', 
-      '5 đến 7 triệu', '5 đến 8 triệu', 'Trên 5 triệu', '6 đến 8 triệu', 
-      '7 đến 10 triệu', '7 đến 9 triệu', '8 đến 10 triệu', '9 đến 12 triệu', 
-      '10 đến 12 triệu', '10 đến 15 triệu', '12 đến 15 triệu', '15 đến 20 triệu', 
-      'Trên 15 triệu', '20 đến 25 triệu', '20 đến 30 triệu', 'Trên 20 triệu', 
+      'Dưới 5 triệu', 'Dưới 7 triệu', '1 đến 2 triệu', '1 đến 3 triệu', 'Dưới 1 triệu',
+      'Từ 0-200k', 'Từ 200-500k', 'Từ 500-1000k', '2 đến 3 triệu', '3 đến 4 triệu',
+      '3 đến 5 triệu', '4 đến 5 triệu', '5 đến 10 triệu', '5 đến 6 triệu',
+      '5 đến 7 triệu', '5 đến 8 triệu', 'Trên 5 triệu', '6 đến 8 triệu',
+      '7 đến 10 triệu', '7 đến 9 triệu', '8 đến 10 triệu', '9 đến 12 triệu',
+      '10 đến 12 triệu', '10 đến 15 triệu', '12 đến 15 triệu', '15 đến 20 triệu',
+      'Trên 15 triệu', '20 đến 25 triệu', '20 đến 30 triệu', 'Trên 20 triệu',
       '25 đến 30 triệu', 'Trên 30 triệu', '40 đến 100 triệu', '50 đến 85 triệu'
     ],
     sections: []
@@ -238,7 +238,7 @@ const categoryConfigs = {
   'linh-kien-may-tinh': {
     brands: [], // Hide brands
     priceRanges: [
-      'Dưới 1 triệu', 'Dưới 5 triệu', 'Dưới 7 triệu', '1 đến 2 triệu', '1 đến 3 triệu', 
+      'Dưới 1 triệu', 'Dưới 5 triệu', 'Dưới 7 triệu', '1 đến 2 triệu', '1 đến 3 triệu',
       'Từ 0-200k', 'Từ 200-500k', 'Từ 500-1000k', '2 đến 3 triệu', '3 đến 4 triệu', '3 đến 5 triệu', '3 đến 4 triệu'
     ],
     sections: [] // Remove all other sections
@@ -257,13 +257,13 @@ const categoryConfigs = {
     ],
     prices: { min: 0, max: 9500000 },
     priceRanges: [
-      'Dưới 5 triệu', 'Dưới 7 triệu', '1 đến 2 triệu', '1 đến 3 triệu', 'Dưới 1 triệu', 
-      'Từ 0-200k', 'Từ 200-500k', 'Từ 500-1000k', '2 đến 3 triệu', '3 đến 4 triệu', 
-      '3 đến 5 triệu', '3 đến 4 triệu', '4 đến 5 triệu', '5 đến 10 triệu', '5 đến 6 triệu', 
-      '5 đến 7 triệu', '5 đến 8 triệu', 'Trên 5 triệu', '6 đến 8 triệu', 
-      '7 đến 10 triệu', '7 đến 9 triệu', '8 đến 10 triệu', '9 đến 12 triệu', 
-      '10 đến 12 triệu', '10 đến 15 triệu', '12 đến 15 triệu', '15 đến 20 triệu', 
-      'Trên 15 triệu', '20 đến 25 triệu', '20 đến 30 triệu', 'Trên 20 triệu', 
+      'Dưới 5 triệu', 'Dưới 7 triệu', '1 đến 2 triệu', '1 đến 3 triệu', 'Dưới 1 triệu',
+      'Từ 0-200k', 'Từ 200-500k', 'Từ 500-1000k', '2 đến 3 triệu', '3 đến 4 triệu',
+      '3 đến 5 triệu', '3 đến 4 triệu', '4 đến 5 triệu', '5 đến 10 triệu', '5 đến 6 triệu',
+      '5 đến 7 triệu', '5 đến 8 triệu', 'Trên 5 triệu', '6 đến 8 triệu',
+      '7 đến 10 triệu', '7 đến 9 triệu', '8 đến 10 triệu', '9 đến 12 triệu',
+      '10 đến 12 triệu', '10 đến 15 triệu', '12 đến 15 triệu', '15 đến 20 triệu',
+      'Trên 15 triệu', '20 đến 25 triệu', '20 đến 30 triệu', 'Trên 20 triệu',
       '25 đến 30 triệu', 'Trên 30 triệu', '40 đến 100 triệu', '50 đến 85 triệu'
     ],
     sections: []
@@ -325,14 +325,14 @@ const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSin
   const isActive = (key, value) => filters[key] === value;
 
   const FilterHeader = ({ title, section, isExpanded }) => (
-    <div 
-        className="flex justify-between items-center py-4 cursor-pointer group select-none"
-        onClick={() => toggleSection(section)}
+    <div
+      className="flex justify-between items-center py-4 cursor-pointer group select-none"
+      onClick={() => toggleSection(section)}
     >
-        <h4 className="text-[15px] font-black text-gray-800 tracking-tighter">{title}</h4>
-        <div className="w-6 h-6 flex items-center justify-center text-gray-300 font-bold text-xl transition-transform group-hover:scale-110">
-            {isExpanded ? '−' : '+'}
-        </div>
+      <h4 className="text-[15px] font-black text-gray-800 tracking-tighter">{title}</h4>
+      <div className="w-6 h-6 flex items-center justify-center text-gray-300 font-bold text-xl transition-transform group-hover:scale-110">
+        {isExpanded ? '−' : '+'}
+      </div>
     </div>
   );
 
@@ -343,11 +343,11 @@ const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSin
       {options.map((opt) => (
         <label key={opt} className="flex items-center justify-between cursor-pointer group">
           <div className="flex items-center gap-3">
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               checked={isActive(key, opt)}
               onChange={() => onSetSingleFilter(key, opt)}
-              className="w-4.5 h-4.5 accent-[#008d71] border-gray-300 rounded" 
+              className="w-4.5 h-4.5 accent-[#008d71] border-gray-300 rounded"
             />
             <span className={`text-[14px] font-medium transition-colors ${isActive(key, opt) ? 'text-[#008d71] font-bold' : 'text-gray-600'}`}>{opt}</span>
           </div>
@@ -360,116 +360,114 @@ const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSin
   return (
     <aside className="w-full sticky top-[60px] pb-10 select-none">
       <button className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-[#008d71] text-white rounded-xl mb-4 shadow-md font-bold uppercase tracking-wider">
-          <Filter size={18} />
-          <span className="text-[15px]">Danh sách sản phẩm</span>
+        <Filter size={18} />
+        <span className="text-[15px]">Danh sách sản phẩm</span>
       </button>
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 divide-y divide-gray-100">
-        
+
         {/* Hãng */}
         {currentBrands && currentBrands.length > 0 && (
           <div>
-              <FilterHeader title="Thương hiệu" section="brand" isExpanded={expandedSections.brand} />
-              {expandedSections.brand && (
-                  <div className="pb-6">
-                      <div className="grid grid-cols-2 gap-2">
-                          {(() => {
-                              const displayedBrands = showAllBrands ? currentBrands : currentBrands.slice(0, 10);
-                              return displayedBrands.map((m) => (
-                                  <div 
-                                      key={m.name} 
-                                      onClick={() => onSetSingleFilter('brand', m.name)}
-                                      className={`flex items-center justify-center border rounded-lg h-[54px] transition-all cursor-pointer group p-1 ${
-                                          isActive('brand', m.name) ? 'border-[#008d71] bg-white relative' : 'border-gray-300 hover:border-[#008d71]/60'
-                                      }`}
-                                  >
-                                      {m.logo ? (
-                                          <img src={m.logo} alt={m.name} className="max-h-[30px] w-auto transition-all group-hover:scale-105 mix-blend-multiply" />
-                                      ) : (
-                                          <span className={`text-[13px] font-bold text-center leading-tight ${isActive('brand', m.name) ? 'text-[#008d71]' : 'text-gray-700'}`}>
-                                            {m.name}
-                                          </span>
-                                      )}
-                                      {isActive('brand', m.name) && (
-                                        <div className="absolute bottom-1 right-1 w-4 h-4 bg-[#008d71] rounded flex items-center justify-center">
-                                          <span className="text-white text-[10px]">✓</span>
-                                        </div>
-                                      )}
-                                  </div>
-                              ));
-                          })()}
+            <FilterHeader title="Thương hiệu" section="brand" isExpanded={expandedSections.brand} />
+            {expandedSections.brand && (
+              <div className="pb-6">
+                <div className="grid grid-cols-2 gap-2">
+                  {(() => {
+                    const displayedBrands = showAllBrands ? currentBrands : currentBrands.slice(0, 10);
+                    return displayedBrands.map((m) => (
+                      <div
+                        key={m.name}
+                        onClick={() => onSetSingleFilter('brand', m.name)}
+                        className={`flex items-center justify-center border rounded-lg h-[54px] transition-all cursor-pointer group p-1 ${isActive('brand', m.name) ? 'border-[#008d71] bg-white relative' : 'border-gray-300 hover:border-[#008d71]/60'
+                          }`}
+                      >
+                        {m.logo ? (
+                          <img src={m.logo} alt={m.name} className="max-h-[30px] w-auto transition-all group-hover:scale-105 mix-blend-multiply" />
+                        ) : (
+                          <span className={`text-[13px] font-bold text-center leading-tight ${isActive('brand', m.name) ? 'text-[#008d71]' : 'text-gray-700'}`}>
+                            {m.name}
+                          </span>
+                        )}
+                        {isActive('brand', m.name) && (
+                          <div className="absolute bottom-1 right-1 w-4 h-4 bg-[#008d71] rounded flex items-center justify-center">
+                            <span className="text-white text-[10px]">✓</span>
+                          </div>
+                        )}
                       </div>
-                      {currentBrands.length > 10 && (
-                          <button 
-                              onClick={() => setShowAllBrands(!showAllBrands)}
-                              className="w-full mt-3 py-2.5 flex items-center justify-center border border-gray-300 rounded-lg text-[13px] font-bold text-red-500 bg-white hover:bg-gray-50 transition-all uppercase tracking-wide gap-1"
-                          >
-                              {showAllBrands ? 'THU GỌN' : 'XEM THÊM'}
-                              <span className="transform -translate-y-0.5">{showAllBrands ? '⌃' : '⌄'}</span>
-                          </button>
-                      )}
-                  </div>
-              )}
+                    ));
+                  })()}
+                </div>
+                {currentBrands.length > 10 && (
+                  <button
+                    onClick={() => setShowAllBrands(!showAllBrands)}
+                    className="w-full mt-3 py-2.5 flex items-center justify-center border border-gray-300 rounded-lg text-[13px] font-bold text-red-500 bg-white hover:bg-gray-50 transition-all uppercase tracking-wide gap-1"
+                  >
+                    {showAllBrands ? 'THU GỌN' : 'XEM THÊM'}
+                    <span className="transform -translate-y-0.5">{showAllBrands ? '⌃' : '⌄'}</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
         {/* Mức giá */}
         <div>
-            <FilterHeader title="Mức giá" section="price" isExpanded={expandedSections.price} />
-            {expandedSections.price && (
-                <div className="pb-6">
-                    <div className="flex flex-col gap-2 mt-4">
-                        {(() => {
-                            const allRanges = [
-                              'Dưới 5 triệu', 'Dưới 7 triệu', '1 đến 2 triệu', '1 đến 3 triệu', 
-                              'Dưới 1 triệu', 'Từ 0-200k', 'Từ 200-500k', 'Từ 500-1000k', 
-                              '2 đến 3 triệu', '3 đến 4 triệu', '3 đến 5 triệu', '4 đến 5 triệu', 
-                              '5 đến 10 triệu', '5 đến 6 triệu', '5 đến 7 triệu', '5 đến 8 triệu', 
-                              'Trên 5 triệu', '6 đến 8 triệu', '7 đến 10 triệu', '7 đến 9 triệu', 
-                              '8 đến 10 triệu', '9 đến 12 triệu', '10 đến 12 triệu', '10 đến 15 triệu', 
-                              '12 đến 15 triệu', '15 đến 20 triệu', 'Trên 15 triệu', '20 đến 25 triệu', 
-                              '20 đến 30 triệu', 'Trên 20 triệu', '25 đến 30 triệu', '30 đến 40 triệu', 
-                              '30 đến 50 triệu', 'Trên 30 triệu', '40 đến 100 triệu'
-                            ];
-                            const displayedRanges = showAllPrices ? allRanges : allRanges.slice(0, 5);
+          <FilterHeader title="Mức giá" section="price" isExpanded={expandedSections.price} />
+          {expandedSections.price && (
+            <div className="pb-6">
+              <div className="flex flex-col gap-2 mt-4">
+                {(() => {
+                  const allRanges = [
+                    'Dưới 5 triệu', 'Dưới 7 triệu', '1 đến 2 triệu', '1 đến 3 triệu',
+                    'Dưới 1 triệu', 'Từ 0-200k', 'Từ 200-500k', 'Từ 500-1000k',
+                    '2 đến 3 triệu', '3 đến 4 triệu', '3 đến 5 triệu', '4 đến 5 triệu',
+                    '5 đến 10 triệu', '5 đến 6 triệu', '5 đến 7 triệu', '5 đến 8 triệu',
+                    'Trên 5 triệu', '6 đến 8 triệu', '7 đến 10 triệu', '7 đến 9 triệu',
+                    '8 đến 10 triệu', '9 đến 12 triệu', '10 đến 12 triệu', '10 đến 15 triệu',
+                    '12 đến 15 triệu', '15 đến 20 triệu', 'Trên 15 triệu', '20 đến 25 triệu',
+                    '20 đến 30 triệu', 'Trên 20 triệu', '25 đến 30 triệu', '30 đến 40 triệu',
+                    '30 đến 50 triệu', 'Trên 30 triệu', '40 đến 100 triệu'
+                  ];
+                  const displayedRanges = showAllPrices ? allRanges : allRanges.slice(0, 5);
 
-                            return (
-                                <>
-                                    {displayedRanges.map((range) => (
-                                        <button 
-                                            key={range}
-                                            onClick={() => setFilters(prev => ({ 
-                                                ...prev, 
-                                                priceRange: prev.priceRange === range ? null : range 
-                                            }))}
-                                            className={`py-2.5 px-3 rounded-xl text-[15px] border transition-all text-center ${
-                                                filters.priceRange === range 
-                                                    ? 'bg-[#008d71] text-white border-[#008d71] font-bold shadow-md' 
-                                                    : 'bg-[#f5f5f5] text-gray-600 border-transparent hover:border-[#008d71] hover:text-[#008d71]'
-                                            }`}
-                                        >
-                                            {range}
-                                        </button>
-                                    ))}
-                                    
-                                    {allRanges.length > 5 && (
-                                        <button 
-                                            onClick={() => setShowAllPrices(!showAllPrices)}
-                                            className="w-full mt-3 py-2.5 flex items-center justify-center gap-2 border border-gray-300 rounded-lg text-[15px] font-bold text-[#11559c] bg-white hover:bg-gray-50 transition-all"
-                                        >
-                                            {showAllPrices ? (
-                                                <>THU GỌN <span className="text-[12px] transform -translate-y-0.5 font-sans">^</span></>
-                                            ) : (
-                                                <>XEM THÊM <span className="text-[12px] transform translate-y-0.5 font-sans">v</span></>
-                                            )}
-                                        </button>
-                                    )}
-                                </>
-                            );
-                        })()}
-                    </div>
-                </div>
-            )}
+                  return (
+                    <>
+                      {displayedRanges.map((range) => (
+                        <button
+                          key={range}
+                          onClick={() => setFilters(prev => ({
+                            ...prev,
+                            priceRange: prev.priceRange === range ? null : range
+                          }))}
+                          className={`py-2.5 px-3 rounded-xl text-[15px] border transition-all text-center ${filters.priceRange === range
+                              ? 'bg-[#008d71] text-white border-[#008d71] font-bold shadow-md'
+                              : 'bg-[#f5f5f5] text-gray-600 border-transparent hover:border-[#008d71] hover:text-[#008d71]'
+                            }`}
+                        >
+                          {range}
+                        </button>
+                      ))}
+
+                      {allRanges.length > 5 && (
+                        <button
+                          onClick={() => setShowAllPrices(!showAllPrices)}
+                          className="w-full mt-3 py-2.5 flex items-center justify-center gap-2 border border-gray-300 rounded-lg text-[15px] font-bold text-[#11559c] bg-white hover:bg-gray-50 transition-all"
+                        >
+                          {showAllPrices ? (
+                            <>THU GỌN <span className="text-[12px] transform -translate-y-0.5 font-sans">^</span></>
+                          ) : (
+                            <>XEM THÊM <span className="text-[12px] transform translate-y-0.5 font-sans">v</span></>
+                          )}
+                        </button>
+                      )}
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Các phần lọc động dựa trên category config */}
@@ -519,28 +517,28 @@ const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSin
         })}
 
         <div className="pt-6">
-            <button 
-                onClick={() => setFilters({ 
-                  brand: null, 
-                  priceRange: 'Tất cả', 
-                  os: null, 
-                  batteryTier: 'Tất cả', 
-                  network: null, 
-                  nfc: false, 
-                  memoryCard: 'Tất cả', 
-                  screenSize: 'Tất cả', 
-                  rom: null,
-                  ram: null,
-                  cpu: null,
-                  refreshRate: null,
-                  storage: null,
-                  sortBy: 'relate' 
-                })}
-                className="w-full flex items-center justify-center gap-2 py-4 text-[12px] font-black text-red-500 border-2 border-dashed border-red-50 rounded-xl hover:bg-red-50 transition-all uppercase"
-            >
-                <Trash2 size={16} />
-                Làm mới toàn bộ
-            </button>
+          <button
+            onClick={() => setFilters({
+              brand: null,
+              priceRange: 'Tất cả',
+              os: null,
+              batteryTier: 'Tất cả',
+              network: null,
+              nfc: false,
+              memoryCard: 'Tất cả',
+              screenSize: 'Tất cả',
+              rom: null,
+              ram: null,
+              cpu: null,
+              refreshRate: null,
+              storage: null,
+              sortBy: 'relate'
+            })}
+            className="w-full flex items-center justify-center gap-2 py-4 text-[12px] font-black text-red-500 border-2 border-dashed border-red-50 rounded-xl hover:bg-red-50 transition-all uppercase"
+          >
+            <Trash2 size={16} />
+            Làm mới toàn bộ
+          </button>
         </div>
       </div>
     </aside>

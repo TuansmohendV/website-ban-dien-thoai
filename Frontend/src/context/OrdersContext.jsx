@@ -105,12 +105,24 @@ export const OrdersProvider = ({ children }) => {
         localStorage.removeItem('phonesin_orders');
     };
 
+    /** Cập nhật trạng thái đơn hàng bất kỳ */
+    const updateOrderStatus = (orderId, newStatus) => {
+        setOrders(prev =>
+            prev.map(o =>
+                o.id === orderId
+                    ? { ...o, status: newStatus, updatedAt: Date.now() }
+                    : o
+            )
+        );
+    };
+
     return (
         <OrdersContext.Provider value={{
             orders,
             addOrder,
             cancelOrder,
             markDelivered,
+            updateOrderStatus,
             clearCancelledOrders,
             clearAllOrders,
         }}>

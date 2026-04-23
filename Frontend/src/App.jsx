@@ -35,6 +35,17 @@ import CustomerSupportPage from './pages/User/CustomerSupportPage';
 import LoginPage from './pages/Auth/LoginPage';
 import RegisterPage from './pages/Auth/RegisterPage';
 
+// Admin Pages
+import AdminLayout from './layouts/AdminLayout';
+import AdminDashboard from './pages/Admin/AdminDashboard';
+import ProductManagement from './pages/Admin/ProductManagement';
+import CategoryManagement from './pages/Admin/CategoryManagement';
+import OrderManagement from './pages/Admin/OrderManagement';
+import UserManagement from './pages/Admin/UserManagement';
+import FeedbackManagement from './pages/Admin/FeedbackManagement';
+import PromotionManagement from './pages/Admin/PromotionManagement';
+import IconManagement from './pages/Admin/IconManagement';
+
 function App() {
   return (
     <LanguageProvider>
@@ -71,6 +82,18 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+
+            {/* Admin Routes */}
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="products" element={<ProductManagement />} />
+              <Route path="categories" element={<CategoryManagement />} />
+              <Route path="orders" element={<OrderManagement />} />
+              <Route path="users" element={<UserManagement />} />
+              <Route path="promotions" element={<PromotionManagement />} />
+              <Route path="feedback" element={<FeedbackManagement />} />
+              <Route path="icons" element={<IconManagement />} />
+            </Route>
           </Routes>
         </OrdersProvider>
       </CartProvider>

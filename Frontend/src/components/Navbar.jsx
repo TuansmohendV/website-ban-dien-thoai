@@ -184,6 +184,12 @@ const Navbar = () => {
                                 </span>
                             </Link>
 
+                            {/* Admin Shortcut (Temporary for testing) */}
+                            <Link to="/admin" className="flex items-center gap-1.5 px-3 py-1 bg-[#008d71]/10 rounded-full hover:bg-[#008d71]/20 transition-all">
+                                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                                <span className="text-[13px] font-bold text-[#008d71]">Admin Panel</span>
+                            </Link>
+
                             {/* Simple Cart Bag */}
                             <Link to="/cart" className="flex items-center gap-1.5 p-1 group">
                                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:stroke-[#008d71] transition-colors">
