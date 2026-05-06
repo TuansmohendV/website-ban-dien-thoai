@@ -42,6 +42,11 @@ const userSchema = new mongoose.Schema(
       enum: ['local', 'google', 'facebook'],
       default: 'local',
     },
+    role: {
+      type: String,
+      enum: ['customer', 'staff', 'admin'],
+      default: 'customer',
+    },
     isActive: {
       type: Boolean,
       default: true,

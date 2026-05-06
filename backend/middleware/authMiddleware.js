@@ -61,3 +61,11 @@ export const optionalAuth = asyncHandler(async (req, res, next) => {
   req.user = await loadUserFromToken(req, false);
   next();
 });
+
+export const requireAdmin = asyncHandler(async (req, res, next) => {
+  if (req.user?.role !== 'admin' && req.user?.isAdmin !== true) {
+    throw new AppError(403, 'Chỉ tài khoản admin mới có quyền truy cập chức năng này.');
+  }
+
+  next();
+});
