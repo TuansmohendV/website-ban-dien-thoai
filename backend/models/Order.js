@@ -90,6 +90,13 @@ const orderSchema = new mongoose.Schema(
       email: { type: String, default: '' },
       phone: { type: String, required: true },
     },
+    invoiceInfo: {
+      enabled: { type: Boolean, default: false },
+      email: { type: String, default: '' },
+      companyName: { type: String, default: '' },
+      taxCode: { type: String, default: '' },
+      companyAddress: { type: String, default: '' },
+    },
     shippingAddress: {
       label: { type: String, default: '' },
       recipientName: { type: String, required: true },
@@ -153,7 +160,7 @@ const orderSchema = new mongoose.Schema(
     paidAt: Date,
     status: {
       type: String,
-      enum: ['pending', 'confirmed', 'packing', 'shipping', 'delivered', 'cancelled'],
+      enum: ['pending', 'confirmed', 'processing', 'packing', 'shipping', 'delivered', 'cancelled'],
       default: 'pending',
     },
     timeline: {

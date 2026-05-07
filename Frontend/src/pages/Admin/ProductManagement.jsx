@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Plus, 
   Search, 
@@ -20,7 +20,22 @@ import {
   Smartphone,
   X
 } from 'lucide-react';
-import { allProducts } from '../../data/allProducts';
+import api from '../../lib/api';
+import { normalizeProduct } from '../../lib/products';
+
+const mapProductForAdmin = (product) => {
+  const normalized = normalizeProduct(product);
+
+  return {
+    ...normalized,
+    id: normalized.backendId || normalized.routeId || normalized.id,
+    price: normalized.priceDisplay,
+    stock: normalized.countInStock,
+    category: normalized.backendCategory || normalized.category,
+    isHidden: normalized.status !== 'active',
+    isFeatured: Boolean(normalized.isHot),
+  };
+};
 
 const ProductManagement = () => {
   const [showForm, setShowForm] = useState(false);
@@ -28,12 +43,32 @@ const ProductManagement = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Tất cả danh mục');
   const [statusFilter, setStatusFilter] = useState('Trạng thái: Tất cả');
-  const [localProducts, setLocalProducts] = useState(allProducts.slice(0, 5));
+  const [localProducts, setLocalProducts] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Pagination state (mock)
+  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const productsPerPage = 10;
+
+  useEffect(() => {
+    const loadProducts = async () => {
+      setIsLoading(true);
+
+      try {
+        const response = await api.get('/api/products', {
+          params: { limit: 200, sort: 'newest', includeInactive: true },
+        });
+        setLocalProducts((response.data?.data || []).map(mapProductForAdmin));
+      } catch {
+        setLocalProducts([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadProducts();
+  }, []);
 
   // Filter products based on all criteria
   const filteredProducts = localProducts.filter(p => {
@@ -346,7 +381,7 @@ const ProductManagement = () => {
               }) : (
                 <tr>
                   <td colSpan="8" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
-                    Không tìm thấy sản phẩm nào khớp với tiêu chí lọc.
+                    {isLoading ? 'Đang tải danh sách sản phẩm từ backend...' : 'Không tìm thấy sản phẩm nào khớp với tiêu chí lọc.'}
                   </td>
                 </tr>
               )}

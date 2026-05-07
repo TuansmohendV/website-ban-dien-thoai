@@ -36,7 +36,9 @@ const buildVariantSummaryMap = (variants) => {
 
 export const getProducts = asyncHandler(async (req, res) => {
   const page = Math.max(Number(req.query.page) || 1, 1);
-  const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 50);
+  const isAdminRequest = req.user?.role === 'admin' || req.user?.isAdmin === true;
+  const maxLimit = isAdminRequest ? 200 : 50;
+  const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), maxLimit);
   const skip = (page - 1) * limit;
 
   const keyword = req.query.keyword || req.query.search || '';
@@ -47,7 +49,9 @@ export const getProducts = asyncHandler(async (req, res) => {
   const minPrice = Number(req.query.minPrice);
   const maxPrice = Number(req.query.maxPrice);
 
-  const filters = [{ status: 'active' }];
+  const includeInactive =
+    isAdminRequest && String(req.query.includeInactive) === 'true';
+  const filters = includeInactive ? [] : [{ status: 'active' }];
 
   if (keyword) {
     const keywordRegex = buildRegex(keyword);
@@ -122,7 +126,8 @@ export const getProducts = asyncHandler(async (req, res) => {
     });
   }
 
-  const query = filters.length > 1 ? { $and: filters } : filters[0];
+  const query =
+    filters.length > 1 ? { $and: filters } : filters[0] || {};
 
   const sortMap = {
     newest: { createdAt: -1 },
@@ -263,5 +268,210 @@ export const getProductById = asyncHandler(async (req, res) => {
       ],
     },
     recentReviews: reviews,
+  });
+});
+
+export const getProductSpecs = asyncHandler(async (req, res) => {
+  const product = await Product.findById(req.params.id).lean();
+
+  if (!product) {
+    throw new AppError(404, 'Không tìm thấy sản phẩm.');
+  }
+
+  const variants = await ProductVariant.find({
+    product: product._id,
+    isActive: true,
+  }).lean();
+
+  res.json({
+    product: {
+      _id: product._id,
+      name: product.name,
+      slug: product.slug,
+      image: product.image,
+      brand: product.brand,
+      category: product.category,
+      price: product.price,
+      originalPrice: product.originalPrice,
+    },
+    specs: {
+      screen: product.screen || '',
+      battery: product.battery || '',
+      camera: product.camera || '',
+      ram: product.ram || '',
+      storage: product.storage || '',
+      ...product.specifications,
+    },
+    colors: product.colors || [],
+    features: product.features || [],
+    variants: variants.map((v) => ({
+      _id: v._id,
+      color: v.color,
+      storage: v.storage,
+      price: v.price,
+      stock: v.stock,
+    })),
+  });
+});
+
+export const compareProductSpecs = asyncHandler(async (req, res) => {
+  const ids = (req.query.ids || '').split(',').map((id) => id.trim()).filter(Boolean);
+
+  if (ids.length < 2) {
+    throw new AppError(400, 'Cần ít nhất 2 sản phẩm để so sánh.');
+  }
+
+  const products = await Product.find({ _id: { $in: ids } }).lean();
+
+  if (products.length < 2) {
+    throw new AppError(404, 'Không tìm đủ sản phẩm để so sánh.');
+  }
+
+  const compareData = products.map((product) => ({
+    _id: product._id,
+    name: product.name,
+    slug: product.slug,
+    image: product.image,
+    brand: product.brand,
+    price: product.price,
+    originalPrice: product.originalPrice,
+    specs: {
+      screen: product.screen || '',
+      battery: product.battery || '',
+      camera: product.camera || '',
+      ram: product.ram || '',
+      storage: product.storage || '',
+      ...product.specifications,
+    },
+    colors: product.colors || [],
+    features: product.features || [],
+    rating: product.rating || 0,
+    numReviews: product.numReviews || 0,
+  }));
+
+  res.json({
+    data: compareData,
+  });
+});
+
+// Admin: Create product
+export const createAdminProduct = asyncHandler(async (req, res, next) => {
+  const { name, description, brand, categoryId, price, countInStock, image, images } =
+    req.body;
+
+  if (!name || !brand || !categoryId || !price) {
+    return next(new AppError('Vui lòng nhập đầy đủ thông tin bắt buộc', 400));
+  }
+
+  const product = await Product.create({
+    name,
+    description,
+    brand,
+    category: categoryId,
+    price,
+    countInStock: countInStock || 0,
+    image,
+    images: images || [],
+    status: 'active',
+  });
+
+  res.status(201).json({
+    status: 'success',
+    message: 'Tạo sản phẩm thành công',
+    data: { product },
+  });
+});
+
+// Admin: Get all products
+export const getAdminProducts = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 10, search, status } = req.query;
+  const skip = (page - 1) * limit;
+
+  const query = {};
+  if (search) {
+    query.name = { $regex: search, $options: 'i' };
+  }
+  if (status) {
+    query.status = status;
+  }
+
+  const products = await Product.find(query)
+    .limit(limit * 1)
+    .skip(skip)
+    .sort({ createdAt: -1 });
+
+  const total = await Product.countDocuments(query);
+
+  res.json({
+    status: 'success',
+    data: products,
+    pagination: {
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / limit),
+    },
+  });
+});
+
+// Admin: Get product detail
+export const getAdminProductDetail = asyncHandler(async (req, res, next) => {
+  const product = await Product.findById(req.params.id).populate('category', 'name');
+
+  if (!product) {
+    return next(new AppError('Không tìm thấy sản phẩm', 404));
+  }
+
+  const variants = await ProductVariant.find({ product: product._id });
+
+  res.json({
+    status: 'success',
+    data: { product, variants },
+  });
+});
+
+// Admin: Update product
+export const updateAdminProduct = asyncHandler(async (req, res, next) => {
+  const { name, description, brand, categoryId, price, countInStock, image, images, status } =
+    req.body;
+
+  let product = await Product.findById(req.params.id);
+
+  if (!product) {
+    return next(new AppError('Không tìm thấy sản phẩm', 404));
+  }
+
+  if (name) product.name = name;
+  if (description) product.description = description;
+  if (brand) product.brand = brand;
+  if (categoryId) product.category = categoryId;
+  if (price) product.price = price;
+  if (countInStock !== undefined) product.countInStock = countInStock;
+  if (image) product.image = image;
+  if (images) product.images = images;
+  if (status) product.status = status;
+
+  product = await product.save();
+
+  res.json({
+    status: 'success',
+    message: 'Cập nhật sản phẩm thành công',
+    data: { product },
+  });
+});
+
+// Admin: Delete product
+export const deleteAdminProduct = asyncHandler(async (req, res, next) => {
+  const product = await Product.findByIdAndDelete(req.params.id);
+
+  if (!product) {
+    return next(new AppError('Không tìm thấy sản phẩm', 404));
+  }
+
+  // Delete related variants
+  await ProductVariant.deleteMany({ product: product._id });
+
+  res.json({
+    status: 'success',
+    message: 'Xóa sản phẩm thành công',
   });
 });

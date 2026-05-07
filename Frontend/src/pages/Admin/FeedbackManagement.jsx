@@ -11,7 +11,6 @@ import {
   Filter,
   User,
   ExternalLink,
-  ExternalLink,
   Flag,
   X,
   History

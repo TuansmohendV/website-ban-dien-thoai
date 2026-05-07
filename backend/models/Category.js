@@ -20,6 +20,15 @@ const categorySchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    icon: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    subCategories: {
+      type: [String],
+      default: [],
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -30,12 +39,10 @@ const categorySchema = new mongoose.Schema(
   }
 );
 
-categorySchema.pre('validate', function buildSlug(next) {
+categorySchema.pre('validate', function buildSlug() {
   if (this.name && (!this.slug || this.isModified('name'))) {
     this.slug = toSlug(this.name);
   }
-
-  next();
 });
 
 const Category = mongoose.model('Category', categorySchema);

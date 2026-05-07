@@ -1,11 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useOrders } from '../context/OrdersContext';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import api, { getApiErrorMessage } from '../lib/api';
 
 const BuyNowModal = ({ product, isOpen, onClose }) => {
   const { formatPrice } = useLanguage();
-  const { addOrder } = useOrders();
+  const { createOrder } = useOrders();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
   const modalRef = useRef(null);
 
   // Form states
@@ -21,6 +26,7 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [couponStatus, setCouponStatus] = useState(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
   const [isVAT, setIsVAT] = useState(false);
   const [companyName, setCompanyName] = useState('');
   const [taxCode, setTaxCode] = useState('');
@@ -64,6 +70,10 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
       setQuantity(1);
       setIsSuccess(false);
       setErrors({});
+      setCouponCode('');
+      setAppliedCoupon(null);
+      setCouponStatus(null);
+      setDiscountAmount(0);
       document.body.style.overflow = 'hidden';
     }
     return () => {
@@ -109,114 +119,98 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (!user) {
+      onClose();
+      navigate('/login', { state: { from: location } });
+      return;
+    }
+
     if (!validate()) return;
     setIsSubmitting(true);
-    
-    setTimeout(() => {
-      const order = {
-        orderId: `SIN-${Date.now().toString(36).toUpperCase()}`,
-        product: {
-          id: product.id,
-          name: product.name,
-          image: product.image,
-          price: selectedColor?.price || product.priceNum,
-          color: selectedColor?.name,
-        },
-        quantity,
-        customer: { fullName, phone, email },
-        delivery: {
-          method: deliveryMethod,
-          city: selectedCity,
-          store: selectedStore,
-        },
-        note,
-        couponCode,
-        isVAT,
-        vatInfo: isVAT ? { companyName, taxCode, companyAddress } : null,
-        total: finalTotal,
-        discount: discount,
-        coupon: appliedCoupon,
-        date: new Date().toLocaleString('vi-VN'),
-      };
 
-      // Calculate delivery estimate
+    try {
       const nowDate = new Date();
       let daysToAdd = 3;
       if (['Hà Nội', 'Hồ Chí Minh'].includes(selectedCity)) daysToAdd = 1;
       else if (['Đà Nẵng'].includes(selectedCity)) daysToAdd = 2;
-      
+
       const deliveryDate = new Date(nowDate);
       deliveryDate.setDate(nowDate.getDate() + daysToAdd);
-      const estimateStr = deliveryDate.toLocaleDateString('vi-VN', { 
-        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
+      const estimateStr = deliveryDate.toLocaleDateString('vi-VN', {
+        weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
       });
 
-      // Lưu vào OrdersContext (phonesin_orders)
-      const newOrder = {
-        id: order.orderId,
-        date: order.date,
-        status: 'pending',
-        items: [{
-          name: product.name,
-          qty: quantity,
-          price: selectedColor?.price || product.priceNum || 0,
-          image: selectedColor?.image || product.image,
-        }],
-        totalAmount: finalTotal,
-        customer: {
-          fullName,
+      const rawVariantId = selectedColor?.id || '';
+      const variantId =
+        rawVariantId &&
+        !String(rawVariantId).startsWith('color-') &&
+        !String(rawVariantId).startsWith('variant-')
+          ? rawVariantId
+          : rawVariantId && String(rawVariantId).length === 24
+            ? rawVariantId
+            : undefined;
+
+      const order = await createOrder({
+        customerInfo: { fullName, phone, email },
+        shippingAddress: {
+          recipientName: fullName,
           phone,
-          email,
-          address: deliveryMethod === 'store'
-            ? `${selectedStore || selectedCity}`
-            : 'Giao hàng tận nơi',
+          province: selectedCity || 'Hồ Chí Minh',
+          district: deliveryMethod === 'store' ? 'Nhận tại cửa hàng' : 'Nhân viên sẽ gọi xác nhận',
+          ward: deliveryMethod === 'store' ? 'Nhận tại cửa hàng' : 'Nhân viên sẽ gọi xác nhận',
+          street: deliveryMethod === 'store' ? (selectedStore || selectedCity || 'Cửa hàng PhoneSin') : 'Khách hàng nhận tại nhà',
+          note,
         },
-        payment: {
-          method: 'cod',
-          methodLabel: 'Thanh toán khi nhận hàng',
-        },
-        estimatedDelivery: estimateStr,
-        summary: {
-          subtotal: (selectedColor?.price || product.priceNum || 0) * quantity,
-          shipping: 0,
-          discount: discount,
-        },
-        timeline: [
-          { time: order.date, text: 'Đặt hàng thành công', active: true },
-          { time: '', text: 'Chờ xác nhận', active: false },
-        ],
-      };
-      addOrder(newOrder);
+        paymentMethod: 'COD',
+        voucherCode: appliedCoupon || undefined,
+        notes: note,
+        items: [{
+          productId: product.backendId || product.backendProductId || product._id,
+          variantId,
+          quantity,
+        }],
+      });
 
       setDeliveryEstimate(estimateStr);
-
+      setIsSuccess(order.id);
+    } catch (error) {
+      setCouponStatus({
+        type: 'error',
+        message: error.message || 'Không thể tạo đơn hàng lúc này.',
+      });
+    } finally {
       setIsSubmitting(false);
-      setIsSuccess(order.orderId); // Store orderId in isSuccess instead of just true
-    }, 1200);
+    }
   };
 
   if (!isOpen || !product) return null;
 
-  const VALID_COUPONS = {
-    'PHONESIN': { discount: 500000, label: 'Ưu đãi Sin' },
-    'SINPHONEAVA': { discount: 200000, label: 'Mã bạn bè giới thiệu' },
-    'SINPHONETEST': { discount: 200000, label: 'Mã bạn bè giới thiệu' },
-  };
-
   const currentPrice = selectedColor?.price || product.priceNum || 0;
   const rawTotal = currentPrice * quantity;
-  const discount = appliedCoupon ? (VALID_COUPONS[appliedCoupon]?.discount || 0) : 0;
+  const discount = discountAmount;
   const finalTotal = Math.max(0, rawTotal - discount);
 
-  const handleApplyCoupon = () => {
-    const found = VALID_COUPONS[couponCode.trim().toUpperCase()];
-    if (found) {
-      setAppliedCoupon(couponCode.trim().toUpperCase());
-      setCouponStatus({ type: 'success', message: `✅ ${found.label} – giảm ${found.discount.toLocaleString('vi-VN')}đ` });
-    } else {
+  const handleApplyCoupon = async () => {
+    try {
+      const response = await api.post('/api/voucher/apply', {
+        code: couponCode.trim().toUpperCase(),
+        amount: rawTotal,
+      });
+
+      setAppliedCoupon(response.data?.voucher?.code || couponCode.trim().toUpperCase());
+      setDiscountAmount(Number(response.data?.discountAmount || 0));
+      setCouponStatus({
+        type: 'success',
+        message: response.data?.message || 'Áp dụng mã giảm giá thành công.',
+      });
+    } catch (error) {
       setAppliedCoupon(null);
-      setCouponStatus({ type: 'error', message: '❌ Mã không hợp lệ hoặc đã hết hạn.' });
+      setDiscountAmount(0);
+      setCouponStatus({
+        type: 'error',
+        message: getApiErrorMessage(error, 'Mã không hợp lệ hoặc đã hết hạn.'),
+      });
     }
   };
 
@@ -594,9 +588,9 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
                     className="flex-1 h-10 px-3 rounded-lg border border-gray-300 text-[13px] font-medium outline-none focus:border-[#ee0000] transition-all uppercase"
                     disabled={!!appliedCoupon}
                   />
-                  {appliedCoupon ? (
+                    {appliedCoupon ? (
                     <button
-                      onClick={() => { setAppliedCoupon(null); setCouponCode(''); setCouponStatus(null); }}
+                      onClick={() => { setAppliedCoupon(null); setCouponCode(''); setCouponStatus(null); setDiscountAmount(0); }}
                       className="px-4 h-10 bg-red-100 border border-red-300 rounded-lg text-[12px] font-bold text-red-600 hover:bg-red-200 transition-all"
                     >
                       Xóa mã
@@ -635,7 +629,7 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
                 </div>
                 {discount > 0 && (
                   <div className="flex justify-between text-[13px] font-bold text-emerald-600">
-                    <span>Giảm giá ({VALID_COUPONS[appliedCoupon]?.label}):</span>
+                    <span>Giảm giá ({appliedCoupon}):</span>
                     <span>-{discount.toLocaleString('vi-VN')}đ</span>
                   </div>
                 )}
@@ -646,6 +640,11 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
               </div>
 
               {/* Submit Button */}
+              {!user && (
+                <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] font-bold text-amber-700">
+                  Vui lòng đăng nhập trước khi đặt hàng.
+                </div>
+              )}
               <button
                 onClick={handleSubmit}
                 disabled={isSubmitting}

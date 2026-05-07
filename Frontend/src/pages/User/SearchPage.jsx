@@ -1,14 +1,16 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { ChevronsUpDown, Search, Filter } from 'lucide-react';
-import { allProducts } from '../../data/allProducts';
 import ProductCard from '../../components/ProductCard';
 import FilterSidebar from '../../components/FilterSidebar';
 import Pagination from '../../components/Pagination';
+import api from '../../lib/api';
+import { normalizeProduct } from '../../lib/products';
 
 const SearchPage = () => {
   const [searchParams] = useSearchParams();
   const query = searchParams.get('q') || '';
+  const [products, setProducts] = useState([]);
 
   // Filter & Sorting State
   const [filters, setFilters] = useState({
@@ -20,17 +22,54 @@ const SearchPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
 
+  useEffect(() => {
+    let ignore = false;
+
+    const loadProducts = async () => {
+      if (!query.trim()) {
+        setProducts([]);
+        return;
+      }
+
+      try {
+        const response = await api.get('/api/products', {
+          params: { search: query.trim(), limit: 50 },
+        });
+
+        if (!ignore) {
+          setProducts((response.data?.data || []).map(normalizeProduct));
+        }
+      } catch (error) {
+        if (!ignore) {
+          setProducts([]);
+        }
+      }
+    };
+
+    loadProducts();
+
+    return () => {
+      ignore = true;
+    };
+  }, [query]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, query]);
+
   // Filter Logic
   const filteredResults = useMemo(() => {
     if (!query.trim()) return [];
     
-    let result = allProducts.filter(p => {
+    let result = products.filter(p => {
       const lowerQuery = query.toLowerCase();
-      const matchesSearch = p.name.toLowerCase().includes(lowerQuery) || p.brand.toLowerCase().includes(lowerQuery);
+      const matchesSearch =
+        p.name.toLowerCase().includes(lowerQuery) ||
+        p.brand.toLowerCase().includes(lowerQuery);
       if (!matchesSearch) return false;
 
       // Sidebar Filters
-      if (filters.brand && p.brand.toLowerCase() !== filters.brand.toLowerCase()) return false;
+      if (filters.brand && (p.brandKey || p.brand.toLowerCase()) !== filters.brand.toLowerCase()) return false;
 
       // Price Range Filter
       if (filters.priceRange && filters.priceRange !== 'Tất cả') {
@@ -45,12 +84,18 @@ const SearchPage = () => {
     });
 
     // Sorting
-    if (filters.sortBy === 'priceAsc') result.sort((a, b) => a.priceNum - b.priceNum);
-    else if (filters.sortBy === 'priceDesc') result.sort((a, b) => b.priceNum - a.priceNum);
-    else if (filters.sortBy === 'newest') result.sort((a, b) => b.id.localeCompare(a.id));
+    if (filters.sortBy === 'priceAsc' || filters.sortBy === 'price') {
+      result.sort((a, b) => a.priceNum - b.priceNum);
+    } else if (filters.sortBy === 'priceDesc') {
+      result.sort((a, b) => b.priceNum - a.priceNum);
+    } else if (filters.sortBy === 'newest') {
+      result.sort((a, b) => String(b.createdAt || b.id).localeCompare(String(a.createdAt || a.id)));
+    } else if (filters.sortBy === 'bestseller') {
+      result.sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0));
+    }
 
     return result;
-  }, [query, filters]);
+  }, [query, filters, products]);
 
   const totalPages = Math.ceil(filteredResults.length / itemsPerPage);
   const currentProducts = filteredResults.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);

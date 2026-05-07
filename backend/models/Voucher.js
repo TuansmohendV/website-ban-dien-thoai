@@ -83,12 +83,10 @@ const voucherSchema = new mongoose.Schema(
   }
 );
 
-voucherSchema.pre('validate', function normalizeCode(next) {
+voucherSchema.pre('validate', function normalizeCode() {
   if (this.code) {
     this.code = this.code.toUpperCase().trim();
   }
-
-  next();
 });
 
 const Voucher = mongoose.model('Voucher', voucherSchema);

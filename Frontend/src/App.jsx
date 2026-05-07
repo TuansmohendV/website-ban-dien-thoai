@@ -30,6 +30,8 @@ import FlashVoucherPage from './pages/User/FlashVoucherPage';
 import InvoicePage from './pages/User/InvoicePage';
 import StoreLocatorPage from './pages/User/StoreLocatorPage';
 import CustomerSupportPage from './pages/User/CustomerSupportPage';
+import ProtectedRoute from './components/ProtectedRoute';
+import ScrollToTop from './components/ScrollToTop';
 
 // Pages - Auth
 import LoginPage from './pages/Auth/LoginPage';
@@ -52,6 +54,7 @@ function App() {
       <AuthProvider>
         <CartProvider>
           <OrdersProvider>
+            <ScrollToTop />
             <Routes>
             {/* Các trang sử dụng MainLayout (có Navbar/Footer) */}
             <Route path="/" element={<MainLayout />}>
@@ -59,12 +62,12 @@ function App() {
               <Route path="product/:id" element={<ProductDetailPage />} />
               <Route path="category" element={<CategoryPage />} />
               <Route path="category/:id" element={<CategoryPage />} />
-              <Route path="checkout" element={<CheckoutPage />} />
+              <Route path="checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
               <Route path="store-locator" element={<StoreLocatorPage />} />
               <Route path="about" element={<AboutPage />} />
               <Route path="contact" element={<ContactPage />} />
               <Route path="profile" element={<ProfilePage />} />
-              <Route path="orders" element={<OrdersPage />} />
+              <Route path="orders" element={<ProtectedRoute><OrdersPage /></ProtectedRoute>} />
               <Route path="trade-in" element={<TradeInPage />} />
               <Route path="warranty" element={<WarrantyPage />} />
               <Route path="pc-epower" element={<PCEPowerPage />} />
@@ -73,18 +76,18 @@ function App() {
               <Route path="return-request/:orderId" element={<ReturnRequestPage />} />
               <Route path="referral" element={<ReferralPage />} />
               <Route path="flash-voucher" element={<FlashVoucherPage />} />
-              <Route path="invoice/:orderId" element={<InvoicePage />} />
-              <Route path="customer-support" element={<CustomerSupportPage />} />
+              <Route path="invoice/:orderId" element={<ProtectedRoute><InvoicePage /></ProtectedRoute>} />
+              <Route path="customer-support" element={<ProtectedRoute><CustomerSupportPage /></ProtectedRoute>} />
             </Route>
 
             {/* Các trang không dùng chung Layout (Trang đăng nhập/đăng ký/giỏ hàng) */}
-            <Route path="/cart" element={<CartPage />} />
+            <Route path="/cart" element={<ProtectedRoute><CartPage /></ProtectedRoute>} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
             {/* Admin Routes */}
-            <Route path="/admin" element={<AdminLayout />}>
+            <Route path="/admin" element={<ProtectedRoute requireAdmin><AdminLayout /></ProtectedRoute>}>
               <Route index element={<AdminDashboard />} />
               <Route path="products" element={<ProductManagement />} />
               <Route path="categories" element={<CategoryManagement />} />

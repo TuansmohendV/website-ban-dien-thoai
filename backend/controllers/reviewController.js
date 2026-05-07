@@ -114,3 +114,67 @@ export const getReviewsByProductId = asyncHandler(async (req, res) => {
     },
   });
 });
+
+export const getAdminReviews = asyncHandler(async (req, res) => {
+  const page = Math.max(Number(req.query.page) || 1, 1);
+  const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 50);
+  const skip = (page - 1) * limit;
+
+  const [total, reviews] = await Promise.all([
+    Review.countDocuments({}),
+    Review.find({})
+      .populate('user', 'fullName avatar email')
+      .populate('product', 'name slug image')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+  ]);
+
+  res.json({
+    data: reviews,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.max(Math.ceil(total / limit), 1),
+    },
+  });
+});
+
+export const updateAdminReview = asyncHandler(async (req, res) => {
+  const review = await Review.findById(req.params.id);
+
+  if (!review) {
+    throw new AppError(404, 'Không tìm thấy đánh giá.');
+  }
+
+  if (req.body.moderationStatus !== undefined) {
+    review.moderationStatus = req.body.moderationStatus;
+  }
+
+  if (req.body.moderationNote !== undefined) {
+    review.moderationNote = req.body.moderationNote;
+  }
+
+  await review.save();
+
+  res.json({
+    message: 'Cập nhật đánh giá thành công.',
+    review,
+  });
+});
+
+export const deleteAdminReview = asyncHandler(async (req, res) => {
+  const review = await Review.findByIdAndDelete(req.params.id);
+
+  if (!review) {
+    throw new AppError(404, 'Không tìm thấy đánh giá.');
+  }
+
+  await syncProductReviewStats(review.product);
+
+  res.json({
+    message: 'Xóa đánh giá thành công.',
+  });
+});

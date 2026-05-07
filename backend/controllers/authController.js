@@ -195,3 +195,57 @@ export const changePassword = asyncHandler(async (req, res) => {
     message: 'Đổi mật khẩu thành công.',
   });
 });
+
+export const socialLogin = asyncHandler(async (req, res) => {
+  const { provider, idToken, accessToken } = req.body;
+
+  if (!provider || !['google', 'facebook'].includes(provider)) {
+    throw new AppError(400, 'Provider phải là google hoặc facebook.');
+  }
+
+  if (!idToken && !accessToken) {
+    throw new AppError(400, 'Vui lòng cung cấp idToken hoặc accessToken.');
+  }
+
+  // In development/test mode, simulate social login
+  // In production, verify tokens with Google/Facebook APIs
+  let email = '';
+  let fullName = 'Social User';
+  let avatar = '';
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new AppError(501, 'Social login chưa được tích hợp OAuth provider thực tế.');
+  }
+
+  // Simulate: create or find user based on provider token
+  email = `social.${provider}.${Date.now()}@example.com`;
+  fullName = `${provider.charAt(0).toUpperCase() + provider.slice(1)} User`;
+
+  let user = await User.findOne({ email });
+
+  if (!user) {
+    user = await User.create({
+      fullName,
+      email,
+      password: crypto.randomBytes(16).toString('hex'),
+      avatar,
+      authProvider: provider,
+    });
+  }
+
+  user.lastLoginAt = new Date();
+  await user.save({ validateBeforeSave: false });
+
+  res.json({
+    ...buildAuthResponse(user),
+    message: `Đăng nhập bằng ${provider} thành công.`,
+  });
+});
+
+export const logoutUser = asyncHandler(async (req, res) => {
+  // JWT is stateless, so logout is handled on the client side
+  // This endpoint confirms the logout action
+  res.json({
+    message: 'Đăng xuất thành công.',
+  });
+});

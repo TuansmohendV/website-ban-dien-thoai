@@ -34,14 +34,14 @@ const CustomerChat = () => {
     };
 
     return (
-        <div className="fixed bottom-6 right-6 z-[999] flex flex-col items-end">
+        <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[999] flex flex-col items-end max-w-[calc(100vw-2rem)]">
             
             {/* Chat Window */}
             {isOpen && (
-                <div className="mb-4 w-[380px] md:w-[460px] h-[600px] bg-white rounded-[32px] shadow-2xl overflow-hidden border border-gray-100 flex flex-col animate-in slide-in-from-bottom-10 fade-in duration-500">
+                <div className="mb-4 w-[calc(100vw-2rem)] sm:w-[380px] md:w-[460px] h-[min(600px,calc(100vh-8rem))] bg-white rounded-[24px] sm:rounded-[32px] shadow-2xl overflow-hidden border border-gray-100 flex flex-col animate-in slide-in-from-bottom-10 fade-in duration-500">
                     {/* Header - Premium Blue */}
-                    <div className="bg-[#0068ff] p-5 text-white flex items-center justify-between">
-                        <div className="flex items-center gap-4">
+                    <div className="bg-[#0068ff] p-4 sm:p-5 text-white flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                             <div className="relative">
                                 <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center overflow-hidden border border-white/30">
                                     <img 
@@ -52,8 +52,8 @@ const CustomerChat = () => {
                                 </div>
                                 <div className="absolute bottom-0.5 right-0.5 w-3.5 h-3.5 bg-green-400 border-2 border-[#0068ff] rounded-full"></div>
                             </div>
-                            <div>
-                                <h3 className="font-bold text-[18px]">Hỗ trợ PhoneSin</h3>
+                            <div className="min-w-0">
+                                <h3 className="font-bold text-[16px] sm:text-[18px] truncate">Hỗ trợ PhoneSin</h3>
                                 <p className="text-[13px] opacity-80 uppercase font-black tracking-widest">Trực tuyến 24/7</p>
                             </div>
                         </div>
@@ -69,7 +69,7 @@ const CustomerChat = () => {
                     </div>
 
                     {/* Messages Area */}
-                    <div className="flex-1 p-5 overflow-y-auto bg-gray-50 flex flex-col gap-5 scroll-smooth custom-scrollbar">
+                    <div className="flex-1 p-4 sm:p-5 overflow-y-auto bg-gray-50 flex flex-col gap-5 scroll-smooth custom-scrollbar">
                         <style dangerouslySetInnerHTML={{ __html: `
                             .custom-scrollbar::-webkit-scrollbar { width: 4px; }
                             .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -104,7 +104,7 @@ const CustomerChat = () => {
                     </div>
 
                     {/* Input Area */}
-                    <div className="p-5 bg-white border-t border-gray-100">
+                    <div className="p-4 sm:p-5 bg-white border-t border-gray-100">
                         <div className="relative flex items-center gap-3">
                             <input 
                                 type="text" 

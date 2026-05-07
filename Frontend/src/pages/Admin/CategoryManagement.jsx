@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import { 
   Plus, 
   Edit, 
@@ -11,19 +11,60 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import api, { getApiErrorMessage } from '../../lib/api';
+
+const buildSlug = (value = '') =>
+  String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
+
+const mapCategoryForAdmin = (category = {}) => ({
+  id: category._id || category.id || category.slug,
+  name: category.name || 'Chưa đặt tên',
+  slug: category.slug || buildSlug(category.name),
+  productCount: Number(category.productCount || 0),
+  subCategories: category.subCategories || [],
+  icon: category.icon || category.iconCode || '',
+  isDerived: Boolean(category.isDerived),
+});
 
 const CategoryManagement = () => {
-  const [categories, setCategories] = useState([
-    { id: 1, name: 'Điện thoại', slug: 'dien-thoai', productCount: 154, subCategories: ['iPhone', 'Samsung', 'Oppo', 'Xiaomi'], icon: '1001' },
-    { id: 2, name: 'Máy tính bảng', slug: 'may-tinh-bang', productCount: 42, subCategories: ['iPad', 'Samsung Tab'], icon: '1002' },
-    { id: 3, name: 'Phụ kiện', slug: 'phu-kien', productCount: 210, subCategories: ['Sạc Cáp', 'Ốp lưng', 'Tai nghe', 'Pin dự phòng'], icon: '1003' },
-  ]);
+  const [categories, setCategories] = useState([]);
 
   const [iconLibrary, setIconLibrary] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingCat, setEditingCat] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({ name: '', slug: '', icon: '' });
+
+  const loadCategories = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError('');
+
+    try {
+      const response = await api.get('/api/categories', {
+        params: { includeInactive: true, includeDerived: true },
+      });
+      setCategories((response.data?.data || []).map(mapCategoryForAdmin));
+    } catch (error) {
+      setCategories([]);
+      setLoadError(getApiErrorMessage(error, 'Không thể tải danh mục từ database.'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
 
   // Load latest icons from library
   useEffect(() => {
@@ -47,43 +88,51 @@ const CategoryManagement = () => {
     setFormData(prev => ({
       ...prev,
       [name]: value,
-      slug: name === 'name' ? value.toLowerCase().replace(/\s+/g, '-') : prev.slug
+      slug: name === 'name' ? buildSlug(value) : prev.slug
     }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.name) return alert('Vui lòng nhập tên danh mục');
-    
-    if (editingCat) {
-      setCategories(categories.map(c => c.id === editingCat.id ? { ...c, ...formData } : c));
-    } else {
-      const newCat = {
-        id: Date.now(),
-        ...formData,
-        productCount: 0,
-        subCategories: []
-      };
-      setCategories([...categories, newCat]);
-    }
-    setShowModal(false);
-  };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa danh mục này?')) {
-      setCategories(categories.filter(c => c.id !== id));
-    }
-  };
-
-  const handleQuickAdd = (name) => {
-    const newCat = {
-      id: Date.now(),
-      name,
-      slug: name.toLowerCase().replace(/\s+/g, '-'),
-      productCount: 0,
-      subCategories: [],
-      icon: ''
+    const payload = {
+      name: formData.name.trim(),
+      slug: formData.slug || buildSlug(formData.name),
+      icon: formData.icon.trim(),
     };
-    setCategories([...categories, newCat]);
+
+    setIsSaving(true);
+
+    try {
+      if (editingCat && !editingCat.isDerived) {
+        await api.put(`/api/categories/${editingCat.id}`, payload);
+      } else {
+        await api.post('/api/categories', payload);
+      }
+
+      await loadCategories();
+      setShowModal(false);
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Không thể lưu danh mục.'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (cat) => {
+    if (cat.isDerived) {
+      alert('Danh mục này đang được suy ra từ sản phẩm trong database. Hãy tạo danh mục chính thức trước khi xóa.');
+      return;
+    }
+
+    if (window.confirm('Bạn có chắc chắn muốn xóa danh mục này?')) {
+      try {
+        await api.delete(`/api/categories/${cat.id}`);
+        setCategories(categories.filter(c => c.id !== cat.id));
+      } catch (error) {
+        alert(getApiErrorMessage(error, 'Không thể xóa danh mục.'));
+      }
+    }
   };
 
   const filteredCats = categories.filter(c => 
@@ -145,14 +194,21 @@ const CategoryManagement = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredCats.map((cat) => (
+                {filteredCats.length > 0 ? filteredCats.map((cat) => (
                   <tr key={cat.id}>
                     <td style={{ paddingLeft: '20px' }}>
                       <div className="cat-icon" style={{ backgroundColor: '#eff6ff' }}>
                          {getIcon(cat.icon)}
                       </div>
                     </td>
-                    <td><span className="cat-name-text">{cat.name}</span></td>
+                    <td>
+                      <span className="cat-name-text">{cat.name}</span>
+                      {cat.isDerived && (
+                        <span style={{ display: 'block', marginTop: '4px', fontSize: '0.75rem', color: '#f59e0b', fontWeight: 700 }}>
+                          Tự nhận từ sản phẩm
+                        </span>
+                      )}
+                    </td>
                     <td><code className="slug-code">/{cat.slug}</code></td>
                     <td>
                       <span style={{ fontWeight: '700', color: '#2563eb' }}>#{cat.icon || 'Chưa gán'}</span>
@@ -160,11 +216,17 @@ const CategoryManagement = () => {
                     <td style={{ textAlign: 'right', paddingRight: '20px' }}>
                       <div className="actions-cell" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                         <button className="action-btn edit" onClick={() => handleOpenModal(cat)}><Edit size={16} /></button>
-                        <button className="action-btn delete" onClick={() => handleDelete(cat.id)}><Trash2 size={16} /></button>
+                        <button className="action-btn delete" onClick={() => handleDelete(cat)}><Trash2 size={16} /></button>
                       </div>
                     </td>
                   </tr>
-                ))}
+                )) : (
+                  <tr>
+                    <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                      {isLoading ? 'Đang tải danh mục từ database...' : loadError || 'Không tìm thấy danh mục nào.'}
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -173,7 +235,7 @@ const CategoryManagement = () => {
         {/* Info Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
            <div className="card" style={{ display: 'flex', alignItems: 'center', gap: '20px', padding: '25px' }}>
-              <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyCenter: 'center' }}>
+              <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: '#dcfce7', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <ShieldCheck size={28} />
               </div>
               <div>
@@ -183,7 +245,7 @@ const CategoryManagement = () => {
            </div>
            
            <Link to="/admin/icons" className="card" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '20px', padding: '25px', border: '1px dashed #2563eb' }}>
-              <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyCenter: 'center' }}>
+              <div style={{ width: '50px', height: '50px', borderRadius: '12px', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <ExternalLink size={28} />
               </div>
               <div>
@@ -245,7 +307,9 @@ const CategoryManagement = () => {
             </div>
             <div className="modal-footer" style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
               <button onClick={() => setShowModal(false)} style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', background: 'white', fontWeight: '600', cursor: 'pointer' }}>Hủy</button>
-              <button onClick={handleSave} style={{ flex: 2, padding: '12px', borderRadius: '10px', border: 'none', background: '#2563eb', color: 'white', fontWeight: '700', cursor: 'pointer' }}>Lưu thay đổi</button>
+              <button onClick={handleSave} disabled={isSaving} style={{ flex: 2, padding: '12px', borderRadius: '10px', border: 'none', background: '#2563eb', color: 'white', fontWeight: '700', cursor: isSaving ? 'not-allowed' : 'pointer', opacity: isSaving ? 0.75 : 1 }}>
+                {isSaving ? 'Đang lưu...' : 'Lưu thay đổi'}
+              </button>
             </div>
           </div>
         </div>

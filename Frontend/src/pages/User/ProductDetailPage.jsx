@@ -1,15 +1,21 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ChevronRight, ChevronLeft, Star, Heart, Share2, ShieldCheck, Truck, RefreshCw, MapPin, Video, Image as ImageIcon, Info, Plus, ShoppingCart, Settings, FileText, Wallet, Check } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCart } from '../../context/CartContext';
 import Breadcrumbs from '../../components/Breadcrumbs';
 import ProductCard from '../../components/ProductCard';
 import BuyNowModal from '../../components/BuyNowModal';
-import { allProducts } from '../../data/allProducts';
+import api, { getApiErrorMessage } from '../../lib/api';
+import {
+    inflateProducts,
+    normalizeProduct,
+    normalizeProductDetail,
+} from '../../lib/products';
 
 const ProductDetailPage = () => {
     const { id } = useParams();
+    const navigate = useNavigate();
     const { t, formatPrice } = useLanguage();
     const { addToCart } = useCart();
     
@@ -20,57 +26,15 @@ const ProductDetailPage = () => {
     const specsRef = useRef(null);
     const descriptionRef = useRef(null);
 
-    // 1. Lấy dữ liệu sản phẩm
-    const product = useMemo(() => {
-        const found = allProducts.find(p => String(p.id) === String(id));
-        if (!found) return null;
-
-        return {
-            ...found,
-            variants: found.variants || [
-                { id: 'v1', storage: '128GB', price: found.priceNum || 20990000 },
-                { id: 'v2', storage: '256GB', price: (found.priceNum || 20990000) * 1.15 },
-                { id: 'v3', storage: '512GB', price: (found.priceNum || 20990000) * 1.35 }
-            ],
-            colors: found.colors || [
-                { id: 'c1', name: 'Trắng', price: found.priceNum || 20990000, image: found.image },
-                { id: 'c2', name: 'Xanh Navy', price: found.priceNum || 20990000, image: found.image },
-                { id: 'c3', name: 'Đen', price: found.priceNum || 20990000, image: found.image },
-                { id: 'c4', name: 'Xanh Nhạt', price: found.priceNum || 20990000, image: found.image }
-            ],
-            images: found.images || [found.image, found.image, found.image, found.image],
-            specs_detailed: found.specs_detailed || (
-                found.brand === 'iPhone' || found.name.toLowerCase().includes('iphone') 
-                ? [
-                    { label: "Hệ điều hành", value: "iOS 18" },
-                    { label: "Mạng di động", value: "Hỗ trợ 5G" },
-                    { label: "Số khe SIM", value: "1 Nano SIM & 1 eSIM" },
-                    { label: "Độ phân giải camera", value: found.specs?.camera || "48MP (Chính) + 12MP (Rộng) + 12MP (Tele)" },
-                    { label: "Bộ nhớ trong", value: found.specs?.ram || "256 GB" },
-                    { label: "Vi xử lý", value: found.specs?.chip || "Apple A18 Pro" },
-                    { label: "Công nghệ màn hình", value: "Super Retina XDR OLED" },
-                    { label: "Kích thước màn hình", value: found.specs?.screen || "6.7\"" },
-                    { label: "Dung lượng pin", value: found.specs?.pin || "4422 mAh" }
-                ]
-                : [
-                    { label: "Hệ điều hành", value: found.specs?.os || "Android 15" },
-                    { label: "Mạng di động", value: "Hỗ trợ 5G" },
-                    { label: "Số khe SIM", value: "2 Nano SIM" },
-                    { label: "Độ phân giải camera", value: found.specs?.camera || "50MP (Chính) + 10MP + 12MP" },
-                    { label: "Bộ nhớ trong", value: found.specs?.ram || "128 GB" },
-                    { label: "Vi xử lý", value: found.specs?.chip || "Snapdragon 8 Gen 3" },
-                    { label: "Công nghệ màn hình", value: "Dynamic AMOLED 2X" },
-                    { label: "Kích thước màn hình", value: found.specs?.screen || "6.7\"" },
-                    { label: "Dung lượng pin", value: found.specs?.pin || "5000 mAh" }
-                ]
-            )
-        };
-    }, [id]);
+    const [product, setProduct] = useState(null);
+    const [relatedProducts, setRelatedProducts] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     const [selectedStorage, setSelectedStorage] = useState(null);
     const [selectedColor, setSelectedColor] = useState(null);
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [showToast, setShowToast] = useState(false);
+    const [wishlistNotice, setWishlistNotice] = useState('');
     const [selectedCity, setSelectedCity] = useState('Hồ Chí Minh');
     const [searchQuery, setSearchQuery] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -90,27 +54,104 @@ const ProductDetailPage = () => {
         { name: "Home PayLater", logo: "https://cdn.hoanghamobile.vn/Uploads/2025/10/15/hpl-logo.png", desc: "Mua trước trả sau với Home PayLater: Ưu đãi giảm lến đến 1.000.000đ cho đơn đầu tiên." }
     ];
 
-    const tradeInProducts = [
-        "iPhone 15 Pro Max 256GB",
-        "iPhone 14 Pro Max 128GB",
-        "Samsung Galaxy S24 Ultra",
-        "Samsung Galaxy S23 Ultra",
-        "Xiaomi 14 Ultra",
-        "Oppo Find X7 Ultra",
-        "iPhone 13 Pro 128GB",
-        "Samsung Galaxy Z Fold 5"
-    ];
-
-    const crossSellProducts = [
-        { id: 'cs1', name: 'Tai nghe Redmi Buds 8 Pro - Chính hãng', category: 'tai-nghe', priceNum: 2190000, oldPriceNum: 2490000, discount: '-12%', image: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/03/15/samsung-galaxy-a35-5g-vang.png' },
-        { id: 'cs2', name: 'Đồng hồ thông minh Xiaomi Watch 5 - Chính hãng', category: 'dong-ho', priceNum: 8490000, oldPriceNum: 9990000, discount: '-15%', image: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2023/09/13/watch-s9-nhom-vien-hong.png' },
-        { id: 'cs3', name: 'Sạc Samsung 45W - Chính hãng', category: 'tai-nghe', priceNum: 490000, oldPriceNum: 600000, discount: '-18%', image: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2023/11/18/cu-sac-25w.png' },
-        { id: 'cs4', name: 'Cáp Apple USB-C sang Lightning 1m', category: 'tai-nghe', priceNum: 590000, oldPriceNum: 650000, discount: '-9%', image: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/05/20/airpods-max-green-1.png' }
-    ];
-
     const [crossSellTab, setCrossSellTab] = useState('Tất cả');
     const [crossSellIndex, setCrossSellIndex] = useState(0);
     const [hotIndex, setHotIndex] = useState(0);
+
+    useEffect(() => {
+        let ignore = false;
+
+        const loadProduct = async () => {
+            setIsLoading(true);
+
+            try {
+                const detailResponse = await api.get(`/api/products/${id}`);
+                const normalizedDetail = normalizeProductDetail(
+                    detailResponse.data?.product || {},
+                    detailResponse.data?.recentReviews || []
+                );
+
+                const listResponse = await api.get('/api/products', {
+                    params: { limit: 50 },
+                });
+
+                const normalizedList = (listResponse.data?.data || []).map(normalizeProduct);
+                const relatedFirst = normalizedList.filter(
+                    (item) =>
+                        item.routeId !== normalizedDetail.routeId &&
+                        (item.brandKey === normalizedDetail.brandKey ||
+                            item.category === normalizedDetail.category)
+                );
+                const fallbackProducts = normalizedList.filter(
+                    (item) => item.routeId !== normalizedDetail.routeId
+                );
+                const dedupedProducts = [...relatedFirst, ...fallbackProducts].filter(
+                    (item, index, array) =>
+                        array.findIndex(
+                            (candidate) =>
+                                candidate.routeId === item.routeId ||
+                                candidate.backendId === item.backendId
+                        ) === index
+                );
+
+                if (!ignore) {
+                    setProduct(normalizedDetail);
+                    setRelatedProducts(dedupedProducts);
+                }
+            } catch (error) {
+                if (!ignore) {
+                    setProduct(null);
+                    setRelatedProducts([]);
+                }
+            } finally {
+                if (!ignore) {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        loadProduct();
+
+        return () => {
+            ignore = true;
+        };
+    }, [id]);
+
+    const tradeInProducts = useMemo(
+        () => relatedProducts.slice(0, 8).map((item) => item.name),
+        [relatedProducts]
+    );
+
+    const filteredCrossSellProducts = useMemo(() => {
+        let filtered = relatedProducts;
+
+        if (crossSellTab === 'Tai nghe') {
+            filtered = relatedProducts.filter((item) => item.category === 'am-thanh');
+        } else if (crossSellTab === 'Đồng hồ thông minh') {
+            filtered = relatedProducts.filter((item) => item.category === 'dong-ho');
+        }
+
+        const source = filtered.length > 0 ? filtered : relatedProducts;
+        return inflateProducts(source, 4, `detail-cross-sell-${crossSellTab}`);
+    }, [crossSellTab, relatedProducts]);
+
+    const hotProducts = useMemo(
+        () => inflateProducts(relatedProducts, 8, 'detail-hot'),
+        [relatedProducts]
+    );
+
+    const comparisonProducts = useMemo(
+        () => inflateProducts(relatedProducts, 5, 'detail-compare'),
+        [relatedProducts]
+    );
+
+    const tradeInMatches = useMemo(
+        () =>
+            tradeInProducts.filter((item) =>
+                item.toLowerCase().includes(searchQuery.toLowerCase())
+            ),
+        [searchQuery, tradeInProducts]
+    );
 
     // Auto-slide for cross-sell
     useEffect(() => {
@@ -158,13 +199,40 @@ const ProductDetailPage = () => {
         setTimeout(() => setShowToast(false), 3000);
     };
 
-    if (!product || !selectedStorage || !selectedColor) {
+    const handleAddWishlist = async () => {
+        if (!product?.backendId) {
+            setWishlistNotice('San pham khong hop le de them yeu thich.');
+            setTimeout(() => setWishlistNotice(''), 2500);
+            return;
+        }
+
+        try {
+            await api.post('/api/user/wishlist', { productId: product.backendId });
+            setWishlistNotice('Da them vao danh sach yeu thich.');
+        } catch (error) {
+            if (error?.response?.status === 401) {
+                navigate('/login');
+                return;
+            }
+            setWishlistNotice(
+                getApiErrorMessage(error, 'Khong the them vao danh sach yeu thich.')
+            );
+        } finally {
+            setTimeout(() => setWishlistNotice(''), 2500);
+        }
+    };
+
+    if (isLoading || !product || !selectedStorage || !selectedColor) {
         return (
             <div className="min-h-[60vh] flex flex-col items-center justify-center p-10">
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4 animate-pulse">
                     <Info className="text-gray-400" />
                 </div>
-                <h2 className="text-xl font-bold text-gray-800 mb-4">Sản phẩm không tồn tại hoặc đã ngừng kinh doanh</h2>
+                <h2 className="text-xl font-bold text-gray-800 mb-4">
+                    {isLoading
+                        ? 'Đang tải thông tin sản phẩm'
+                        : 'Sản phẩm không tồn tại hoặc đã ngừng kinh doanh'}
+                </h2>
                 <Link to="/" className="bg-[#00917a] text-white px-6 py-2 rounded-lg font-bold">Quay lại trang chủ</Link>
             </div>
         );
@@ -232,7 +300,10 @@ const ProductDetailPage = () => {
                                     <ChevronRight size={28} strokeWidth={3} />
                                 </button>
 
-                                <button className="absolute top-4 right-4 p-2.5 bg-white/90 rounded-full shadow-md text-[#cc0000] hover:scale-110 transition-transform">
+                                <button
+                                    onClick={handleAddWishlist}
+                                    className="absolute top-4 right-4 p-2.5 bg-white/90 rounded-full shadow-md text-[#cc0000] hover:scale-110 transition-transform"
+                                >
                                     <Heart size={22} />
                                 </button>
                                 <div className="absolute top-4 right-16 p-2.5 bg-white/90 rounded-full shadow-md text-gray-600 hover:scale-110 transition-transform">
@@ -392,23 +463,27 @@ const ProductDetailPage = () => {
                                 >
                                     {[0, 1].map(page => (
                                         <div key={page} className="min-w-full grid grid-cols-2 gap-4">
-                                            {crossSellProducts.slice(page * 2, page * 2 + 2).map((p, i) => (
-                                                <div key={i} className="border border-gray-100 rounded-2xl p-4 flex flex-col items-center hover:shadow-xl transition-all duration-500 transform hover:-translate-y-1 group/card bg-white">
+                                            {filteredCrossSellProducts.slice(page * 2, page * 2 + 2).map((p) => (
+                                                <div key={p.uiKey || p.id} className="border border-gray-100 rounded-2xl p-4 flex flex-col items-center hover:shadow-xl transition-all duration-500 transform hover:-translate-y-1 group/card bg-white">
                                                     <div className="relative w-full aspect-square flex items-center justify-center mb-4 overflow-hidden">
                                                         <img src={p.image} className="max-h-[80%] max-w-[80%] object-contain group-hover/card:scale-105 transition-transform duration-700" alt={p.name} />
-                                                        <div className="absolute top-0 right-0 bg-[#cc0000] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{p.discount}</div>
+                                                        {p.discount && (
+                                                            <div className="absolute top-0 right-0 bg-[#cc0000] text-white text-[10px] font-bold px-2 py-0.5 rounded-full">-{String(p.discount).replace(/^-+/, '')}</div>
+                                                        )}
                                                     </div>
                                                     <div className="w-full space-y-3">
                                                         <h4 className="text-[13px] font-bold text-[#333] line-clamp-2 h-9 leading-snug">{p.name}</h4>
                                                         <div className="space-y-0.5">
-                                                            <div className="flex items-center gap-2 text-[12px] text-gray-300 line-through">
-                                                                {formatPrice(p.oldPriceNum)}
-                                                            </div>
+                                                            {p.oldPriceNum ? (
+                                                                <div className="flex items-center gap-2 text-[12px] text-gray-300 line-through">
+                                                                    {formatPrice(p.oldPriceNum)}
+                                                                </div>
+                                                            ) : null}
                                                             <div className="text-[#cc0000] font-black text-[18px] tracking-tight">{formatPrice(p.priceNum)}</div>
                                                         </div>
                                                         <div className="bg-[#f0faf7] rounded-lg px-3 py-1.5 flex items-center justify-between">
                                                             <span className="text-[10px] font-bold text-[#00917a]">Giá Member</span>
-                                                            <span className="text-[#00917a] font-black text-[14px]">{formatPrice(p.priceNum)}</span>
+                                                            <span className="text-[#00917a] font-black text-[14px]">{formatPrice(p.memberPrice || p.priceNum)}</span>
                                                         </div>
                                                         <button 
                                                             onClick={() => handleAddCrossSellToCart(p)}
@@ -507,7 +582,7 @@ const ProductDetailPage = () => {
                                             <span className="text-[12px] font-bold text-gray-700">+26,000 Điểm thưởng</span>
                                         </div>
                                      </div>
-                                     <Link to="/auth/login" className="absolute top-2 right-4 text-[12px] text-blue-600 font-bold hover:underline">Đăng nhập ngay</Link>
+                                     <Link to="/login" className="absolute top-2 right-4 text-[12px] text-blue-600 font-bold hover:underline">Đăng nhập ngay</Link>
                                 </div>
 
                                 <div className="bg-gray-50 border border-gray-100 rounded-xl p-5 flex justify-between items-center">
@@ -575,10 +650,9 @@ const ProductDetailPage = () => {
                                     {/* Suggestions Dropdown */}
                                     {showSuggestions && searchQuery.length > 0 && (
                                         <div className="absolute bottom-full left-0 w-full bg-white border border-gray-100 rounded-t-xl shadow-2xl z-50 mb-1 max-h-[250px] overflow-y-auto hh-scrollbar p-2 ring-1 ring-gray-200 animate-in fade-in slide-in-from-bottom-2">
-                                            <div className="text-[11px] font-bold text-gray-400 px-3 py-1 uppercase">Gợi ý sản phẩm ({tradeInProducts.filter(p => p.toLowerCase().includes(searchQuery.toLowerCase())).length})</div>
-                                            {tradeInProducts.filter(p => p.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
-                                                tradeInProducts
-                                                    .filter(p => p.toLowerCase().includes(searchQuery.toLowerCase()))
+                                            <div className="text-[11px] font-bold text-gray-400 px-3 py-1 uppercase">Gợi ý sản phẩm ({tradeInMatches.length})</div>
+                                            {tradeInMatches.length > 0 ? (
+                                                tradeInMatches
                                                     .map((p, idx) => (
                                                         <div 
                                                             key={idx}
@@ -811,9 +885,9 @@ const ProductDetailPage = () => {
                                     className="flex transition-transform duration-700 ease-in-out"
                                     style={{ transform: `translateX(-${hotIndex * 25}%)` }}
                                 >
-                                    {allProducts.filter(p => p.id !== product.id).slice(0, 8).map((p, i) => (
-                                        <div key={p.id} className="min-w-[25%] px-2">
-                                            <Link to={`/product/${p.id}`} className="block border border-gray-100 rounded-xl p-4 hover:shadow-lg transition-all duration-300 group bg-white hover:border-gray-200">
+                                    {hotProducts.map((p, i) => (
+                                        <div key={p.uiKey || p.id || i} className="min-w-[25%] px-2">
+                                            <Link to={`/product/${p.routeId || p.id}`} className="block border border-gray-100 rounded-xl p-4 hover:shadow-lg transition-all duration-300 group bg-white hover:border-gray-200">
                                                 
                                                 {/* Spec Badges */}
                                                 <div className="text-[11px] text-gray-400 space-y-1 mb-3">
@@ -845,15 +919,15 @@ const ProductDetailPage = () => {
 
                                                 {/* Price */}
                                                 <div className="flex items-center gap-2 mb-1">
-                                                    <span className="text-[12px] text-gray-400 line-through">{p.oldPrice || formatPrice((p.priceNum || 0) * 1.1)}</span>
-                                                    <span className="text-[12px] font-black text-[#cc0000]">-{Math.round(10)}%</span>
+                                                    <span className="text-[12px] text-gray-400 line-through">{formatPrice(p.oldPriceNum || Math.round((p.priceNum || 0) * 1.1))}</span>
+                                                    <span className="text-[12px] font-black text-[#cc0000]">-{String(p.discount || '10%').replace(/^-+/, '')}</span>
                                                 </div>
-                                                <p className="text-[18px] font-black text-[#cc0000] mb-3">{p.price || formatPrice(p.priceNum)}</p>
+                                                <p className="text-[18px] font-black text-[#cc0000] mb-3">{formatPrice(p.priceNum)}</p>
 
                                                 {/* Badges */}
                                                 <div className="space-y-1.5 mb-4">
                                                     <div className="bg-[#e8f8f4] text-[#00917a] text-[11px] font-bold px-2 py-1 rounded-md">
-                                                        PhoneSin Member giảm thêm tới <strong>78.000đ</strong>
+                                                        PhoneSin Member giảm thêm tới <strong>{formatPrice(Math.max((p.priceNum || 0) - (p.memberPrice || p.priceNum), 0))}</strong>
                                                     </div>
                                                     <div className="bg-blue-50 text-blue-600 text-[11px] font-bold px-2 py-1 rounded-md">
                                                         PhoneSin Edu giảm thêm <strong>-200.000đ</strong>
@@ -923,11 +997,11 @@ const ProductDetailPage = () => {
 
                         {/* Product Comparison Cards */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-                            {allProducts.filter(p => p.id !== product.id).slice(0, 5).map((p, i) => {
+                            {comparisonProducts.map((p, i) => {
                                 const savings = [1000000, 1800000, 1200000, 2400000, 2100000][i] || 1000000;
                                 const originalPrice = (p.priceNum || 5000000) + savings;
                                 return (
-                                    <div key={p.id} className="border border-gray-100 rounded-xl p-4 flex flex-col items-center hover:shadow-md transition-all duration-300 group">
+                                    <div key={p.uiKey || p.id || i} className="border border-gray-100 rounded-xl p-4 flex flex-col items-center hover:shadow-md transition-all duration-300 group">
                                         {/* Image */}
                                         <div className="w-full flex items-center justify-center h-[160px] mb-3 overflow-hidden">
                                             <img
@@ -942,14 +1016,14 @@ const ProductDetailPage = () => {
 
                                         {/* Price Row */}
                                         <div className="flex items-center gap-2 mb-2 flex-wrap justify-center">
-                                            <span className="text-[15px] font-black text-[#cc0000]">{p.price || formatPrice(p.priceNum)}</span>
+                                            <span className="text-[15px] font-black text-[#cc0000]">{formatPrice(p.priceNum)}</span>
                                             <span className="text-[12px] text-gray-400 line-through">{formatPrice(originalPrice)}</span>
                                         </div>
 
                                         {/* Final Price Badge */}
                                         <div className="w-full bg-[#fff0f0] border border-red-100 rounded-lg px-3 py-2 text-center mb-2">
                                             <p className="text-[11px] font-bold text-[#cc0000] uppercase">Giá cuối:</p>
-                                            <p className="text-[15px] font-black text-[#cc0000]">{p.price || formatPrice(p.priceNum)}</p>
+                                            <p className="text-[15px] font-black text-[#cc0000]">{formatPrice(p.priceNum)}</p>
                                         </div>
 
                                         {/* Savings */}
@@ -1157,6 +1231,12 @@ const ProductDetailPage = () => {
                 isOpen={showBuyModal}
                 onClose={() => setShowBuyModal(false)}
             />
+
+            {wishlistNotice && (
+                <div className="fixed top-24 right-6 z-[210] bg-white border border-[#008d71]/30 text-[#008d71] px-4 py-2 rounded-xl shadow-lg text-sm font-bold">
+                    {wishlistNotice}
+                </div>
+            )}
         </div>
     );
 };

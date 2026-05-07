@@ -3,87 +3,6 @@ import { useParams, Link } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import { useOrders } from '../../context/OrdersContext';
 
-// ─── Mock data lấy theo orderId ──────────────────────────────────────────────
-const MOCK_INVOICES = {
-  'ORD-54321': {
-    invoiceNo: 'INV-2026-054321',
-    issueDate: '02/04/2026',
-    dueDate: '02/04/2026',
-    orderId: 'ORD-54321',
-    orderDate: '2026-04-01 10:15',
-    status: 'Đã thanh toán',
-    customer: {
-      fullName: 'Nguyễn Văn A',
-      phone: '0901 234 567',
-      email: 'nguyenvana@gmail.com',
-      address: '123 Đường Láng, Thành Công, Ba Đình, Hà Nội',
-      taxCode: '',
-    },
-    payment: { method: 'Chuyển khoản ngân hàng (VCB)' },
-    items: [
-      { no: 1, name: 'iPhone 15 Pro Max 256GB – Titan Xanh', unit: 'Cái', qty: 1, unitPrice: 31568421, total: 31568421 },
-    ],
-    subtotal: 31568421,
-    shipping: 35000,
-    discount: 2113421,
-    vat: 0,
-    total: 29490000,
-    note: 'Cảm ơn quý khách đã mua hàng tại PhoneSin.',
-  },
-  'ORD-12345': {
-    invoiceNo: 'INV-2026-012345',
-    issueDate: '27/03/2026',
-    dueDate: '27/03/2026',
-    orderId: 'ORD-12345',
-    orderDate: '2026-03-25 08:30',
-    status: 'Đã thanh toán',
-    customer: {
-      fullName: 'Trần Thị B',
-      phone: '0988 777 666',
-      email: 'tranthib@gmail.com',
-      address: '456 Lê Lợi, Phường 1, Quận 1, TP. Hồ Chí Minh',
-      taxCode: '',
-    },
-    payment: { method: 'Tiền mặt khi nhận hàng (COD)' },
-    items: [
-      { no: 1, name: 'Samsung Galaxy S24 Ultra 12GB/256GB – Xám Titan', unit: 'Cái', qty: 1, unitPrice: 25990000, total: 25990000 },
-      { no: 2, name: 'Ốp lưng S24 Ultra Silicon Lilac', unit: 'Cái', qty: 1, unitPrice: 350000, total: 350000 },
-    ],
-    subtotal: 26340000,
-    shipping: 0,
-    discount: 0,
-    vat: 0,
-    total: 26340000,
-    note: 'Hàng đã kiểm tra, không nhận đổi trả sau khi ký nhận.',
-  },
-};
-
-const DEMO_INVOICE = {
-  invoiceNo: 'INV-2026-099999',
-  issueDate: new Date().toLocaleDateString('vi-VN'),
-  dueDate: new Date().toLocaleDateString('vi-VN'),
-  orderId: 'DEMO',
-  orderDate: new Date().toLocaleString('vi-VN'),
-  status: 'Đã thanh toán',
-  customer: {
-    fullName: 'Khách hàng Demo',
-    phone: '0900 000 000',
-    email: 'demo@phonesin.vn',
-    address: '99 Cầu Giấy, Dịch Vọng, Cầu Giấy, Hà Nội',
-    taxCode: '',
-  },
-  payment: { method: 'Chuyển khoản ngân hàng' },
-  items: [
-    { no: 1, name: 'iPhone 15 Pro Max 256GB – Titan Tự Nhiên', unit: 'Cái', qty: 1, unitPrice: 29490000, total: 29490000 },
-  ],
-  subtotal: 29490000,
-  shipping: 35000,
-  discount: 0,
-  vat: 0,
-  total: 29525000,
-  note: 'Đây là hóa đơn mẫu demo.',
-};
-
 // ─── Barcode-like decoration ──────────────────────────────────────────────────
 const Barcode = () => (
   <div className="flex items-end gap-[2px] h-12">
@@ -132,15 +51,8 @@ const InvoicePage = () => {
     }
   };
 
-  // ─── Find Real Order Data ──────────────────────────────────────────────────
   let realOrder = orders.find(o => o.id === orderId);
-  
-  if (!realOrder) {
-    const quickOrders = JSON.parse(localStorage.getItem('quickOrders') || '[]');
-    realOrder = quickOrders.find(o => o.orderId === orderId);
-  }
 
-  // ─── Map to Invoice Format ────────────────────────────────────────────────
   const invoice = realOrder ? {
     invoiceNo: `INV-${realOrder.id || realOrder.orderId}`,
     issueDate: new Date().toLocaleDateString('vi-VN'),
@@ -154,6 +66,8 @@ const InvoicePage = () => {
       phone: realOrder.customer.phone || realOrder.customer.phoneNumber,
       email: realOrder.customer.email,
       address: realOrder.customer.address || realOrder.delivery?.store || 'Tại cửa hàng PhoneSin',
+      companyName: realOrder.vatInfo?.companyName || '',
+      companyAddress: realOrder.vatInfo?.companyAddress || '',
       taxCode: realOrder.vatInfo?.taxCode || '',
     },
     payment: { method: realOrder.payment?.methodLabel || realOrder.payment?.method || 'Thanh toán khi nhận hàng' },
@@ -171,7 +85,35 @@ const InvoicePage = () => {
     vat: realOrder.vatInfo ? (realOrder.total * 0.1) : 0,
     total: realOrder.totalAmount || realOrder.total,
     note: realOrder.note || 'Cảm ơn quý khách đã mua hàng tại PhoneSin.',
-  } : (MOCK_INVOICES[orderId] || DEMO_INVOICE);
+  } : null;
+
+  if (!invoice) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
+        <div className="max-w-xl w-full bg-white rounded-3xl shadow-xl border border-gray-200 p-10 text-center">
+          <p className="text-xs font-black text-gray-400 uppercase tracking-[0.3em] mb-4">Hoa don dien tu</p>
+          <h1 className="text-3xl font-black text-slate-900 mb-3">Khong tim thay hoa don</h1>
+          <p className="text-sm font-medium text-gray-500 mb-8">
+            Don hang nay chua ton tai trong lich su don hang hien tai hoac ban chua tai lai du lieu backend.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <Link
+              to="/orders"
+              className="px-6 py-3 rounded-2xl bg-slate-950 text-white font-black uppercase tracking-widest hover:bg-red-600 transition-all"
+            >
+              Ve trang don hang
+            </Link>
+            <Link
+              to="/"
+              className="px-6 py-3 rounded-2xl border-2 border-gray-200 text-slate-700 font-black uppercase tracking-widest hover:border-slate-950 transition-all"
+            >
+              Tiep tuc mua sam
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const fmt = (n) => n ? n.toLocaleString('vi-VN') + 'đ' : '0đ';
 
@@ -273,6 +215,12 @@ const InvoicePage = () => {
               <p className="text-sm font-bold text-slate-600 mb-1">📞 {invoice.customer.phone}</p>
               <p className="text-sm font-bold text-slate-600 mb-1">✉️ {invoice.customer.email}</p>
               <p className="text-sm font-bold text-slate-600 leading-relaxed">📍 {invoice.customer.address}</p>
+              {invoice.customer.companyName && (
+                <p className="text-sm font-bold text-slate-600 mt-2">🏢 {invoice.customer.companyName}</p>
+              )}
+              {invoice.customer.companyAddress && (
+                <p className="text-sm font-bold text-slate-600 leading-relaxed">🧾 {invoice.customer.companyAddress}</p>
+              )}
               {invoice.customer.taxCode && (
                 <p className="text-sm font-bold text-slate-600 mt-1">MST: {invoice.customer.taxCode}</p>
               )}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   DollarSign, 
@@ -11,18 +11,75 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { useOrders } from '../../context/OrdersContext';
-import { allProducts } from '../../data/allProducts';
+import api from '../../lib/api';
+import { normalizeProduct } from '../../lib/products';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const { orders } = useOrders();
+  const [products, setProducts] = useState([]);
+
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        const response = await api.get('/api/products', {
+          params: { limit: 200, sort: 'popular', includeInactive: true },
+        });
+        setProducts((response.data?.data || []).map(normalizeProduct));
+      } catch {
+        setProducts([]);
+      }
+    };
+
+    loadProducts();
+  }, []);
   
-  // Calculate real stats with fallback for different data structures
   const totalRevenue = orders.reduce((sum, order) => {
     const val = order.totalAmount || order.total || order.amount || 0;
     return sum + (Number(val) || 0);
   }, 0);
-  const totalProducts = allProducts.length;
+  const totalProducts = products.length;
+
+  const chartValues = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat('vi-VN', { weekday: 'short' });
+    const dayBuckets = Array.from({ length: 7 }, (_, index) => {
+      const date = new Date();
+      date.setDate(date.getDate() - (6 - index));
+      const key = date.toISOString().slice(0, 10);
+
+      return {
+        key,
+        day: formatter.format(date),
+        rawTotal: 0,
+      };
+    });
+
+    const bucketMap = new Map(dayBuckets.map((bucket) => [bucket.key, bucket]));
+
+    orders.forEach((order) => {
+      const dateKey = new Date(order.createdAt || order.date || Date.now())
+        .toISOString()
+        .slice(0, 10);
+      const targetBucket = bucketMap.get(dateKey);
+
+      if (targetBucket) {
+        targetBucket.rawTotal += Number(order.totalAmount || order.total || 0);
+      }
+    });
+
+    const maxTotal = Math.max(...dayBuckets.map((bucket) => bucket.rawTotal), 1);
+
+    return dayBuckets.map((bucket) => ({
+      day: bucket.day,
+      val: Math.max(Math.round((bucket.rawTotal / maxTotal) * 100), bucket.rawTotal > 0 ? 12 : 6),
+      label: `${Math.round(bucket.rawTotal / 1000000)}M`,
+    }));
+  }, [orders]);
+
+  const topProducts = products
+    .slice()
+    .sort((left, right) => Number(right.soldCount || 0) - Number(left.soldCount || 0))
+    .slice(0, 3);
   
   const stats = [
     { label: 'Doanh thu', value: `${totalRevenue.toLocaleString()} ₫`, icon: <DollarSign />, trend: '+12.5%', isPositive: true, color: '#3b82f6' },
@@ -51,17 +108,6 @@ const AdminDashboard = () => {
       statusColor: (o.status === 'delivered' || o.status === 'Đã giao') ? '#10b981' : (o.status === 'cancelled' || o.status === 'Đã hủy') ? '#ef4444' : '#f59e0b'
     };
   });
-
-  // Giả lập dữ liệu doanh thu 7 ngày
-  const chartValues = [
-    { day: 'Thứ 2', val: 65 },
-    { day: 'Thứ 3', val: 45 },
-    { day: 'Thứ 4', val: 75 },
-    { day: 'Thứ 5', val: 55 },
-    { day: 'Thứ 6', val: 85 },
-    { day: 'Thứ 7', val: 95 },
-    { day: 'Thứ CN', val: 70 },
-  ];
 
   return (
     <div className="dashboard-container">
@@ -110,13 +156,13 @@ const AdminDashboard = () => {
                     width: '35px', 
                     backgroundColor: '#2563eb', 
                     borderRadius: '8px 8px 0 0',
-                    position: 'relative',
+                   position: 'relative',
                     transition: 'height 0.5s ease'
                  }}>
                    <span style={{ 
                       position: 'absolute', top: '-25px', left: '50%', transform: 'translateX(-50%)', 
                       fontSize: '11px', fontWeight: '700', color: '#1e293b' 
-                   }}>{item.val}M</span>
+                   }}>{item.label}</span>
                  </div>
                  {/* Label */}
                  <span style={{ fontSize: '12px', color: '#64748b', marginTop: '10px', fontWeight: '500' }}>{item.day}</span>
@@ -132,18 +178,25 @@ const AdminDashboard = () => {
             <button className="card-action" onClick={() => navigate('/admin/products')}>Xem tất cả</button>
           </div>
           <div className="product-list">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="product-item">
+            {topProducts.length > 0 ? topProducts.map((product) => (
+              <div key={product.id} className="product-item">
                 <div className="product-img">📱</div>
                 <div className="product-details">
-                  <span className="product-name">iPhone 15 Pro Max {i === 1 ? 'White' : 'Black'}</span>
-                  <span className="product-category">Điện thoại</span>
+                  <span className="product-name">{product.name}</span>
+                  <span className="product-category">{product.backendCategory || product.category}</span>
                 </div>
                 <div className="product-sales">
-                  <span className="sales-count">{250 - i * 30} lượt bán</span>
+                  <span className="sales-count">{Number(product.soldCount || 0).toLocaleString()} lượt bán</span>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="product-item">
+                <div className="product-details">
+                  <span className="product-name">Chưa có dữ liệu sản phẩm</span>
+                  <span className="product-category">Danh sách sẽ hiện khi backend có sản phẩm</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
