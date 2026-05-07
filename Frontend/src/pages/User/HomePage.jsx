@@ -129,7 +129,7 @@ const HomePage = () => {
 
     return (
         <div className="bg-[#f0f2f5] min-h-screen pb-20 font-sans">
-            <div className="max-w-[1850px] mx-auto flex gap-6 pt-6 px-4 sm:px-8 relative items-start">
+            <div className="max-w-[1850px] mx-auto flex gap-4 lg:gap-6 pt-3 sm:pt-6 px-3 sm:px-8 relative items-start">
                 
                 {/* 1. LEFT POSTER - Refined Height & Premium Look */}
                 <div className="hidden 2xl:block w-[185px] shrink-0 sticky top-[130px] h-[700px] rounded-2xl overflow-hidden shadow-2xl border border-white/50 group">
@@ -223,7 +223,7 @@ const HomePage = () => {
                         {/* Header Image (Festive Banner) */}
                         <div className="w-full relative rounded-t-2xl overflow-hidden shadow-lg border-x border-t border-[#c00]">
                             <img src="https://cdn.hoanghamobile.vn/i/home/Uploads/2026/01/19/khung-sale-tet-fill-danh-muc.png" className="w-full h-auto" alt="Flash Sale Banner" />
-                            <Link to="/flash-sale" className="absolute top-4 right-4 bg-white/95 hover:bg-white text-gray-800 px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 transition-all shadow-md group">
+                            <Link to="/flash-sale" className="hidden sm:flex absolute top-4 right-4 bg-white/95 hover:bg-white text-gray-800 px-4 py-1.5 rounded-full text-xs font-bold items-center gap-1 transition-all shadow-md group">
                                 Xem thêm <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
                             </Link>
                         </div>
@@ -270,7 +270,7 @@ const HomePage = () => {
                                         <button 
                                             key={i} 
                                             onClick={() => setActiveTab(tab.name)}
-                                            className={`px-5 py-2 rounded-full text-[13px] font-black transition-all border-2 ${
+                                            className={`px-3 sm:px-5 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-[13px] font-black transition-all border-2 ${
                                                 activeTab === tab.name 
                                                 ? 'bg-[#00917a] text-white border-[#00917a] shadow-md' 
                                                 : 'bg-white text-[#00917a] border-[#00917a] hover:bg-emerald-50'
@@ -294,7 +294,7 @@ const HomePage = () => {
                                     }}
                                 >
                                     {flashSaleProducts.map((item, i) => (
-                                        <div key={item.uiKey || item.id || i} className="min-w-[210px] md:min-w-[240px] flex-shrink-0 snap-start">
+                                        <div key={item.uiKey || item.id || i} className="min-w-[178px] sm:min-w-[210px] md:min-w-[240px] flex-shrink-0 snap-start">
                                             <ProductCard product={item} />
                                         </div>
                                     ))}
@@ -303,13 +303,13 @@ const HomePage = () => {
                                 {/* Carousel Navigation - Fixed Precision and Visibility */}
                                 <button 
                                     onClick={() => flashSaleRef.current.scrollBy({ left: -flashSaleRef.current.offsetWidth/2, behavior: 'smooth' })}
-                                    className="absolute -left-4 top-[40%] -translate-y-1/2 bg-white/95 backdrop-blur-md w-11 h-11 rounded-full shadow-[0_5px_20px_rgba(0,0,0,0.2)] flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 z-50 transition-all hover:scale-110 active:scale-90 border border-gray-100"
+                                    className="hidden sm:flex absolute -left-4 top-[40%] -translate-y-1/2 bg-white/95 backdrop-blur-md w-11 h-11 rounded-full shadow-[0_5px_20px_rgba(0,0,0,0.2)] items-center justify-center opacity-0 group-hover/carousel:opacity-100 z-50 transition-all hover:scale-110 active:scale-90 border border-gray-100"
                                 >
                                     <ChevronLeft size={24} className="text-[#00917a]" strokeWidth={3} />
                                 </button>
                                 <button 
                                     onClick={() => flashSaleRef.current.scrollBy({ left: flashSaleRef.current.offsetWidth/2, behavior: 'smooth' })}
-                                    className="absolute -right-4 top-[40%] -translate-y-1/2 bg-white/95 backdrop-blur-md w-11 h-11 rounded-full shadow-[0_5px_20px_rgba(0,0,0,0.2)] flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 z-50 transition-all hover:scale-110 active:scale-90 border border-gray-100"
+                                    className="hidden sm:flex absolute -right-4 top-[40%] -translate-y-1/2 bg-white/95 backdrop-blur-md w-11 h-11 rounded-full shadow-[0_5px_20px_rgba(0,0,0,0.2)] items-center justify-center opacity-0 group-hover/carousel:opacity-100 z-50 transition-all hover:scale-110 active:scale-90 border border-gray-100"
                                 >
                                     <ChevronRight size={24} className="text-[#00917a]" strokeWidth={3} />
                                 </button>

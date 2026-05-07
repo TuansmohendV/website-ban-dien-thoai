@@ -1,17 +1,30 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import api, { getApiErrorMessage } from '../../lib/api';
 
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState('');
   const [isSent, setIsSent] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsSent(true);
-    // Simulating API call
-    setTimeout(() => {
-        alert(`Link khôi phục đã được gửi tới: ${email}`);
-    }, 500);
+    setErrorMessage('');
+    setIsSubmitting(true);
+
+    try {
+      await api.post('/api/auth/forgot-password', {
+        email: email.trim(),
+      });
+      setIsSent(true);
+    } catch (error) {
+      setErrorMessage(
+        getApiErrorMessage(error, 'Khong the gui yeu cau khoi phuc mat khau.')
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -91,10 +104,14 @@ const ForgotPasswordPage = () => {
 
                     <button 
                         type="submit"
-                        className="w-full bg-slate-950 text-white rounded-2xl py-4.5 font-black uppercase tracking-[0.25em] shadow-2xl hover:bg-red-600 transition-all hover:scale-[1.02] active:scale-95 shadow-slate-200"
+                        disabled={isSubmitting}
+                        className="w-full bg-slate-950 text-white rounded-2xl py-4.5 font-black uppercase tracking-[0.25em] shadow-2xl hover:bg-red-600 transition-all hover:scale-[1.02] active:scale-95 shadow-slate-200 disabled:opacity-60"
                     >
-                        GỬI YÊU CẦU 
+                        {isSubmitting ? 'DANG GUI...' : 'GUI YEU CAU'}
                     </button>
+                    {errorMessage && (
+                      <p className="text-sm font-semibold text-red-500">{errorMessage}</p>
+                    )}
                     
                     <div className="pt-6 border-t border-slate-100 flex justify-center">
                         <Link to="/login" className="flex items-center gap-2 text-sm font-black text-slate-400 hover:text-slate-900 transition-all uppercase tracking-widest">

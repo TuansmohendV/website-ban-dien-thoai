@@ -88,9 +88,15 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const logout = () => {
-        clearSession();
-        setUser(null);
+    const logout = async () => {
+        try {
+            await api.post('/api/auth/logout');
+        } catch {
+            // Keep client-side logout even if network call fails.
+        } finally {
+            clearSession();
+            setUser(null);
+        }
     };
 
     const refreshProfile = async () => {

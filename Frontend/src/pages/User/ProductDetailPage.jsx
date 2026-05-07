@@ -1,12 +1,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ChevronRight, ChevronLeft, Star, Heart, Share2, ShieldCheck, Truck, RefreshCw, MapPin, Video, Image as ImageIcon, Info, Plus, ShoppingCart, Settings, FileText, Wallet, Check } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCart } from '../../context/CartContext';
 import Breadcrumbs from '../../components/Breadcrumbs';
 import ProductCard from '../../components/ProductCard';
 import BuyNowModal from '../../components/BuyNowModal';
-import api from '../../lib/api';
+import api, { getApiErrorMessage } from '../../lib/api';
 import {
     inflateProducts,
     normalizeProduct,
@@ -15,6 +15,7 @@ import {
 
 const ProductDetailPage = () => {
     const { id } = useParams();
+    const navigate = useNavigate();
     const { t, formatPrice } = useLanguage();
     const { addToCart } = useCart();
     
@@ -33,6 +34,7 @@ const ProductDetailPage = () => {
     const [selectedColor, setSelectedColor] = useState(null);
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [showToast, setShowToast] = useState(false);
+    const [wishlistNotice, setWishlistNotice] = useState('');
     const [selectedCity, setSelectedCity] = useState('Hồ Chí Minh');
     const [searchQuery, setSearchQuery] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -197,6 +199,29 @@ const ProductDetailPage = () => {
         setTimeout(() => setShowToast(false), 3000);
     };
 
+    const handleAddWishlist = async () => {
+        if (!product?.backendId) {
+            setWishlistNotice('San pham khong hop le de them yeu thich.');
+            setTimeout(() => setWishlistNotice(''), 2500);
+            return;
+        }
+
+        try {
+            await api.post('/api/user/wishlist', { productId: product.backendId });
+            setWishlistNotice('Da them vao danh sach yeu thich.');
+        } catch (error) {
+            if (error?.response?.status === 401) {
+                navigate('/login');
+                return;
+            }
+            setWishlistNotice(
+                getApiErrorMessage(error, 'Khong the them vao danh sach yeu thich.')
+            );
+        } finally {
+            setTimeout(() => setWishlistNotice(''), 2500);
+        }
+    };
+
     if (isLoading || !product || !selectedStorage || !selectedColor) {
         return (
             <div className="min-h-[60vh] flex flex-col items-center justify-center p-10">
@@ -275,7 +300,10 @@ const ProductDetailPage = () => {
                                     <ChevronRight size={28} strokeWidth={3} />
                                 </button>
 
-                                <button className="absolute top-4 right-4 p-2.5 bg-white/90 rounded-full shadow-md text-[#cc0000] hover:scale-110 transition-transform">
+                                <button
+                                    onClick={handleAddWishlist}
+                                    className="absolute top-4 right-4 p-2.5 bg-white/90 rounded-full shadow-md text-[#cc0000] hover:scale-110 transition-transform"
+                                >
                                     <Heart size={22} />
                                 </button>
                                 <div className="absolute top-4 right-16 p-2.5 bg-white/90 rounded-full shadow-md text-gray-600 hover:scale-110 transition-transform">
@@ -1203,6 +1231,12 @@ const ProductDetailPage = () => {
                 isOpen={showBuyModal}
                 onClose={() => setShowBuyModal(false)}
             />
+
+            {wishlistNotice && (
+                <div className="fixed top-24 right-6 z-[210] bg-white border border-[#008d71]/30 text-[#008d71] px-4 py-2 rounded-xl shadow-lg text-sm font-bold">
+                    {wishlistNotice}
+                </div>
+            )}
         </div>
     );
 };

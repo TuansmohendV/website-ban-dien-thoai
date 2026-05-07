@@ -31,6 +31,7 @@ import InvoicePage from './pages/User/InvoicePage';
 import StoreLocatorPage from './pages/User/StoreLocatorPage';
 import CustomerSupportPage from './pages/User/CustomerSupportPage';
 import ProtectedRoute from './components/ProtectedRoute';
+import ScrollToTop from './components/ScrollToTop';
 
 // Pages - Auth
 import LoginPage from './pages/Auth/LoginPage';
@@ -53,6 +54,7 @@ function App() {
       <AuthProvider>
         <CartProvider>
           <OrdersProvider>
+            <ScrollToTop />
             <Routes>
             {/* Các trang sử dụng MainLayout (có Navbar/Footer) */}
             <Route path="/" element={<MainLayout />}>
@@ -75,7 +77,7 @@ function App() {
               <Route path="referral" element={<ReferralPage />} />
               <Route path="flash-voucher" element={<FlashVoucherPage />} />
               <Route path="invoice/:orderId" element={<ProtectedRoute><InvoicePage /></ProtectedRoute>} />
-              <Route path="customer-support" element={<CustomerSupportPage />} />
+              <Route path="customer-support" element={<ProtectedRoute><CustomerSupportPage /></ProtectedRoute>} />
             </Route>
 
             {/* Các trang không dùng chung Layout (Trang đăng nhập/đăng ký/giỏ hàng) */}

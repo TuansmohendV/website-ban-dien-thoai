@@ -100,6 +100,10 @@ app.get('/', (req, res) => {
 // ─── Auth ────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 
+// ─── User-linked modules that can conflict with /api/user/:id ─────────────
+app.use('/api/user/wishlist', wishlistRoutes);
+app.use('/api/user/search-history', searchHistoryRoutes);
+
 // ─── User profile & admin user management ────────
 app.use('/api/user', userRoutes);
 app.use('/api/users', userRoutes);
@@ -147,14 +151,12 @@ app.use('/api/admin/dashboard', dashboardRoutes);
 
 // ─── Wishlist ────────────────────────────────────
 app.use('/api/wishlist', wishlistRoutes);
-app.use('/api/user/wishlist', wishlistRoutes);
 
 // ─── Notifications ──────────────────────────────
 app.use('/api/notifications', notificationRoutes);
 
 // ─── Search History ─────────────────────────────
 app.use('/api/search-history', searchHistoryRoutes);
-app.use('/api/user/search-history', searchHistoryRoutes);
 
 // ─── Support Tickets (User + Public FAQ) ────────
 app.use('/api/support', supportRoutes);
