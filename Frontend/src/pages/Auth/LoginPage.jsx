@@ -9,8 +9,6 @@ import {
     BatteryCharging,
     Truck,
     Gift,
-    Chrome,
-    Facebook,
     Eye,
     EyeOff,
     Minus,
@@ -18,16 +16,17 @@ import {
     ArrowLeft
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
+import api from '../../lib/api';
 
 const LoginPage = () => {
-    const { login } = useAuth();
+    const { login, loginWithEmailOTP } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const redirectTo = location.state?.from?.pathname || '/';
 
-    const [phone, setPhone] = useState('');
-    const [loginMode, setLoginMode] = useState('phone'); // phone, password, otp
-    const [formData, setFormData] = useState({ email: '', password: '' });
+    const [email, setEmail] = useState('');
+    const [loginMode, setLoginMode] = useState('password'); // password, email (otp)
+    const [formData, setFormData] = useState({ password: '' });
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [showPassword, setShowPassword] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -68,54 +67,59 @@ const LoginPage = () => {
 
     const handleSendOTP = async () => {
         setIsSubmitting(true);
-        // Simulate API call to send OTP via Zalo
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        setTimer(60);
-        setCanResend(false);
-        setIsSubmitting(false);
         setErrorMessage('');
+        try {
+            const response = await api.post('/api/auth/send-otp', { email: email.trim() });
+            
+            setTimer(60);
+            setCanResend(false);
+            setLoginMode('otp');
+        } catch (error) {
+            console.error('Send OTP Error:', error);
+            setErrorMessage(error.response?.data?.message || 'Lỗi khi gửi mã OTP qua Email. Vui lòng thử lại.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setErrorMessage('');
 
-        if (loginMode === 'phone') {
-            const phoneRegex = /^(0|84)(3|5|7|8|9)([0-9]{8})$/;
-            if (!phone.trim() || !phoneRegex.test(phone.trim())) {
-                setErrorMessage('Vui long nhap so dien thoai hop le de tiep tuc.');
+        if (loginMode === 'email') {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!email.trim() || !emailRegex.test(email.trim())) {
+                setErrorMessage('Vui lòng nhập email hợp lệ để tiếp tục.');
                 return;
             }
 
             await handleSendOTP();
-            setLoginMode('otp');
             return;
         }
 
         if (loginMode === 'otp') {
             const otpCode = otp.join('');
             if (otpCode.length < 6) {
-                setErrorMessage('Vui long nhap day du ma OTP.');
+                setErrorMessage('Vui lòng nhập đầy đủ mã OTP.');
                 return;
             }
 
             setIsSubmitting(true);
             try {
-                // Simulate OTP verification
-                await new Promise(resolve => setTimeout(resolve, 1000));
-                
-                // If verification success, we can either login directly if backend supports it
-                // or move to password step if it's a dual verification.
-                // For this request, we'll simulate direct login or account creation.
-                
-                // Simulated login
-                await login({
-                    identifier: phone.trim(),
-                    password: 'simulated_otp_login', // Backend would handle this
+                // Xác thực mã OTP ở backend
+                await api.post('/api/auth/verify-otp', {
+                    email: email.trim(),
+                    otp: otpCode 
+                });
+
+                // Nếu xác thực thành công, thực hiện đăng nhập qua Email OTP
+                await loginWithEmailOTP({
+                    email: email.trim()
                 });
                 navigate(redirectTo, { replace: true });
             } catch (error) {
-                setErrorMessage('Ma xac thuc khong dung hoac da het han.');
+                console.error('Verify Error:', error);
+                setErrorMessage(error.response?.data?.message || 'Mã xác thực không đúng hoặc đã hết hạn.');
             } finally {
                 setIsSubmitting(false);
             }
@@ -125,7 +129,7 @@ const LoginPage = () => {
         try {
             setIsSubmitting(true);
             await login({
-                identifier: formData.email.trim(),
+                identifier: email.trim(),
                 password: formData.password,
             });
             navigate(redirectTo, { replace: true });
@@ -222,27 +226,27 @@ const LoginPage = () => {
                     <div className="mb-10">
                         <h3 className="text-[22px] font-black text-[#111] mb-2">Chao mung ban toi PhoneSin</h3>
                         <p className="text-[#333] text-[14px] font-medium leading-relaxed">
-                            {loginMode === 'phone'
-                                ? 'Ban da tung mua sam tai PhoneSin? Dang nhap xem hang the ngay'
+                            {loginMode === 'email'
+                                ? 'Bạn đã từng mua sắm tại PhoneSin? Đăng nhập nhận ưu đãi ngay'
                                 : loginMode === 'otp'
-                                ? `Ma xac thuc da duoc gui toi Zalo cua so dien thoai ${phone}`
-                                : 'Chao mung ban tro lai! Vui long dang nhap tai khoan khach hang'}
+                                ? `Mã xác thực đã được gửi tới Email: ${email}`
+                                : 'Chào mừng bạn trở lại! Vui lòng đăng nhập tài khoản khách hàng'}
                         </p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-5">
-                        {loginMode === 'phone' ? (
+                        {loginMode === 'email' ? (
                             <div className="space-y-1">
                                 <input
-                                    type="tel"
+                                    type="email"
                                     required
-                                    value={phone}
-                                    onChange={(e) => setPhone(e.target.value)}
-                                    placeholder="So dien thoai cua ban"
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="Địa chỉ Email của bạn"
                                     className="w-full bg-white border border-gray-300 rounded-lg px-5 py-4 text-slate-900 text-[15px] font-semibold focus:border-[#008d71] focus:ring-0 outline-none transition-all placeholder:text-gray-400"
                                 />
                                 <p className="text-[12px] text-gray-400 font-medium pl-1 mt-2">
-                                    He thong se gui ma xac thuc OTP qua Zalo de xac minh tai khoan
+                                    Hệ thống sẽ gửi mã xác thực OTP qua Gmail để xác minh tài khoản
                                 </p>
                             </div>
                         ) : loginMode === 'otp' ? (
@@ -264,10 +268,10 @@ const LoginPage = () => {
                                 <div className="flex items-center justify-between px-1">
                                     <button 
                                         type="button"
-                                        onClick={() => setLoginMode('phone')}
+                                        onClick={() => setLoginMode('email')}
                                         className="text-[13px] font-bold text-gray-500 hover:text-[#008d71] flex items-center gap-1 transition-colors"
                                     >
-                                        <ArrowLeft size={14} /> Thay doi so dien thoai
+                                        <ArrowLeft size={14} /> Thay đổi Email
                                     </button>
                                     <div className="text-[13px] font-bold">
                                         {canResend ? (
@@ -291,8 +295,8 @@ const LoginPage = () => {
                                     <input
                                         type="text"
                                         required
-                                        value={formData.email}
-                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
                                         className="w-full bg-white border border-gray-300 rounded-lg px-5 py-3.5 text-slate-900 text-[15px] font-semibold focus:border-[#008d71] outline-none transition-all"
                                     />
                                 </div>
@@ -334,51 +338,30 @@ const LoginPage = () => {
                                 : (loginMode === 'otp' ? 'XAC NHAN MA OTP' : 'TIEP TUC')}
                         </button>
 
-                        <div className="text-center pt-2">
+                        <div className="text-center pt-2 space-y-3">
                             {loginMode !== 'otp' && (
                                 <button
                                     type="button"
                                     onClick={() => {
                                         setErrorMessage('');
-                                        setLoginMode(loginMode === 'phone' ? 'password' : 'phone');
+                                        setLoginMode(loginMode === 'email' ? 'password' : 'email');
                                     }}
-                                    className="text-[#008d71] text-[15px] font-bold hover:underline underline-offset-4"
+                                    className="text-[#008d71] text-[15px] font-bold hover:underline underline-offset-4 block w-full"
                                 >
-                                    {loginMode === 'phone' ? 'Dang nhap bang mat khau' : 'Dang nhap bang So dien thoai'}
+                                    {loginMode === 'email' ? 'Đăng nhập bằng mật khẩu' : 'Đăng nhập bằng Email OTP'}
                                 </button>
                             )}
+                            
+                            <div className="text-[14px] text-gray-500 font-medium">
+                                Bạn chưa có tài khoản?{' '}
+                                <Link to="/register" className="text-[#008d71] font-black hover:underline">
+                                    Đăng ký ngay
+                                </Link>
+                            </div>
                         </div>
                     </form>
 
-                    {loginMode !== 'password' && (
-                        <div className="mt-10">
-                            <div className="relative mb-8">
-                                <div className="absolute inset-0 flex items-center">
-                                    <span className="w-full border-t border-gray-200"></span>
-                                </div>
-                                <div className="relative flex justify-center text-xs uppercase">
-                                    <span className="bg-white px-4 text-gray-500 font-bold tracking-widest leading-none">Hoac dang nhap nhanh</span>
-                                </div>
-                            </div>
-
-                            <div className="space-y-3">
-                                <button className="w-full flex items-center justify-center h-[52px] bg-[#0068ff] text-white rounded-lg font-bold gap-3 hover:opacity-90 transition-all shadow-sm">
-                                    <MessageCircle size={22} fill="white" />
-                                    Dang nhap voi Zalo
-                                </button>
-
-                                <button className="w-full flex items-center justify-center h-[52px] bg-white border border-gray-300 text-[#555] rounded-lg font-bold gap-3 hover:bg-gray-50 transition-all shadow-sm">
-                                    <Chrome size={20} className="text-[#ea4335]" fill="#ea4335" />
-                                    Dang nhap voi Google
-                                </button>
-
-                                <button className="w-full flex items-center justify-center h-[52px] bg-[#3b5998] text-white rounded-lg font-bold gap-3 hover:opacity-90 transition-all shadow-sm">
-                                    <Facebook size={20} fill="white" />
-                                    Dang nhap voi Facebook
-                                </button>
-                            </div>
-                        </div>
-                    )}
+                    {/* Social login buttons removed */}
 
                     <div className="mt-12 text-[12px] text-gray-500 leading-relaxed text-center lg:text-left">
                         Bang viec tiep tuc, ban da doc va dong y voi <Link to="/policy" className="text-[#008d71] font-bold hover:underline">Chinh sach bao mat thong tin ca nhan</Link> cua PhoneSin

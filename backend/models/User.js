@@ -39,8 +39,13 @@ const userSchema = new mongoose.Schema(
     dateOfBirth: Date,
     authProvider: {
       type: String,
-      enum: ['local', 'google', 'facebook'],
+      enum: ['local', 'google', 'facebook', 'firebase', 'email_otp'],
       default: 'local',
+    },
+    firebaseUid: {
+      type: String,
+      sparse: true,
+      unique: true,
     },
     role: {
       type: String,

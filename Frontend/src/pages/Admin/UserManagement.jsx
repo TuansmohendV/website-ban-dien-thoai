@@ -72,7 +72,7 @@ const UserManagement = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedRole, setSelectedRole] = useState('Nhân viên');
   const [activeMenuId, setActiveMenuId] = useState(null);
-  const [selectedUser, setSelectedUser] = useState(null);
+
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);

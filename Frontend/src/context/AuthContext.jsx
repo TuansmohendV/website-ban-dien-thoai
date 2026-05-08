@@ -71,6 +71,40 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const loginWithFirebase = async (payload) => {
+        try {
+            const response = await api.post('/api/auth/firebase-login', payload);
+            const nextUser = normalizeUser(response.data?.user || {});
+            persistSession({
+                token: response.data?.token,
+                user: nextUser,
+            });
+            setUser(nextUser);
+            return nextUser;
+        } catch (error) {
+            throw new Error(
+                getApiErrorMessage(error, 'Xác thực OTP thành công nhưng không thể đăng nhập hệ thống.')
+            );
+        }
+    };
+
+    const loginWithEmailOTP = async (payload) => {
+        try {
+            const response = await api.post('/api/auth/otp-login', payload);
+            const nextUser = normalizeUser(response.data?.user || {});
+            persistSession({
+                token: response.data?.token,
+                user: nextUser,
+            });
+            setUser(nextUser);
+            return nextUser;
+        } catch (error) {
+            throw new Error(
+                getApiErrorMessage(error, 'Xác thực OTP thành công nhưng không thể đăng nhập hệ thống.')
+            );
+        }
+    };
+
     const register = async (payload) => {
         try {
             const response = await api.post('/api/auth/register', payload);
@@ -143,6 +177,8 @@ export const AuthProvider = ({ children }) => {
             value={{
                 user,
                 login,
+                loginWithFirebase,
+                loginWithEmailOTP,
                 register,
                 logout,
                 refreshProfile,

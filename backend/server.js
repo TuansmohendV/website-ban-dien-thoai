@@ -1,6 +1,7 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+dotenv.config();
 import cors from 'cors';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
@@ -31,8 +32,6 @@ import adminProductRoutes from './routes/adminProductRoutes.js';
 import adminOrderRoutes from './routes/adminOrderRoutes.js';
 import adminReviewRoutes from './routes/adminReviewRoutes.js';
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
-
-dotenv.config();
 
 const app = express();
 

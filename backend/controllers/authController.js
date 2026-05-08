@@ -242,10 +242,79 @@ export const socialLogin = asyncHandler(async (req, res) => {
   });
 });
 
+export const firebaseLogin = asyncHandler(async (req, res) => {
+  const { phone: rawPhone, firebaseUid } = req.body;
+
+  if (!rawPhone || !firebaseUid) {
+    throw new AppError(400, 'Vui lòng cung cấp số điện thoại và firebaseUid.');
+  }
+
+  const phone = normalizePhone(rawPhone);
+  let user = await User.findOne({ 
+    $or: [
+      { firebaseUid },
+      { phone }
+    ]
+  });
+
+  if (!user) {
+    // Create new user if not exists
+    user = await User.create({
+      phone,
+      firebaseUid,
+      authProvider: 'firebase',
+      fullName: 'Khách hàng',
+      password: crypto.randomBytes(16).toString('hex'), // Dummy password for local auth compatibility
+    });
+  } else {
+    // Update firebaseUid if not set
+    if (!user.firebaseUid) {
+      user.firebaseUid = firebaseUid;
+      user.authProvider = 'firebase';
+    }
+    user.lastLoginAt = new Date();
+    await user.save({ validateBeforeSave: false });
+  }
+
+  res.json({
+    ...buildAuthResponse(user),
+    message: 'Đăng nhập bằng mã OTP thành công.',
+  });
+});
+
+export const otpEmailLogin = asyncHandler(async (req, res) => {
+  const { email: rawEmail } = req.body;
+
+  if (!rawEmail) {
+    throw new AppError(400, 'Vui lòng cung cấp email.');
+  }
+
+  const email = rawEmail.toLowerCase().trim();
+  let user = await User.findOne({ email });
+
+  if (!user) {
+    // Create new user if not exists (Register on first login)
+    user = await User.create({
+      email,
+      fullName: 'Khách hàng',
+      password: crypto.randomBytes(16).toString('hex'), // Dummy password
+      authProvider: 'email_otp',
+    });
+  } else {
+    user.lastLoginAt = new Date();
+    await user.save({ validateBeforeSave: false });
+  }
+
+  res.json({
+    ...buildAuthResponse(user),
+    message: 'Đăng nhập bằng Email OTP thành công.',
+  });
+});
+
 export const logoutUser = asyncHandler(async (req, res) => {
   // JWT is stateless, so logout is handled on the client side
   // This endpoint confirms the logout action
   res.json({
-    message: 'Đăng xuất thành công.',
+    message: 'Đánh xuất thành công.',
   });
 });

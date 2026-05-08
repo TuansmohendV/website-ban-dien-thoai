@@ -20,7 +20,8 @@ import {
   Image as ImageIcon,
   LayoutTemplate,
   Hash,
-  Dna
+  Dna,
+  Settings
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
