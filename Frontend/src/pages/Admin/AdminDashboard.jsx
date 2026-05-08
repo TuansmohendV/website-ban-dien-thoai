@@ -196,9 +196,6 @@ const AdminDashboard = () => {
                 </div>
               </div>
             )) : (
-                </div>
-              </div>
-            )) : (
               <div className="product-item">
                 <div className="product-details">
                   <span className="product-name">Chưa có dữ liệu sản phẩm</span>

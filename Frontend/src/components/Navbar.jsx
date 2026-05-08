@@ -164,7 +164,6 @@ const Navbar = () => {
                                 <span className="text-[11px] font-black text-[#004f44]/80 tracking-[0.22em] uppercase">MOBILE.COM</span>
                             </div>
                         </div>
-                        </div>
                     </Link>
 
                     {/* 2. Middle & Right Group */}
