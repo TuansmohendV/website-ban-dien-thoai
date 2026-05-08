@@ -1,22 +1,61 @@
 import mongoose from 'mongoose';
+import { toSlug } from '../utils/slug.js';
 
-const productSchema = new mongoose.Schema({
+const productSchema = new mongoose.Schema(
+  {
     name: { type: String, required: true },
-    image: { type: String, required: true },
-    brand: { type: String, required: true }, // Apple, Samsung, Xiaomi...
-    category: { type: String, default: 'Smartphone' },
+    slug: { type: String, trim: true, unique: true, sparse: true },
+    image: { type: String, required: true, trim: true },
+    images: { type: [String], default: [] },
+    brand: { type: String, required: true, trim: true },
+    brandRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Brand' },
+    category: { type: String, default: 'Smartphone', trim: true },
+    categoryRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Category' },
     description: { type: String, required: true },
     price: { type: Number, required: true, default: 0 },
+    originalPrice: { type: Number, default: 0 },
     countInStock: { type: Number, required: true, default: 0 },
-    // Các thông số chuyên biệt cho Điện thoại
-    screen: { type: String },   // Ví dụ: 6.7 inch, OLED
-    battery: { type: String },  // Ví dụ: 5000mAh
-    camera: { type: String },   // Ví dụ: 48MP Chính & 12MP Phụ
-    ram: { type: String },      // Ví dụ: 8GB
-    storage: { type: String }   // Ví dụ: 128GB, 256GB
-}, {
-    timestamps: true 
+    screen: { type: String, default: '' },
+    battery: { type: String, default: '' },
+    camera: { type: String, default: '' },
+    ram: { type: String, default: '' },
+    storage: { type: String, default: '' },
+    colors: { type: [String], default: [] },
+    features: { type: [String], default: [] },
+    tags: { type: [String], default: [] },
+    specifications: {
+      type: Map,
+      of: String,
+      default: {},
+    },
+    rating: { type: Number, default: 0 },
+    numReviews: { type: Number, default: 0 },
+    soldCount: { type: Number, default: 0 },
+    status: {
+      type: String,
+      enum: ['active', 'inactive'],
+      default: 'active',
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+productSchema.pre('validate', function buildSlug() {
+  if (this.name && (!this.slug || this.isModified('name'))) {
+    this.slug = toSlug(this.name);
+  }
 });
+
+productSchema.index({
+  name: 'text',
+  description: 'text',
+  brand: 'text',
+  category: 'text',
+  tags: 'text',
+});
+productSchema.index({ brand: 1, category: 1, price: 1 });
 
 const Product = mongoose.model('Product', productSchema);
 export default Product;

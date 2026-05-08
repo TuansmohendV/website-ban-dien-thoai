@@ -1,9 +1,8 @@
+/* Remove default root styles to allow full-screen layout */
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+  width: 100%;
 }
+
 
 .logo {
   height: 6em;
