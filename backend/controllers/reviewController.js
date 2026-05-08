@@ -55,22 +55,15 @@ export const createReview = asyncHandler(async (req, res) => {
     'items.product': productId,
   });
 
-  if (!purchasedOrder) {
-    throw new AppError(
-      403,
-      'Bạn chỉ có thể đánh giá sản phẩm đã từng mua trong hệ thống.'
-    );
-  }
-
   const review = await Review.create({
     product: productId,
     user: req.user._id,
-    order: purchasedOrder._id,
+    order: purchasedOrder?._id,
     rating,
     title,
     comment,
     images,
-    isVerifiedPurchase: true,
+    isVerifiedPurchase: Boolean(purchasedOrder),
   });
 
   await syncProductReviewStats(productId);
@@ -139,6 +132,74 @@ export const getAdminReviews = asyncHandler(async (req, res) => {
       total,
       totalPages: Math.max(Math.ceil(total / limit), 1),
     },
+  });
+});
+
+export const getMyReviews = asyncHandler(async (req, res) => {
+  const reviews = await Review.find({ user: req.user._id })
+    .populate('product', 'name slug image')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  res.json({
+    data: reviews,
+    total: reviews.length,
+  });
+});
+
+export const updateMyReview = asyncHandler(async (req, res) => {
+  const review = await Review.findById(req.params.id);
+
+  if (!review) {
+    throw new AppError(404, 'Không tìm thấy đánh giá.');
+  }
+
+  if (String(review.user) !== String(req.user._id)) {
+    throw new AppError(403, 'Bạn không có quyền sửa đánh giá này.');
+  }
+
+  const nextRating = Number(req.body.rating);
+  const nextComment = String(req.body.comment || '').trim();
+
+  if (!nextRating || nextRating < 1 || nextRating > 5) {
+    throw new AppError(400, 'Số sao đánh giá phải từ 1 đến 5.');
+  }
+
+  if (!nextComment) {
+    throw new AppError(400, 'Vui lòng nhập nội dung đánh giá.');
+  }
+
+  review.rating = nextRating;
+  review.comment = nextComment;
+  review.title = req.body.title ? String(req.body.title).trim() : review.title;
+  review.moderationStatus = 'pending';
+  review.moderationNote = '';
+  await review.save();
+  await syncProductReviewStats(review.product);
+
+  res.json({
+    message: 'Cập nhật đánh giá thành công.',
+    review,
+  });
+});
+
+export const deleteMyReview = asyncHandler(async (req, res) => {
+  const review = await Review.findById(req.params.id);
+
+  if (!review) {
+    throw new AppError(404, 'Không tìm thấy đánh giá.');
+  }
+
+  if (String(review.user) !== String(req.user._id)) {
+    throw new AppError(403, 'Bạn không có quyền xóa đánh giá này.');
+  }
+
+  const productId = review.product;
+  await Review.findByIdAndDelete(review._id);
+  await syncProductReviewStats(productId);
+
+  res.json({
+    message: 'Xóa đánh giá thành công.',
   });
 });
 

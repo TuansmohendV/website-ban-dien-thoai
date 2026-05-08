@@ -33,6 +33,13 @@ const mapCategoryForAdmin = (category = {}) => ({
   isDerived: Boolean(category.isDerived),
 });
 
+const extractIconArray = (payload = {}) => {
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.data?.icons)) return payload.data.icons;
+  if (Array.isArray(payload?.icons)) return payload.icons;
+  return [];
+};
+
 const CategoryManagement = () => {
   const [categories, setCategories] = useState([]);
 
@@ -68,8 +75,40 @@ const CategoryManagement = () => {
 
   // Load latest icons from library
   useEffect(() => {
-    const saved = localStorage.getItem('admin_icon_library');
-    if (saved) setIconLibrary(JSON.parse(saved));
+    const loadIconLibrary = async () => {
+      try {
+        const response = await api.get('/api/admin/icons', {
+          params: { page: 1, limit: 200 },
+        });
+        const icons = extractIconArray(response.data).map((icon) => ({
+          id: icon._id || icon.id || '',
+          url: icon.url || '',
+          name: icon.name || '',
+        }));
+        setIconLibrary(icons);
+        localStorage.setItem('admin_icon_library', JSON.stringify(icons));
+      } catch {
+        try {
+          const publicResponse = await api.get('/api/icons/public');
+          const icons = extractIconArray(publicResponse.data).map((icon) => ({
+            id: icon._id || icon.id || '',
+            url: icon.url || '',
+            name: icon.name || '',
+          }));
+          setIconLibrary(icons);
+          localStorage.setItem('admin_icon_library', JSON.stringify(icons));
+        } catch {
+          const saved = localStorage.getItem('admin_icon_library');
+          if (saved) {
+            setIconLibrary(JSON.parse(saved));
+          } else {
+            setIconLibrary([]);
+          }
+        }
+      }
+    };
+
+    loadIconLibrary();
   }, [showModal]); // Refresh when modal opens
 
   const handleOpenModal = (cat = null) => {

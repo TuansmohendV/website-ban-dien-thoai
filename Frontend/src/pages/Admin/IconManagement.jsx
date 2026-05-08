@@ -1,42 +1,101 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, Trash2, Search, Plus, Image as ImageIcon, Copy, Check } from 'lucide-react';
+import api, { getApiErrorMessage } from '../../lib/api';
+
+const mapIconForView = (icon = {}) => ({
+  id: icon._id || icon.id || '',
+  url: icon.url || '',
+  name: icon.name || 'Unnamed icon',
+  category: icon.category || 'general',
+});
+
+const extractIconArray = (payload = {}) => {
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.data?.icons)) return payload.data.icons;
+  if (Array.isArray(payload?.icons)) return payload.icons;
+  return [];
+};
+
+const normalizeIconUrl = (url = '') => {
+  const value = String(url || '').trim();
+  if (!value) return '';
+  if (value.startsWith('//')) return `https:${value}`;
+  if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('data:')) {
+    return value;
+  }
+  return `https://${value}`;
+};
 
 const IconManagement = () => {
-  // Load icons from localStorage to stay in sync with Category page
-  const [icons, setIcons] = useState(() => {
-    const saved = localStorage.getItem('admin_icon_library');
-    return saved ? JSON.parse(saved) : [
-      { id: '1001', url: 'https://cdn-icons-png.flaticon.com/512/3616/3616215.png', name: 'Smartphone System' },
-      { id: '1002', url: 'https://cdn-icons-png.flaticon.com/512/688/688531.png', name: 'Tablet System' },
-    ];
-  });
+  const [icons, setIcons] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedId, setCopiedId] = useState(null);
 
   useEffect(() => {
-    localStorage.setItem('admin_icon_library', JSON.stringify(icons));
-  }, [icons]);
+    const loadIcons = async () => {
+      setIsLoading(true);
+      setLoadError('');
 
-  const handleFileUpload = (e) => {
+      try {
+        const response = await api.get('/api/admin/icons', {
+          params: { page: 1, limit: 1000, t: Date.now() },
+        });
+        const mappedIcons = extractIconArray(response.data).map(mapIconForView);
+        setIcons(mappedIcons);
+      } catch (error) {
+        setIcons([]);
+        setLoadError(
+          getApiErrorMessage(
+            error,
+            'Không thể tải icon từ API admin. Vui lòng đăng nhập lại bằng tài khoản admin.'
+          )
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadIcons();
+  }, []);
+
+  const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
-    files.forEach(file => {
+    const uploadTasks = files.map((file) => new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
-        const newIcon = {
-          id: (Math.floor(Math.random() * 9000) + 1000).toString(), // Random 4 digits
-          url: reader.result,
-          name: file.name
-        };
-        setIcons(prev => [newIcon, ...prev]);
+        resolve({ name: file.name, url: reader.result });
       };
+      reader.onerror = reject;
       reader.readAsDataURL(file);
-    });
+    }));
+
+    try {
+      const payloads = await Promise.all(uploadTasks);
+      const createdIcons = await Promise.all(
+        payloads.map((payload) => api.post('/api/admin/icons', payload))
+      );
+      const newIcons = createdIcons
+        .map((response) => mapIconForView(response.data?.data?.icon))
+        .filter((icon) => icon.id);
+      setIcons((prev) => [...newIcons, ...prev]);
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Tải lên icon thất bại.'));
+    } finally {
+      e.target.value = '';
+    }
   };
 
-  const deleteIcon = (id) => {
+  const deleteIcon = async (id) => {
     if (window.confirm('Xóa biểu tượng này khỏi thư viện?')) {
-      setIcons(icons.filter(icon => icon.id !== id));
+      try {
+        await api.delete(`/api/admin/icons/${id}`);
+        setIcons((prev) => prev.filter((icon) => icon.id !== id));
+      } catch (error) {
+        alert(getApiErrorMessage(error, 'Không thể xóa icon.'));
+      }
     }
   };
 
@@ -82,6 +141,18 @@ const IconManagement = () => {
         gap: '20px',
         marginTop: '20px'
       }}>
+        {isLoading && (
+          <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '60px', color: '#64748b' }}>
+            Đang tải icon từ database...
+          </div>
+        )}
+
+        {!isLoading && loadError && (
+          <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '60px', color: '#ef4444' }}>
+            {loadError}
+          </div>
+        )}
+
         {filteredIcons.map((icon) => (
           <div key={icon.id} className="card" style={{ 
             padding: '20px', 
@@ -100,7 +171,14 @@ const IconManagement = () => {
               background: '#f8fafc',
               borderRadius: '12px'
             }}>
-              <img src={icon.url} alt="" style={{ maxWidth: '40px', maxHeight: '40px' }} />
+              <img
+                src={normalizeIconUrl(icon.url)}
+                alt={icon.name}
+                style={{ maxWidth: '40px', maxHeight: '40px' }}
+                onError={(event) => {
+                  event.currentTarget.style.display = 'none';
+                }}
+              />
             </div>
             
             <div style={{ fontWeight: '800', fontSize: '1.2rem', color: '#2563eb', marginBottom: '5px' }}>
@@ -150,7 +228,7 @@ const IconManagement = () => {
           </div>
         ))}
         
-        {filteredIcons.length === 0 && (
+        {!isLoading && !loadError && filteredIcons.length === 0 && (
           <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '100px', color: '#94a3b8' }}>
             <ImageIcon size={48} style={{ marginBottom: '15px', opacity: 0.5 }} />
             <p>Không tìm thấy biểu tượng nào. Háy tải lên để bắt đầu!</p>
