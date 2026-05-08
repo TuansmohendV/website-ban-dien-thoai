@@ -951,22 +951,54 @@ const ProfilePage = () => {
                                     <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Chua co lich su mua hang.</div>
                                 ) : (
                                     <div className="space-y-3">
-                                        {orderHistoryItems.map((item) => (
-                                            <div key={item._id} className="bg-white rounded-2xl p-4 border border-gray-100 flex items-center justify-between">
-                                                <div>
-                                                    <p className="font-black text-gray-900">Don hang #{item._id?.slice(-6) || ''}</p>
-                                                    <p className="text-xs text-gray-400">
-                                                        {item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : ''}
-                                                        {' · '}
-                                                        {item.items?.length || 0} san pham
-                                                    </p>
-                                                    <p className="text-sm text-[#008d71] font-bold mt-1">
-                                                        {formatPrice(item.totalAmount || 0)}
-                                                    </p>
+                                        {orderHistoryItems.map((item) => {
+                                            const statusMap = {
+                                                pending: { label: 'Chờ xác nhận', cls: 'bg-amber-100 text-amber-700' },
+                                                processing: { label: 'Đang xử lý', cls: 'bg-blue-100 text-blue-700' },
+                                                shipping: { label: 'Đang giao', cls: 'bg-indigo-100 text-indigo-700' },
+                                                delivered: { label: 'Đã giao', cls: 'bg-green-100 text-green-700' },
+                                                cancelled: { label: 'Đã hủy', cls: 'bg-gray-100 text-gray-500' },
+                                            };
+                                            const st = statusMap[item.status] || {
+                                                label: String(item.status || 'pending'),
+                                                cls: 'bg-gray-100 text-gray-500',
+                                            };
+
+                                            return (
+                                                <div key={item._id} className="bg-white rounded-2xl p-4 border border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                                    <div>
+                                                        <p className="font-black text-gray-900">Don hang #{item._id?.slice(-6) || ''}</p>
+                                                        <p className="text-xs text-gray-400">
+                                                            {item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : ''}
+                                                            {' · '}
+                                                            {item.items?.length || 0} san pham
+                                                        </p>
+                                                        <p className="text-sm text-[#008d71] font-bold mt-1">
+                                                            {formatPrice(item.totalAmount || 0)}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:justify-end">
+                                                        <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase ${st.cls}`}>
+                                                            {st.label}
+                                                        </span>
+                                                        <Link
+                                                            to="/orders"
+                                                            className="text-xs font-black text-[#008d71] border border-[#008d71]/20 bg-[#e5f9e0] px-3 py-1.5 rounded-lg"
+                                                        >
+                                                            Xem chi tiet
+                                                        </Link>
+                                                        {item.status === 'delivered' && (
+                                                            <Link
+                                                                to={`/invoice/${item._id}`}
+                                                                className="text-xs font-black text-gray-700 border border-gray-200 bg-gray-50 px-3 py-1.5 rounded-lg"
+                                                            >
+                                                                Xuat hoa don
+                                                            </Link>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <span className="text-xs font-black text-gray-500 uppercase">{item.status || 'pending'}</span>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>

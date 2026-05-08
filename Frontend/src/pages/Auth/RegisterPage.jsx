@@ -53,7 +53,7 @@ const RegisterPage = () => {
         try {
             await api.post('/api/auth/send-otp', { 
                 email: formData.email.trim(),
-                purpose: 'register' // Báo backend kiểm tra email trùng trước khi gửi OTP
+                purpose: 'register'
             });
             setStep(2);
         } catch (error) {
@@ -84,13 +84,11 @@ const RegisterPage = () => {
 
         try {
             setIsSubmitting(true);
-            // 1. Xác thực OTP
             await api.post('/api/auth/verify-otp', {
                 email: formData.email.trim(),
                 otp: otpCode
             });
 
-            // 2. Nếu OTP đúng, mới tiến hành đăng ký
             await register({
                 fullName: formData.fullName,
                 email: formData.email,
@@ -98,9 +96,7 @@ const RegisterPage = () => {
             });
             navigate('/');
         } catch (error) {
-            // Hiện thông báo lỗi chính xác từ server
-            const msg = error.response?.data?.message || error.message || 'Có lỗi xảy ra. Vui lòng thử lại.';
-            setErrorMessage(msg);
+            setErrorMessage(error.response?.data?.message || error.message || 'Có lỗi xảy ra. Vui lòng thử lại.');
         } finally {
             setIsSubmitting(false);
         }
@@ -118,10 +114,7 @@ const RegisterPage = () => {
 
     return (
         <div className="min-h-screen w-full flex bg-white font-sans overflow-hidden relative">
-            <Link
-                to="/"
-                className="absolute top-4 right-4 z-50 w-10 h-10 bg-[#008d71] rounded-full flex items-center justify-center hover:bg-[#007a62] transition-all shadow-md group"
-            >
+            <Link to="/" className="absolute top-4 right-4 z-50 w-10 h-10 bg-[#008d71] rounded-full flex items-center justify-center hover:bg-[#007a62] transition-all shadow-md group">
                 <Minus size={24} className="text-white" strokeWidth={4} />
             </Link>
 
@@ -136,34 +129,25 @@ const RegisterPage = () => {
                             <span className="text-[18px] font-black text-[#008d71]/80 tracking-tight uppercase">MOBILE</span>
                         </div>
                     </div>
-
-                    <div className="relative mb-8 text-center">
-                        <div className="flex items-center justify-center gap-3">
-                            <div className="px-3 py-1.5 border-2 border-[#008d71] bg-white rounded-lg shadow-sm">
-                                <span className="text-[#008d71] text-[18px] font-black tracking-tight">NHAP HOI</span>
-                            </div>
-                            <h1 className="text-[62px] font-black text-[#008d71] tracking-tight italic leading-none" style={{ textShadow: '5px 0 0 #fff, -5px 0 0 #fff, 0 5px 0 #fff, 0 -5px 0 #fff, 4px 4px 0 #fff, -4px -4px 0 #fff, 4px -4px 0 #fff, -4px 4px 0 #fff, 0px 8px 10px rgba(0,0,0,0.15)' }}>
-                                PhoneSin Member
-                            </h1>
-                        </div>
-                    </div>
-
+                    <h1 className="text-[62px] font-black text-[#008d71] tracking-tight italic leading-none mb-8 text-center" style={{ textShadow: '5px 0 0 #fff, -5px 0 0 #fff, 0 5px 0 #fff, 0 -5px 0 #fff, 4px 4px 0 #fff, -4px -4px 0 #fff, 4px -4px 0 #fff, -4px 4px 0 #fff, 0px 8px 10px rgba(0,0,0,0.15)' }}>
+                        PhoneSin Member
+                    </h1>
                     <div className="w-full bg-[#006e58] rounded-[24px] p-10 shadow-2xl relative overflow-hidden mb-8">
                         <div className="space-y-4 relative z-10">
                             {benefits.map((benefit, index) => (
                                 <div key={index} className="flex items-center gap-5 text-white">
-                                    <img src="https://hoanghamobile.com/Content/web/img/member-login-gift.png" alt="gift" className="w-5 h-5 object-contain shrink-0" />
+                                    <div className="shrink-0 text-white/90">
+                                        {benefit.icon}
+                                    </div>
                                     <span className="text-[15px] font-bold leading-tight tracking-tight">{benefit.text}</span>
                                 </div>
                             ))}
                         </div>
                     </div>
-
                     <button className="bg-white border-2 border-gray-100 px-12 py-3.5 rounded-xl text-[#008d71] font-black text-[14px] uppercase tracking-wider hover:shadow-lg transition-all shadow-md active:scale-95">
                         XEM CHI TIET UU DAI
                     </button>
                 </div>
-
                 <div className="absolute bottom-[-50px] left-0 w-full pointer-events-none flex flex-col items-center z-10">
                     <img src="https://cdn.hoanghamobile.vn/Uploads/2025/06/16/2025-06-16-141858.png" alt="PhoneSin Mascot" className="w-full max-w-[650px] h-auto object-contain drop-shadow-2xl opacity-100" />
                 </div>
@@ -171,7 +155,7 @@ const RegisterPage = () => {
 
             <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white overflow-y-auto">
                 <div className="w-full max-w-[650px]">
-                    <div className="mb-10">
+                    <div className="mb-10 text-center lg:text-left">
                         <h3 className="text-[22px] font-black text-[#111] mb-2">
                             {step === 1 ? 'Tao tai khoan PhoneSin' : 'Xac thuc Email'}
                         </h3>
@@ -196,7 +180,6 @@ const RegisterPage = () => {
                                         className="w-full bg-white border border-gray-300 rounded-lg px-5 py-3.5 text-slate-900 text-[15px] font-semibold focus:border-[#008d71] outline-none transition-all"
                                     />
                                 </div>
-
                                 <div className="space-y-2">
                                     <label className="text-[14px] font-bold text-[#444] pl-1">Địa chỉ Email</label>
                                     <input
@@ -208,7 +191,6 @@ const RegisterPage = () => {
                                         className="w-full bg-white border border-gray-300 rounded-lg px-5 py-3.5 text-slate-900 text-[15px] font-semibold focus:border-[#008d71] outline-none transition-all"
                                     />
                                 </div>
-
                                 <div className="space-y-2">
                                     <label className="text-[14px] font-bold text-[#444] pl-1">Mật khẩu</label>
                                     <div className="relative">
@@ -220,16 +202,11 @@ const RegisterPage = () => {
                                             placeholder="Tối thiểu 6 ký tự"
                                             className="w-full bg-white border border-gray-300 rounded-lg px-5 py-3.5 text-slate-900 text-[15px] font-semibold focus:border-[#008d71] outline-none transition-all pr-12"
                                         />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPassword(!showPassword)}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#008d71] transition-colors"
-                                        >
+                                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#008d71]">
                                             {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                                         </button>
                                     </div>
                                 </div>
-
                                 <div className="space-y-2">
                                     <label className="text-[14px] font-bold text-[#444] pl-1">Nhập lại mật khẩu</label>
                                     <div className="relative">
@@ -241,11 +218,7 @@ const RegisterPage = () => {
                                             placeholder="Xác nhận lại mật khẩu"
                                             className="w-full bg-white border border-gray-300 rounded-lg px-5 py-3.5 text-slate-900 text-[15px] font-semibold focus:border-[#008d71] outline-none transition-all pr-12"
                                         />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#008d71] transition-colors"
-                                        >
+                                        <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#008d71]">
                                             {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                                         </button>
                                     </div>
@@ -253,7 +226,7 @@ const RegisterPage = () => {
                             </>
                         ) : (
                             <div className="space-y-6">
-                                <div className="flex justify-between gap-2 sm:gap-4">
+                                <div className="flex justify-between gap-2">
                                     {otp.map((digit, index) => (
                                         <input
                                             key={index}
@@ -263,48 +236,31 @@ const RegisterPage = () => {
                                             value={digit}
                                             onChange={(e) => handleOtpChange(index, e.target.value)}
                                             onKeyDown={(e) => handleKeyDown(index, e)}
-                                            className="w-full h-[58px] sm:h-[64px] text-center text-[24px] font-black border-2 border-gray-200 rounded-xl focus:border-[#008d71] outline-none transition-all"
+                                            className="w-full h-[60px] text-center text-[24px] font-black border-2 border-gray-200 rounded-xl focus:border-[#008d71] outline-none transition-all"
                                         />
                                     ))}
                                 </div>
-                                <button 
-                                    type="button"
-                                    onClick={() => setStep(1)}
-                                    className="text-[13px] font-bold text-[#008d71] hover:underline flex items-center gap-1"
-                                >
+                                <button type="button" onClick={() => setStep(1)} className="text-[13px] font-bold text-[#008d71] hover:underline flex items-center gap-1">
                                     <ArrowLeft size={14} /> Thay đổi thông tin
                                 </button>
                             </div>
                         )}
 
-                        {errorMessage && (
-                            <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-[13px] font-semibold text-red-600">
-                                {errorMessage}
-                            </div>
-                        )}
+                        {errorMessage && <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-[13px] font-semibold text-red-600">{errorMessage}</div>}
 
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="w-full bg-[#008d71] text-white rounded-lg h-[54px] font-black uppercase tracking-wider shadow-md hover:bg-[#007a62] transition-all flex items-center justify-center gap-2 disabled:opacity-70 mt-4"
-                        >
-                            {isSubmitting 
-                                ? (step === 1 ? 'DANG GUI MA...' : 'DANG TAO TAI KHOAN...') 
-                                : (step === 1 ? 'TIEP TUC' : 'XAC NHAN DANG KY')}
+                        <button type="submit" disabled={isSubmitting} className="w-full bg-[#008d71] text-white rounded-lg h-[54px] font-black uppercase tracking-wider shadow-md hover:bg-[#007a62] transition-all disabled:opacity-70 mt-4">
+                            {isSubmitting ? 'ĐANG XỬ LÝ...' : (step === 1 ? 'TIẾP TỤC' : 'XÁC NHẬN ĐĂNG KÝ')}
                         </button>
 
                         <div className="text-center pt-2">
                             <div className="text-[14px] text-gray-500 font-medium">
-                                Bạn đã có tài khoản?{' '}
-                                <Link to="/login" className="text-[#008d71] font-black hover:underline">
-                                    Đăng nhập
-                                </Link>
+                                Bạn đã có tài khoản? <Link to="/login" className="text-[#008d71] font-black hover:underline">Đăng nhập</Link>
                             </div>
                         </div>
                     </form>
 
-                    <div className="mt-12 text-[12px] text-gray-500 leading-relaxed text-center lg:text-left">
-                        Bang viec tiep tuc, ban da doc va dong y voi <Link to="/policy" className="text-[#008d71] font-bold hover:underline">Chinh sach bao mat thong tin ca nhan</Link> cua PhoneSin
+                    <div className="mt-12 text-[12px] text-gray-500 text-center lg:text-left leading-relaxed">
+                        Bằng việc tiếp tục, bạn đã đồng ý với <Link to="/policy" className="text-[#008d71] font-bold hover:underline">Chính sách bảo mật</Link> của PhoneSin
                     </div>
                 </div>
             </div>

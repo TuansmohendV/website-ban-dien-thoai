@@ -4,23 +4,66 @@ import api, { getApiErrorMessage } from '../../lib/api';
 
 const ForgotPasswordPage = () => {
   const [email, setEmail] = useState('');
-  const [isSent, setIsSent] = useState(false);
+  const [step, setStep] = useState('request'); // request | verify | done
+  const [otpCode, setOtpCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = async (e) => {
+  const handleRequestOtp = async (e) => {
     e.preventDefault();
     setErrorMessage('');
+    setSuccessMessage('');
     setIsSubmitting(true);
 
     try {
-      await api.post('/api/auth/forgot-password', {
+      const response = await api.post('/api/auth/forgot-password', {
         email: email.trim(),
       });
-      setIsSent(true);
+      setSuccessMessage('Ma OTP da duoc gui den email cua ban. Vui lòng kiểm tra hộp thư đến.');
+      setStep('verify');
     } catch (error) {
       setErrorMessage(
         getApiErrorMessage(error, 'Khong the gui yeu cau khoi phuc mat khau.')
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setErrorMessage('');
+    setSuccessMessage('');
+
+    if (!otpCode.trim()) {
+      setErrorMessage('Vui long nhap ma OTP.');
+      return;
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      setErrorMessage('Mat khau moi phai tu 6 ky tu tro len.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setErrorMessage('Mat khau moi va xac nhan mat khau chua khop.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await api.post('/api/auth/reset-password', {
+        token: otpCode.trim(),
+        newPassword,
+      });
+      setStep('done');
+      setSuccessMessage('Dat lai mat khau thanh cong. Ban co the dang nhap lai.');
+    } catch (error) {
+      setErrorMessage(
+        getApiErrorMessage(error, 'Khong the dat lai mat khau.')
       );
     } finally {
       setIsSubmitting(false);
@@ -77,14 +120,16 @@ const ForgotPasswordPage = () => {
             <header className="mb-10 text-center lg:text-left">
                <h3 className="text-4xl font-black text-slate-900 mb-3 tracking-tight">Quên mật khẩu</h3>
                <p className="text-slate-500 font-medium text-lg">
-                  {isSent 
-                    ? "Kiểm tra email của bạn để tiếp tục." 
-                    : "Nhập email đã đăng ký để khôi phục mật khẩu."}
+                  {step === 'request'
+                    ? "Nhập email đã đăng ký để khôi phục mật khẩu."
+                    : step === 'verify'
+                      ? "Nhap ma OTP da nhan duoc va mat khau moi."
+                      : "Mat khau da duoc cap nhat."}
                </p>
             </header>
 
-            {!isSent ? (
-                <form onSubmit={handleSubmit} className="space-y-8">
+            {step === 'request' && (
+                <form onSubmit={handleRequestOtp} className="space-y-8">
                     <div className="space-y-2">
                         <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] pl-1">Địa chỉ Email</label>
                         <div className="relative group">
@@ -105,7 +150,7 @@ const ForgotPasswordPage = () => {
                     <button 
                         type="submit"
                         disabled={isSubmitting}
-                        className="w-full bg-slate-950 text-white rounded-2xl py-4.5 font-black uppercase tracking-[0.25em] shadow-2xl hover:bg-red-600 transition-all hover:scale-[1.02] active:scale-95 shadow-slate-200 disabled:opacity-60"
+                        className="w-full bg-slate-950 text-white rounded-2xl py-4 font-black uppercase tracking-widest shadow-2xl hover:bg-red-600 transition-all shadow-slate-200 disabled:opacity-60 flex items-center justify-center leading-none whitespace-nowrap"
                     >
                         {isSubmitting ? 'DANG GUI...' : 'GUI YEU CAU'}
                     </button>
@@ -120,27 +165,90 @@ const ForgotPasswordPage = () => {
                         </Link>
                     </div>
                 </form>
-            ) : (
+            )}
+
+            {step === 'verify' && (
+                <form onSubmit={handleResetPassword} className="space-y-5">
+                    <div className="space-y-2">
+                        <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] pl-1">Ma OTP</label>
+                        <input
+                            type="text"
+                            required
+                            value={otpCode}
+                            onChange={(e) => setOtpCode(e.target.value)}
+                            placeholder="Nhap ma 6 so"
+                            className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 text-slate-900 text-sm font-semibold"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] pl-1">Mat khau moi</label>
+                        <input
+                            type="password"
+                            required
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 text-slate-900 text-sm font-semibold"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] pl-1">Nhap lai mat khau moi</label>
+                        <input
+                            type="password"
+                            required
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 text-slate-900 text-sm font-semibold"
+                        />
+                    </div>
+                    <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="w-full bg-slate-950 text-white rounded-2xl py-4 font-black uppercase tracking-widest shadow-2xl hover:bg-red-600 transition-all disabled:opacity-60 flex items-center justify-center leading-none whitespace-nowrap"
+                    >
+                        {isSubmitting ? 'DANG XU LY...' : 'XAC NHAN DOI MAT KHAU'}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                          setStep('request');
+                          setOtpCode('');
+                          setNewPassword('');
+                          setConfirmPassword('');
+                        }}
+                        disabled={isSubmitting}
+                        className="w-full border border-slate-200 rounded-2xl py-3 font-black text-slate-500 uppercase tracking-widest transition-all hover:bg-slate-50 flex items-center justify-center whitespace-nowrap leading-none"
+                    >
+                        Gui lai OTP
+                    </button>
+                    {successMessage && (
+                      <p className="text-sm font-semibold text-green-600">{successMessage}</p>
+                    )}
+                    {errorMessage && (
+                      <p className="text-sm font-semibold text-red-500">{errorMessage}</p>
+                    )}
+                </form>
+            )}
+
+            {step === 'done' && (
                 <div className="space-y-8 bg-green-50/50 p-8 rounded-3xl border border-green-100 animate-in fade-in zoom-in duration-500">
                     <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto shadow-sm">
                         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
                     </div>
                     <div className="text-center space-y-4">
                         <h4 className="text-xl font-black text-slate-900 uppercase tracking-tight">Thành công!</h4>
-                        <p className="text-slate-600 font-medium leading-relaxed">
-                            Chúng tôi đã gửi hướng dẫn khôi phục mật khẩu vào email <span className="text-slate-900 font-bold">{email}</span>. Vui lòng kiểm tra hộp thư đến.
-                        </p>
+                        <p className="text-slate-600 font-medium leading-relaxed">{successMessage}</p>
                     </div>
-                    <button 
-                        onClick={() => setIsSent(false)}
-                        className="w-full bg-white border border-green-200 text-green-700 rounded-2xl py-4 font-black uppercase tracking-widest hover:bg-green-50 transition-all"
-                    >
-                        GỬI LẠI EMAIL
-                    </button>
                     <Link to="/login" className="block text-center text-sm font-black text-slate-400 hover:text-slate-900 transition-all uppercase tracking-widest">
                         Quay lại đăng nhập
                     </Link>
                 </div>
+            )}
+
+            {step === 'request' && successMessage && (
+              <p className="text-sm font-semibold text-green-600 mt-4">{successMessage}</p>
+            )}
+            {step === 'request' && errorMessage && (
+              <p className="text-sm font-semibold text-red-500 mt-4">{errorMessage}</p>
             )}
          </div>
       </div>
