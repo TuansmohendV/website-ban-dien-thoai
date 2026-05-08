@@ -44,8 +44,14 @@ const ProfilePage = () => {
     const [profileNotice, setProfileNotice] = useState(null);
     const [tabNotice, setTabNotice] = useState('');
     const [tabLoading, setTabLoading] = useState(false);
-    const [wishlistItems, setWishlistItems] = useState([]);
+    const [myReviews, setMyReviews] = useState([]);
+    const [editingReviewId, setEditingReviewId] = useState('');
+    const [editingReviewRating, setEditingReviewRating] = useState(0);
+    const [editingReviewContent, setEditingReviewContent] = useState('');
+    const [reviewActionLoadingId, setReviewActionLoadingId] = useState('');
+    const [reviewStats, setReviewStats] = useState({ total: 0, average: 0 });
     const [searchHistoryItems, setSearchHistoryItems] = useState([]);
+    const [orderHistoryItems, setOrderHistoryItems] = useState([]);
     const [notifications, setNotifications] = useState([]);
     const [addresses, setAddresses] = useState([]);
     const [addressForm, setAddressForm] = useState({
@@ -139,28 +145,24 @@ const ProfilePage = () => {
         e.preventDefault();
         setProfileNotice(null);
 
-        if (
-            (profileData.newPassword || profileData.confirmPassword) &&
-            profileData.newPassword !== profileData.confirmPassword
-        ) {
+        const rawDob = String(profileData.dob || '').trim();
+        const dobSlashFormat = rawDob.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        const dobIsoFormat = rawDob.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+        let normalizedDob;
+        if (!rawDob) {
+            normalizedDob = undefined;
+        } else if (dobSlashFormat) {
+            normalizedDob = `${dobSlashFormat[3]}-${dobSlashFormat[2]}-${dobSlashFormat[1]}`;
+        } else if (dobIsoFormat) {
+            normalizedDob = rawDob;
+        } else {
             setProfileNotice({
                 type: 'error',
-                message: 'Mat khau moi va xac nhan mat khau chua khop.',
+                message: 'Ngay sinh khong hop le. Vui long nhap theo dinh dang DD/MM/YYYY.',
             });
             return;
         }
-
-        if (profileData.newPassword || profileData.confirmPassword) {
-            setProfileNotice({
-                type: 'error',
-                message: 'Backend hien chua co truong mat khau hien tai trong form nay, nen chi tiet ca nhan da duoc cap nhat con mat khau tam thoi chua doi.',
-            });
-        }
-
-        const dateParts = String(profileData.dob || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-        const normalizedDob = dateParts
-            ? `${dateParts[3]}-${dateParts[2]}-${dateParts[1]}`
-            : profileData.dob || undefined;
 
         try {
             setIsSavingProfile(true);
@@ -177,11 +179,6 @@ const ProfilePage = () => {
                 avatar: avatarUrl,
             });
             setShowOTP(true);
-            setProfileData((prevData) => ({
-                ...prevData,
-                newPassword: '',
-                confirmPassword: '',
-            }));
         } catch (error) {
             setProfileNotice({
                 type: 'error',
@@ -210,18 +207,32 @@ const ProfilePage = () => {
 
         try {
             if (tabId === 'history') {
-                const response = await api.get('/api/user/search-history');
-                setSearchHistoryItems(response.data?.data || []);
+                const response = await api.get('/api/orders/user');
+                setOrderHistoryItems(response.data?.data || []);
             }
 
             if (tabId === 'comments') {
-                const response = await api.get('/api/notifications');
-                setNotifications(response.data?.data || []);
+                const response = await api.get('/api/reviews/my');
+                const items = response.data?.data || [];
+                setMyReviews(items);
+                const total = items.length;
+                const average =
+                    total > 0
+                        ? items.reduce((sum, item) => sum + Number(item.rating || 0), 0) / total
+                        : 0;
+                setReviewStats({ total, average });
             }
 
             if (tabId === 'ratings') {
-                const response = await api.get('/api/user/wishlist');
-                setWishlistItems(response.data?.data || []);
+                const response = await api.get('/api/reviews/my');
+                const items = response.data?.data || [];
+                setMyReviews(items);
+                const total = items.length;
+                const average =
+                    total > 0
+                        ? items.reduce((sum, item) => sum + Number(item.rating || 0), 0) / total
+                        : 0;
+                setReviewStats({ total, average });
             }
 
             if (tabId === 'vouchers') {
@@ -288,9 +299,64 @@ const ProfilePage = () => {
     const handleRemoveWishlistItem = async (id) => {
         try {
             await api.delete(`/api/user/wishlist/${id}`);
-            setWishlistItems((prev) => prev.filter((item) => item._id !== id));
+            // kept for backwards compatibility
         } catch (error) {
             setTabNotice(getApiErrorMessage(error, 'Khong xoa duoc san pham yeu thich.'));
+        }
+    };
+
+    const handleStartEditReview = (item) => {
+        setEditingReviewId(item._id);
+        setEditingReviewRating(Number(item.rating || 0));
+        setEditingReviewContent(item.comment || '');
+    };
+
+    const handleCancelEditReview = () => {
+        setEditingReviewId('');
+        setEditingReviewRating(0);
+        setEditingReviewContent('');
+    };
+
+    const handleSaveEditReview = async (reviewId) => {
+        if (editingReviewRating < 1 || editingReviewRating > 5) {
+            setTabNotice('Vui long chon so sao tu 1 den 5.');
+            return;
+        }
+
+        if (!editingReviewContent.trim()) {
+            setTabNotice('Vui long nhap noi dung danh gia.');
+            return;
+        }
+
+        try {
+            setReviewActionLoadingId(reviewId);
+            await api.patch(`/api/reviews/${reviewId}`, {
+                rating: editingReviewRating,
+                comment: editingReviewContent.trim(),
+                title: `Danh gia ${editingReviewRating} sao`,
+            });
+            handleCancelEditReview();
+            await loadTabData(activeTab);
+        } catch (error) {
+            setTabNotice(getApiErrorMessage(error, 'Khong cap nhat duoc danh gia.'));
+        } finally {
+            setReviewActionLoadingId('');
+        }
+    };
+
+    const handleDeleteMyReview = async (reviewId) => {
+        if (!window.confirm('Ban chac chan muon xoa danh gia nay?')) {
+            return;
+        }
+
+        try {
+            setReviewActionLoadingId(reviewId);
+            await api.delete(`/api/reviews/${reviewId}`);
+            await loadTabData(activeTab);
+        } catch (error) {
+            setTabNotice(getApiErrorMessage(error, 'Khong xoa duoc danh gia.'));
+        } finally {
+            setReviewActionLoadingId('');
         }
     };
 
@@ -570,32 +636,15 @@ const ProfilePage = () => {
                                                 <div className="pt-4 space-y-6">
                                                     <div className="flex flex-col items-center">
                                                         <div className="w-full h-[1px] bg-gray-100 relative">
-                                                            <span className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-4 text-[12px] font-bold text-gray-400 italic whitespace-nowrap">Để trống nếu không muốn thay đổi mật khẩu.</span>
+                                                            <span className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-4 text-[12px] font-bold text-gray-400 italic whitespace-nowrap">Đổi mật khẩu tại trang riêng để bảo mật hơn.</span>
                                                         </div>
                                                     </div>
-
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        <div className="space-y-2">
-                                                            <label className="text-[13px] font-black text-gray-500 uppercase tracking-wide">Mật khẩu mới:</label>
-                                                            <input 
-                                                                type="password" 
-                                                                value={profileData.newPassword}
-                                                                onChange={(e) => setProfileData({...profileData, newPassword: e.target.value})}
-                                                                placeholder="Mật khẩu mới"
-                                                                className="w-full h-[58px] bg-white border border-gray-200 rounded-xl px-5 font-bold text-gray-900 shadow-sm focus:border-[#008d71] outline-none transition-all"
-                                                            />
-                                                        </div>
-                                                        <div className="space-y-2">
-                                                            <label className="text-[13px] font-black text-gray-500 uppercase tracking-wide">Nhập lại mật khẩu mới:</label>
-                                                            <input 
-                                                                type="password" 
-                                                                value={profileData.confirmPassword}
-                                                                onChange={(e) => setProfileData({...profileData, confirmPassword: e.target.value})}
-                                                                placeholder="Nhập lại mật khẩu mới"
-                                                                className="w-full h-[58px] bg-white border border-gray-200 rounded-xl px-5 font-bold text-gray-900 shadow-sm focus:border-[#008d71] outline-none transition-all"
-                                                            />
-                                                        </div>
-                                                    </div>
+                                                    <Link
+                                                        to="/change-password"
+                                                        className="w-full h-[52px] rounded-2xl bg-gray-900 text-white font-black uppercase tracking-wider hover:bg-black transition-colors active:scale-[0.98] flex items-center justify-center"
+                                                    >
+                                                        Đổi mật khẩu
+                                                    </Link>
                                                 </div>
 
                                                 {profileNotice && (
@@ -895,30 +944,27 @@ const ProfilePage = () => {
 
                         {activeTab === 'history' && (
                             <div className="space-y-6 animate-in fade-in duration-300">
-                                <div className="flex items-center justify-between">
-                                <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Lịch sử tìm kiếm</h2>
-                                    <button
-                                        onClick={handleClearSearchHistory}
-                                        className="px-4 py-2 text-xs font-black bg-gray-50 border border-gray-200 rounded-xl text-gray-600"
-                                    >
-                                        Xóa toàn bộ
-                                    </button>
-                                </div>
+                                <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Lịch sử mua hàng</h2>
                                 {tabLoading ? (
                                     <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Dang tai du lieu...</div>
-                                ) : searchHistoryItems.length === 0 ? (
-                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Chua co lich su tim kiem.</div>
+                                ) : orderHistoryItems.length === 0 ? (
+                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Chua co lich su mua hang.</div>
                                 ) : (
                                     <div className="space-y-3">
-                                        {searchHistoryItems.map((item) => (
+                                        {orderHistoryItems.map((item) => (
                                             <div key={item._id} className="bg-white rounded-2xl p-4 border border-gray-100 flex items-center justify-between">
                                                 <div>
-                                                    <p className="font-black text-gray-900">{item.keyword}</p>
-                                                    <p className="text-xs text-gray-400">So ket qua: {item.resultCount || 0}</p>
+                                                    <p className="font-black text-gray-900">Don hang #{item._id?.slice(-6) || ''}</p>
+                                                    <p className="text-xs text-gray-400">
+                                                        {item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : ''}
+                                                        {' · '}
+                                                        {item.items?.length || 0} san pham
+                                                    </p>
+                                                    <p className="text-sm text-[#008d71] font-bold mt-1">
+                                                        {formatPrice(item.totalAmount || 0)}
+                                                    </p>
                                                 </div>
-                                                <button onClick={() => handleDeleteSearchHistoryItem(item._id)} className="text-xs font-black text-red-500">
-                                                    Xoa
-                                                </button>
+                                                <span className="text-xs font-black text-gray-500 uppercase">{item.status || 'pending'}</span>
                                             </div>
                                         ))}
                                     </div>
@@ -929,33 +975,77 @@ const ProfilePage = () => {
                         {activeTab === 'comments' && (
                             <div className="space-y-6 animate-in fade-in duration-300">
                                 <div className="flex items-center justify-between">
-                                    <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Thông báo của bạn</h2>
-                                    <button
-                                        onClick={handleMarkAllNotificationsRead}
-                                        className="px-4 py-2 text-xs font-black bg-[#e5f9e0] border border-[#008d71]/20 rounded-xl text-[#008d71]"
-                                    >
-                                        Đánh dấu tất cả đã đọc
-                                    </button>
+                                    <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Quản lý bình luận</h2>
                                 </div>
                                 {tabLoading ? (
                                     <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Dang tai du lieu...</div>
-                                ) : notifications.length === 0 ? (
-                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Chua co thong bao.</div>
+                                ) : myReviews.length === 0 ? (
+                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Ban chua co binh luan nao.</div>
                                 ) : (
                                     <div className="space-y-3">
-                                        {notifications.map((item) => (
-                                            <div key={item._id} className={`bg-white rounded-2xl p-4 border ${item.isRead ? 'border-gray-100' : 'border-[#008d71]/30'}`}>
+                                        {myReviews.map((item) => (
+                                            <div key={item._id} className="bg-white rounded-2xl p-4 border border-gray-100">
                                                 <div className="flex items-center justify-between gap-3">
-                                                    <div>
-                                                        <p className="font-black text-gray-900">{item.title}</p>
-                                                        <p className="text-sm text-gray-500">{item.message}</p>
-                                                    </div>
-                                                    {!item.isRead && (
-                                                        <button onClick={() => handleMarkNotificationRead(item._id)} className="text-xs font-black text-[#008d71]">
-                                                            Danh dau da doc
-                                                        </button>
-                                                    )}
+                                                    <p className="font-black text-gray-900">{item.product?.name || 'San pham'}</p>
+                                                    <span className="text-xs text-gray-400">
+                                                        {item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : ''}
+                                                    </span>
                                                 </div>
+                                                <div className="flex gap-1 mt-2">
+                                                    {[1, 2, 3, 4, 5].map((s) => (
+                                                        <Star key={s} size={14} fill={s <= Number(item.rating || 0) ? "#f59e0b" : "none"} color={s <= Number(item.rating || 0) ? "#f59e0b" : "#cbd5e1"} />
+                                                    ))}
+                                                </div>
+                                                {editingReviewId === item._id ? (
+                                                    <div className="mt-3 space-y-3">
+                                                        <div className="flex gap-1">
+                                                            {[1, 2, 3, 4, 5].map((s) => (
+                                                                <button key={s} onClick={() => setEditingReviewRating(s)} type="button">
+                                                                    <Star size={16} fill={s <= editingReviewRating ? "#f59e0b" : "none"} color={s <= editingReviewRating ? "#f59e0b" : "#cbd5e1"} />
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <textarea
+                                                            rows={3}
+                                                            value={editingReviewContent}
+                                                            onChange={(e) => setEditingReviewContent(e.target.value)}
+                                                            className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm"
+                                                        />
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                type="button"
+                                                                disabled={reviewActionLoadingId === item._id}
+                                                                onClick={() => handleSaveEditReview(item._id)}
+                                                                className="px-3 py-1.5 text-xs font-black rounded-lg bg-[#008d71] text-white disabled:opacity-60"
+                                                            >
+                                                                Luu
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleCancelEditReview}
+                                                                className="px-3 py-1.5 text-xs font-black rounded-lg bg-gray-100 text-gray-600"
+                                                            >
+                                                                Huy
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm text-gray-500 mt-2">{item.comment || item.title || 'Danh gia san pham'}</p>
+                                                )}
+                                                {editingReviewId !== item._id && (
+                                                    <div className="flex gap-2 mt-3">
+                                                        <button onClick={() => handleStartEditReview(item)} className="text-xs font-black text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg">
+                                                            Sua
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteMyReview(item._id)}
+                                                            disabled={reviewActionLoadingId === item._id}
+                                                            className="text-xs font-black text-red-600 bg-red-50 px-3 py-1.5 rounded-lg disabled:opacity-60"
+                                                        >
+                                                            Xoa
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -965,29 +1055,44 @@ const ProfilePage = () => {
 
                         {activeTab === 'ratings' && (
                             <div className="space-y-6 animate-in fade-in duration-300">
-                                <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Danh sách yêu thích</h2>
+                                <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Quản lý đánh giá</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="bg-white rounded-2xl p-5 border border-gray-100">
+                                        <p className="text-sm font-bold text-gray-500">Tong so danh gia</p>
+                                        <p className="text-3xl font-black text-gray-900 mt-2">{reviewStats.total}</p>
+                                    </div>
+                                    <div className="bg-white rounded-2xl p-5 border border-gray-100">
+                                        <p className="text-sm font-bold text-gray-500">Diem trung binh</p>
+                                        <p className="text-3xl font-black text-[#008d71] mt-2">{reviewStats.average.toFixed(1)} / 5</p>
+                                    </div>
+                                </div>
                                 {tabLoading ? (
                                     <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Dang tai du lieu...</div>
-                                ) : wishlistItems.length === 0 ? (
-                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Chua co san pham yeu thich.</div>
+                                ) : myReviews.length === 0 ? (
+                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Chua co danh gia nao.</div>
                                 ) : (
                                     <div className="space-y-3">
-                                        {wishlistItems.map((item) => (
+                                        {myReviews.map((item) => (
                                             <div key={item._id} className="bg-white rounded-2xl p-4 border border-gray-100 flex items-center justify-between">
                                                 <div className="flex items-center gap-4">
                                                     <img
-                                                        src={item.productId?.image || ''}
-                                                        alt={item.productId?.name || 'product'}
+                                                        src={item.product?.image || ''}
+                                                        alt={item.product?.name || 'product'}
                                                         className="w-14 h-14 object-cover rounded-lg border border-gray-100"
                                                     />
                                                     <div>
-                                                        <p className="font-black text-gray-900">{item.productId?.name || 'San pham'}</p>
-                                                        <p className="text-sm text-[#008d71] font-bold">{formatPrice(item.productId?.price || 0)}</p>
+                                                        <p className="font-black text-gray-900">{item.product?.name || 'San pham'}</p>
+                                                        <div className="flex gap-1 mt-1">
+                                                            {[1,2,3,4,5].map((s) => (
+                                                                <Star key={s} size={13} fill={s <= Number(item.rating || 0) ? "#f59e0b" : "none"} color={s <= Number(item.rating || 0) ? "#f59e0b" : "#cbd5e1"} />
+                                                            ))}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <button onClick={() => handleRemoveWishlistItem(item._id)} className="text-xs font-black text-red-500">
-                                                    Xoa
-                                                </button>
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => handleStartEditReview(item)} className="text-xs font-black text-amber-600">Sua</button>
+                                                    <button onClick={() => handleDeleteMyReview(item._id)} className="text-xs font-black text-red-500">Xoa</button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>

@@ -30,6 +30,7 @@ import FlashVoucherPage from './pages/User/FlashVoucherPage';
 import InvoicePage from './pages/User/InvoicePage';
 import StoreLocatorPage from './pages/User/StoreLocatorPage';
 import CustomerSupportPage from './pages/User/CustomerSupportPage';
+import ChangePasswordPage from './pages/User/ChangePasswordPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import ScrollToTop from './components/ScrollToTop';
 
@@ -67,6 +68,7 @@ function App() {
               <Route path="about" element={<AboutPage />} />
               <Route path="contact" element={<ContactPage />} />
               <Route path="profile" element={<ProfilePage />} />
+              <Route path="change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
               <Route path="orders" element={<ProtectedRoute><OrdersPage /></ProtectedRoute>} />
               <Route path="trade-in" element={<TradeInPage />} />
               <Route path="warranty" element={<WarrantyPage />} />
