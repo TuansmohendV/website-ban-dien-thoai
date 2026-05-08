@@ -189,9 +189,9 @@ const RegisterPage = () => {
                <button
                  type="submit"
                  disabled={isSubmitting}
-                 className="col-span-full bg-slate-950 text-white rounded-2xl py-4.5 font-black uppercase tracking-[0.25em] shadow-2xl hover:bg-red-600 transition-all hover:scale-[1.02] active:scale-95 shadow-slate-200 disabled:opacity-70"
+                 className="col-span-full w-full bg-slate-950 text-white rounded-2xl py-4 font-black uppercase tracking-widest shadow-2xl hover:bg-red-600 transition-all hover:scale-[1.01] active:scale-95 shadow-slate-200 disabled:opacity-70 flex items-center justify-center leading-none whitespace-nowrap"
                >
-                  {isSubmitting ? 'DANG XU LY...' : 'HOAN TAT DANG KY'}
+                  {isSubmitting ? 'DANG XU LY...' : 'DANG KY'}
                </button>
             </form>
 

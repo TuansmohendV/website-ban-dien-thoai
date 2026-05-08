@@ -88,6 +88,26 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const socialLogin = async (provider) => {
+        try {
+            const response = await api.post('/api/auth/social-login', {
+                provider,
+                accessToken: `mock-${provider}-token`,
+            });
+            const nextUser = normalizeUser(response.data?.user || {});
+            persistSession({
+                token: response.data?.token,
+                user: nextUser,
+            });
+            setUser(nextUser);
+            return nextUser;
+        } catch (error) {
+            throw new Error(
+                getApiErrorMessage(error, `Khong the dang nhap bang ${provider} luc nay.`)
+            );
+        }
+    };
+
     const logout = async () => {
         try {
             await api.post('/api/auth/logout');
@@ -121,8 +141,13 @@ export const AuthProvider = ({ children }) => {
             setUser(nextUser);
             return nextUser;
         } catch (error) {
+            const details = error?.response?.data?.details;
+            const detailText =
+                Array.isArray(details) && details.length > 0
+                    ? ` (${details.join(', ')})`
+                    : '';
             throw new Error(
-                getApiErrorMessage(error, 'Khong the cap nhat thong tin tai khoan.')
+                `${getApiErrorMessage(error, 'Khong the cap nhat thong tin tai khoan.')}${detailText}`
             );
         }
     };
@@ -144,6 +169,7 @@ export const AuthProvider = ({ children }) => {
                 user,
                 login,
                 register,
+                socialLogin,
                 logout,
                 refreshProfile,
                 updateProfile,

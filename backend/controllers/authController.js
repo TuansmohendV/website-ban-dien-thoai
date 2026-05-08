@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import User from '../models/User.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import AppError from '../utils/appError.js';
+import { sendResetOtpEmail } from '../utils/email.js';
 import { normalizePhone } from '../utils/phone.js';
 import { signToken } from '../utils/token.js';
 
@@ -128,20 +129,24 @@ export const forgotPassword = asyncHandler(async (req, res) => {
     });
   }
 
-  const resetToken = crypto.randomBytes(32).toString('hex');
-  const hashedToken = crypto
-    .createHash('sha256')
-    .update(resetToken)
-    .digest('hex');
+  const otpCode = `${Math.floor(100000 + Math.random() * 900000)}`;
+  const hashedToken = crypto.createHash('sha256').update(otpCode).digest('hex');
 
   user.resetPasswordToken = hashedToken;
-  user.resetPasswordExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  user.resetPasswordExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
   await user.save({ validateBeforeSave: false });
+
+  if (user.email) {
+    await sendResetOtpEmail({
+      to: user.email,
+      otpCode,
+      expiresAt: user.resetPasswordExpiresAt,
+    });
+  }
 
   res.json({
     message:
-      'Đã tạo yêu cầu reset mật khẩu. Hãy dùng token này để test frontend/backend nội bộ.',
-    resetToken: process.env.NODE_ENV === 'production' ? undefined : resetToken,
+      'Neu tai khoan ton tai, he thong da gui ma OTP khoi phuc mat khau den email dang ky.',
     expiresAt: user.resetPasswordExpiresAt,
   });
 });
@@ -153,7 +158,11 @@ export const resetPassword = asyncHandler(async (req, res) => {
     throw new AppError(400, 'Token và mật khẩu mới phải hợp lệ.');
   }
 
-  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+  const normalizedToken = String(token).trim();
+  const hashedToken = crypto
+    .createHash('sha256')
+    .update(normalizedToken)
+    .digest('hex');
 
   const user = await User.findOne({
     resetPasswordToken: hashedToken,

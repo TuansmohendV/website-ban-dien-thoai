@@ -17,41 +17,37 @@ import {
 } from 'lucide-react';
 
 const LoginPage = () => {
-    const { login } = useAuth();
+    const { login, socialLogin } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const redirectTo = location.state?.from?.pathname || '/';
 
-    const [phone, setPhone] = useState('');
-    const [loginMode, setLoginMode] = useState('phone');
-    const [formData, setFormData] = useState({ email: '', password: '' });
+    const [formData, setFormData] = useState({ identifier: '', password: '' });
     const [showPassword, setShowPassword] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
+
+    const handleSocialLogin = async (provider) => {
+        try {
+            setIsSubmitting(true);
+            setErrorMessage('');
+            await socialLogin(provider);
+            navigate(redirectTo, { replace: true });
+        } catch (error) {
+            setErrorMessage(error.message || 'Dang nhap mang xa hoi that bai.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setErrorMessage('');
 
-        if (loginMode === 'phone') {
-            if (!phone.trim()) {
-                setErrorMessage('Vui long nhap so dien thoai de tiep tuc.');
-                return;
-            }
-
-            setFormData((prevData) => ({
-                ...prevData,
-                email: phone.trim(),
-            }));
-            setLoginMode('password');
-            setErrorMessage('Vui long nhap mat khau de dang nhap bang so dien thoai.');
-            return;
-        }
-
         try {
             setIsSubmitting(true);
             await login({
-                identifier: formData.email.trim(),
+                identifier: formData.identifier.trim(),
                 password: formData.password,
             });
             navigate(redirectTo, { replace: true });
@@ -148,60 +144,58 @@ const LoginPage = () => {
                     <div className="mb-10">
                         <h3 className="text-[22px] font-black text-[#111] mb-2">Chao mung ban toi PhoneSin</h3>
                         <p className="text-[#333] text-[14px] font-medium leading-relaxed">
-                            {loginMode === 'phone'
-                                ? 'Ban da tung mua sam tai PhoneSin? Dang nhap xem hang the ngay'
-                                : 'Chao mung ban tro lai! Vui long dang nhap tai khoan khach hang'}
+                            Chao mung ban tro lai! Vui long dang nhap bang email hoac tai khoan.
                         </p>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-5">
-                        {loginMode === 'phone' ? (
-                            <div className="space-y-1">
+                        <div className="space-y-5">
+                            <div className="space-y-2">
+                                <label className="text-[14px] font-medium text-[#444] pl-1">Email hoac tai khoan</label>
                                 <input
-                                    type="tel"
+                                    type="text"
                                     required
-                                    value={phone}
-                                    onChange={(e) => setPhone(e.target.value)}
-                                    placeholder="So dien thoai cua ban"
-                                    className="w-full bg-white border border-gray-300 rounded-lg px-5 py-4 text-slate-900 text-[15px] font-semibold focus:border-[#008d71] focus:ring-0 outline-none transition-all placeholder:text-gray-400"
+                                    value={formData.identifier}
+                                    onChange={(e) => setFormData({ ...formData, identifier: e.target.value })}
+                                    className="w-full bg-white border border-gray-300 rounded-lg px-5 py-3.5 text-slate-900 text-[15px] font-semibold focus:border-[#008d71] outline-none transition-all"
                                 />
-                                <p className="text-[12px] text-gray-400 font-medium pl-1 mt-2">
-                                    He thong se dua ban toi buoc nhap mat khau de xac thuc tai khoan
-                                </p>
                             </div>
-                        ) : (
-                            <div className="space-y-5">
-                                <div className="space-y-2">
-                                    <label className="text-[14px] font-medium text-[#444] pl-1">Nhap email, tai khoan hoac so dien thoai</label>
+
+                            <div className="space-y-2">
+                                <label className="text-[14px] font-medium text-[#444] pl-1">Nhap mat khau cua ban</label>
+                                <div className="relative">
                                     <input
-                                        type="text"
+                                        type={showPassword ? 'text' : 'password'}
                                         required
-                                        value={formData.email}
-                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                        className="w-full bg-white border border-gray-300 rounded-lg px-5 py-3.5 text-slate-900 text-[15px] font-semibold focus:border-[#008d71] outline-none transition-all"
+                                        value={formData.password}
+                                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                        className="w-full bg-white border border-gray-300 rounded-lg px-5 py-3.5 text-slate-900 text-[15px] font-semibold focus:border-[#008d71] outline-none transition-all pr-12"
                                     />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[14px] font-medium text-[#444] pl-1">Nhap mat khau cua ban</label>
-                                    <div className="relative">
-                                        <input
-                                            type={showPassword ? 'text' : 'password'}
-                                            required
-                                            value={formData.password}
-                                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                            className="w-full bg-white border border-gray-300 rounded-lg px-5 py-3.5 text-slate-900 text-[15px] font-semibold focus:border-[#008d71] outline-none transition-all pr-12"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowPassword(!showPassword)}
-                                            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#008d71] transition-colors"
-                                        >
-                                            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                                        </button>
-                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#008d71] transition-colors"
+                                    >
+                                        {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                    </button>
                                 </div>
                             </div>
-                        )}
+
+                            <div className="flex justify-between items-center pt-1">
+                                <Link
+                                    to="/forgot-password"
+                                    className="text-[#008d71] text-[13px] font-bold hover:underline underline-offset-4"
+                                >
+                                    Quên mật khẩu?
+                                </Link>
+                                <Link
+                                    to="/register"
+                                    className="text-gray-500 text-[13px] font-bold hover:underline underline-offset-4"
+                                >
+                                    Đăng ký tài khoản
+                                </Link>
+                            </div>
+                        </div>
 
                         {errorMessage && (
                             <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-[13px] font-semibold text-red-600">
@@ -216,52 +210,40 @@ const LoginPage = () => {
                         >
                             {isSubmitting ? 'DANG DANG NHAP...' : 'TIEP TUC'}
                         </button>
-
-                        <div className="text-center pt-2">
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setErrorMessage('');
-                                    setLoginMode(loginMode === 'phone' ? 'password' : 'phone');
-                                }}
-                                className="text-[#008d71] text-[15px] font-bold hover:underline underline-offset-4"
-                            >
-                                {loginMode === 'phone' ? 'Dang nhap bang mat khau' : 'Dang nhap bang So dien thoai'}
-                            </button>
-                        </div>
                     </form>
 
-                    {loginMode === 'phone' && (
-                        <div className="mt-10">
-                            <div className="relative mb-8">
-                                <div className="absolute inset-0 flex items-center">
-                                    <span className="w-full border-t border-gray-200"></span>
-                                </div>
-                                <div className="relative flex justify-center text-xs uppercase">
-                                    <span className="bg-white px-4 text-gray-500 font-bold tracking-widest leading-none">Hoac dang nhap bang</span>
-                                </div>
+                    <div className="mt-10">
+                        <div className="relative mb-8">
+                            <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t border-gray-200"></span>
                             </div>
-
-                            <div className="space-y-3">
-                                <button className="w-full flex items-center justify-center h-[52px] bg-[#0078ff] text-white rounded-lg font-bold gap-3 hover:opacity-90 transition-all shadow-sm">
-                                    <div className="bg-white rounded-full p-1">
-                                        <svg viewBox="0 0 24 24" width="18" height="18" fill="#0078ff"><path d="M12 2C6.477 2 2 6.477 2 12c0 5.523 4.477 10 10 10s10-4.477 10-10c0-5.523-4.477-10-10-10zm4.5 9h-2.1l.6-3h-1.5l-.6 3H11l.6-3H10.1l-.6 3h-1.5l.6-3H7.1l.6-3h-2l-.6 3h-1.5z" /></svg>
-                                    </div>
-                                    Dang nhap voi Zalo
-                                </button>
-
-                                <button className="w-full flex items-center justify-center h-[52px] bg-white border border-gray-300 text-[#555] rounded-lg font-bold gap-3 hover:bg-gray-50 transition-all shadow-sm">
-                                    <Chrome size={20} className="text-[#ea4335]" fill="#ea4335" />
-                                    Dang nhap voi Google
-                                </button>
-
-                                <button className="w-full flex items-center justify-center h-[52px] bg-[#3b5998] text-white rounded-lg font-bold gap-3 hover:opacity-90 transition-all shadow-sm">
-                                    <Facebook size={20} fill="white" />
-                                    Dang nhap voi Facebook
-                                </button>
+                            <div className="relative flex justify-center text-xs uppercase">
+                                <span className="bg-white px-4 text-gray-500 font-bold tracking-widest leading-none">Hoac dang nhap bang</span>
                             </div>
                         </div>
-                    )}
+
+                        <div className="space-y-3">
+                            <button
+                                type="button"
+                                disabled={isSubmitting}
+                                onClick={() => handleSocialLogin('google')}
+                                className="w-full flex items-center justify-center h-[52px] bg-white border border-gray-300 text-[#555] rounded-lg font-bold gap-3 hover:bg-gray-50 transition-all shadow-sm disabled:opacity-70"
+                            >
+                                <Chrome size={20} className="text-[#ea4335]" fill="#ea4335" />
+                                Đăng nhập với Google
+                            </button>
+
+                            <button
+                                type="button"
+                                disabled={isSubmitting}
+                                onClick={() => handleSocialLogin('facebook')}
+                                className="w-full flex items-center justify-center h-[52px] bg-[#3b5998] text-white rounded-lg font-bold gap-3 hover:opacity-90 transition-all shadow-sm disabled:opacity-70"
+                            >
+                                <Facebook size={20} fill="white" />
+                                Đăng nhập với Facebook
+                            </button>
+                        </div>
+                    </div>
 
                     <div className="mt-12 text-[12px] text-gray-500 leading-relaxed text-center lg:text-left">
                         Bang viec tiep tuc, ban da doc va dong y voi <Link to="/policy" className="text-[#008d71] font-bold hover:underline">Chinh sach bao mat thong tin ca nhan</Link> cua PhoneSin
