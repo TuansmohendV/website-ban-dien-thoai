@@ -1,7 +1,5 @@
 import React from 'react';
 import { Filter, Trash2 } from 'lucide-react';
-import Slider from 'rc-slider';
-import 'rc-slider/assets/index.css';
 
 // LAPTOP BRANDS
 const laptopBrands = [

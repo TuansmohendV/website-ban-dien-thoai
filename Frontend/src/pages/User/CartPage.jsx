@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useCart } from '../../context/CartContext';
 import { useOrders } from '../../context/OrdersContext';
 import { Link } from 'react-router-dom';
+import api, { getApiErrorMessage } from '../../lib/api';
 import { 
   ArrowLeft, 
   Check, 
@@ -50,9 +51,32 @@ const HCM_BRANCHES = [
   "Số 127 Tô Ngọc Vân, Phường Thủ Đức, Hồ Chí Minh"
 ];
 
+const STORE_BRANCHES_BY_CITY = {
+  'Hồ Chí Minh': HCM_BRANCHES,
+  'Hà Nội': [
+    '89 Tam Trinh, Phường Mai Động, Quận Hoàng Mai, Hà Nội',
+    '65 Trần Quang Diệu, Phường Ô Chợ Dừa, Quận Đống Đa, Hà Nội',
+    '26 Phạm Văn Đồng, Phường Dịch Vọng Hậu, Quận Cầu Giấy, Hà Nội',
+  ],
+  'Đà Nẵng': [
+    '97 Hàm Nghi, Phường Thanh Khê, Thành phố Đà Nẵng',
+    '220 Nguyễn Văn Linh, Phường Nam Dương, Thành phố Đà Nẵng',
+  ],
+};
+
 const CartPage = () => {
-  const { cartItems, updateQuantity, removeFromCart, cartTotal, clearCart } = useCart();
-  const { addOrder } = useOrders();
+  const {
+    cartItems,
+    updateQuantity,
+    removeFromCart,
+    cartSubtotal,
+    cartDiscount,
+    cartTotal,
+    voucherCode,
+    clearCart,
+    refreshCart,
+  } = useCart();
+  const { createOrder } = useOrders();
   const [isOrdered, setIsOrdered] = useState(false);
   const [orderId, setOrderId] = useState('');
 
@@ -63,78 +87,178 @@ const CartPage = () => {
     email: '',
     deliveryMode: 'store', // 'home' or 'store'
     city: 'Hồ Chí Minh',
-    store: 'Cửa hàng *',
+    store: '',
+    homeAddress: '',
     note: '',
     isVAT: false,
-    promoCode: '',
     companyName: '',
     taxId: '',
     companyAddress: ''
   });
-
-  const [isCityOpen, setIsCityOpen] = useState(false);
-  const [isStoreOpen, setIsStoreOpen] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState('');
+  const [couponStatus, setCouponStatus] = useState(null);
+  const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
 
   const formatPrice = (num) => new Intl.NumberFormat('vi-VN').format(num || 0) + ' ₫';
+  const availableStores = STORE_BRANCHES_BY_CITY[customerInfo.city] || [];
+  const isStorePickup = customerInfo.deliveryMode === 'store';
+  const isHomeDelivery = customerInfo.deliveryMode === 'home';
 
-  const handleSubmitOrder = (e) => {
+  useEffect(() => {
+    setAppliedCoupon(voucherCode || '');
+    if (voucherCode) {
+      setCouponCode(voucherCode);
+    }
+  }, [voucherCode]);
+
+  useEffect(() => {
+    if (!isStorePickup) {
+      return;
+    }
+
+    if (customerInfo.store && !availableStores.includes(customerInfo.store)) {
+      setCustomerInfo((prev) => ({ ...prev, store: '' }));
+    }
+  }, [availableStores, customerInfo.store, isStorePickup]);
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) {
+      setCouponStatus({
+        type: 'error',
+        message: 'Vui lòng nhập mã giảm giá trước khi áp dụng.',
+      });
+      return;
+    }
+
+    setIsApplyingCoupon(true);
+    setCouponStatus(null);
+
+    try {
+      const response = await api.post('/api/voucher/apply', {
+        code: couponCode.trim().toUpperCase(),
+      });
+
+      await refreshCart();
+      setAppliedCoupon(response.data?.voucher?.code || couponCode.trim().toUpperCase());
+      setCouponStatus({
+        type: 'success',
+        message: response.data?.message || 'Áp dụng mã giảm giá thành công.',
+      });
+    } catch (error) {
+      setAppliedCoupon('');
+      setCouponStatus({
+        type: 'error',
+        message: getApiErrorMessage(error, 'Mã giảm giá không hợp lệ hoặc đã hết hạn.'),
+      });
+    } finally {
+      setIsApplyingCoupon(false);
+    }
+  };
+
+  const handleRemoveCoupon = async () => {
+    setIsApplyingCoupon(true);
+    setCouponStatus(null);
+
+    try {
+      await api.post('/api/voucher/apply', { code: '' });
+      await refreshCart();
+      setAppliedCoupon('');
+      setCouponCode('');
+      setCouponStatus({
+        type: 'success',
+        message: 'Đã gỡ mã giảm giá khỏi giỏ hàng.',
+      });
+    } catch (error) {
+      setCouponStatus({
+        type: 'error',
+        message: getApiErrorMessage(error, 'Không thể gỡ mã giảm giá lúc này.'),
+      });
+    } finally {
+      setIsApplyingCoupon(false);
+    }
+  };
+
+  const handleSubmitOrder = async (e) => {
     e.preventDefault();
     
-    // Simple Validation
     if (!customerInfo.name || !customerInfo.phone) {
         alert("Vui lòng điền đầy đủ Họ tên và Số điện thoại!");
         return;
     }
 
-    if (customerInfo.deliveryMode === 'store' && (!customerInfo.city || customerInfo.store === 'Cửa hàng *')) {
+    if (customerInfo.deliveryMode === 'store' && (!customerInfo.city || !customerInfo.store)) {
         alert("Vui lòng chọn Tỉnh/Thành phố và Cửa hàng nhận hàng!");
         return;
     }
 
-    // Simulate API Call
-    const mockOrderId = 'PS-' + Math.random().toString(36).substr(2, 9).toUpperCase();
-    
-    // Create actual order object to save
-    const newOrder = {
-        id: mockOrderId,
-        date: new Date().toLocaleString(),
-        status: 'pending',
-        items: cartItems.map(item => ({
-            name: item.name,
-            qty: item.qty,
-            price: item.price,
-            image: item.image
-        })),
-        totalAmount: cartTotal,
-        customer: {
-            fullName: customerInfo.name,
-            phone: customerInfo.phone,
-            email: customerInfo.email,
-            address: customerInfo.deliveryMode === 'store' ? customerInfo.store : 'Giao hàng tận nhà'
-        },
-        payment: {
-            method: 'cod',
-            methodLabel: 'Thanh toán khi nhận hàng'
-        },
-        summary: {
-            subtotal: cartTotal,
-            shipping: 0,
-            discount: 0
-        },
-        timeline: [
-            { time: new Date().toLocaleString(), text: 'Đặt hàng thành công', active: true },
-            { time: '', text: 'Chờ xác nhận', active: false }
-        ]
-    };
+    if (customerInfo.deliveryMode === 'home' && (!customerInfo.city || !customerInfo.homeAddress.trim())) {
+        alert("Vui lòng chọn Tỉnh/Thành phố và nhập địa chỉ nhận hàng tại nhà!");
+        return;
+    }
 
-    addOrder(newOrder);
-    setOrderId(mockOrderId);
-    setIsOrdered(true);
-    
-    // Clear cart after a short delay
-    setTimeout(() => {
-        clearCart();
-    }, 500);
+    if (customerInfo.isVAT) {
+        if (!customerInfo.email.trim()) {
+            alert("Vui lòng nhập email để nhận hóa đơn VAT.");
+            return;
+        }
+
+        if (
+            !customerInfo.companyName.trim() ||
+            !customerInfo.taxId.trim() ||
+            !customerInfo.companyAddress.trim()
+        ) {
+            alert("Vui lòng điền đầy đủ thông tin công ty để xuất hóa đơn VAT.");
+            return;
+        }
+    }
+
+    try {
+        const order = await createOrder({
+            customerInfo: {
+                fullName: customerInfo.name.trim(),
+                phone: customerInfo.phone.trim(),
+                email: customerInfo.email.trim(),
+            },
+            shippingAddress: {
+                recipientName: customerInfo.name.trim(),
+                phone: customerInfo.phone.trim(),
+                province: customerInfo.city || 'Hồ Chí Minh',
+                district:
+                    customerInfo.deliveryMode === 'store'
+                        ? 'Nhận tại cửa hàng'
+                        : 'Nhân viên sẽ gọi xác nhận',
+                ward:
+                    customerInfo.deliveryMode === 'store'
+                        ? 'Nhận tại cửa hàng'
+                        : 'Nhân viên sẽ gọi xác nhận',
+                street:
+                    customerInfo.deliveryMode === 'store'
+                        ? customerInfo.store
+                        : customerInfo.homeAddress.trim(),
+                note: customerInfo.note || '',
+            },
+            paymentMethod: 'COD',
+            shippingFee: 0,
+            voucherCode: appliedCoupon || undefined,
+            notes: customerInfo.note || '',
+            invoiceInfo: customerInfo.isVAT
+                ? {
+                    enabled: true,
+                    email: customerInfo.email.trim(),
+                    companyName: customerInfo.companyName.trim(),
+                    taxCode: customerInfo.taxId.trim(),
+                    companyAddress: customerInfo.companyAddress.trim(),
+                }
+                : undefined,
+        });
+
+        setOrderId(order.id);
+        setIsOrdered(true);
+        await clearCart();
+    } catch (error) {
+        alert(error.message || 'Không thể tạo đơn hàng lúc này.');
+    }
   };
 
   if (isOrdered) {
@@ -281,7 +405,7 @@ const CartPage = () => {
 
                                 <div className="space-y-2">
                                     <span className="text-[12px] font-black text-gray-800 uppercase tracking-tight">Màu sắc</span>
-                                    <button className="flex items-center gap-2 px-6 py-2 border-2 border-[#008d71] rounded-lg text-[#008d71] font-bold text-[13px] bg-white">
+                                    <button type="button" className="flex items-center gap-2 px-6 py-2 border-2 border-[#008d71] rounded-lg text-[#008d71] font-bold text-[13px] bg-white">
                                         <div className="w-5 h-5 rounded-full border-2 border-[#008d71] flex items-center justify-center bg-[#008d71]">
                                             <Check size={12} className="text-white" strokeWidth={4} />
                                         </div>
@@ -297,8 +421,14 @@ const CartPage = () => {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 space-y-3">
                     <div className="flex items-center gap-2 text-[16px] font-bold text-gray-900">
                         <span>Tổng giá trị:</span>
-                        <span className="font-black">{formatPrice(cartTotal)}</span>
+                        <span className="font-black">{formatPrice(cartSubtotal)}</span>
                     </div>
+                    {cartDiscount > 0 && (
+                        <div className="flex items-center gap-2 text-[16px] font-bold text-emerald-700">
+                            <span>Giảm giá:</span>
+                            <span className="font-black">- {formatPrice(cartDiscount)}</span>
+                        </div>
+                    )}
                     <div className="flex items-center gap-2 text-[16px] font-bold text-gray-900">
                         <span>Tổng thanh toán:</span>
                         <span className="text-[#ef3d4e] font-black">{formatPrice(cartTotal)}</span>
@@ -339,7 +469,7 @@ const CartPage = () => {
                         <div className="grid grid-cols-2 gap-4">
                             <button 
                                 type="button"
-                                onClick={() => setCustomerInfo({...customerInfo, deliveryMode: 'home'})}
+                                onClick={() => setCustomerInfo({...customerInfo, deliveryMode: 'home', store: ''})}
                                 className={`flex items-center gap-3 h-[52px] px-4 rounded-xl border-2 transition-all font-bold text-[14px] ${customerInfo.deliveryMode === 'home' ? 'border-[#008d71] text-[#008d71] bg-white' : 'border-gray-100 text-gray-500 bg-[#f1f1f1]'}`}
                             >
                                 <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${customerInfo.deliveryMode === 'home' ? 'border-[#008d71]' : 'border-gray-400'}`}>
@@ -349,7 +479,7 @@ const CartPage = () => {
                             </button>
                             <button 
                                 type="button"
-                                onClick={() => setCustomerInfo({...customerInfo, deliveryMode: 'store'})}
+                                onClick={() => setCustomerInfo({...customerInfo, deliveryMode: 'store', homeAddress: ''})}
                                 className={`flex items-center gap-3 h-[52px] px-4 rounded-xl border-2 transition-all font-bold text-[14px] ${customerInfo.deliveryMode === 'store' ? 'border-[#008d71] text-[#008d71] bg-white' : 'border-gray-100 text-gray-500 bg-[#f1f1f1]'}`}
                             >
                                 <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${customerInfo.deliveryMode === 'store' ? 'border-[#008d71]' : 'border-gray-400'}`}>
@@ -363,75 +493,64 @@ const CartPage = () => {
                     <div className="space-y-3">
                         <span className="text-[13px] font-bold text-gray-700 block ml-1">Nơi nhận hàng</span>
                         <div className="grid grid-cols-2 gap-4">
-                            {/* Custom City Dropdown */}
-                            <div className="relative">
-                                <div 
-                                    onClick={() => setIsCityOpen(!isCityOpen)}
-                                    className="w-full bg-white border border-gray-200 rounded-xl h-[52px] px-6 flex items-center justify-between text-[14px] font-bold text-gray-800 cursor-pointer hover:border-[#008d71] transition-all"
-                                >
-                                    <span className={customerInfo.city ? "text-gray-800" : "text-gray-400"}>
-                                        {customerInfo.city || "Tỉnh/Thành phố *"}
-                                    </span>
-                                    <ChevronDown className={`transition-transform duration-300 ${isCityOpen ? 'rotate-180' : ''}`} size={18} />
-                                </div>
-                                
-                                {isCityOpen && (
-                                    <div className="absolute bottom-full mb-2 left-0 w-full bg-white border border-gray-200 rounded-xl shadow-2xl z-[100] max-h-[300px] overflow-y-auto">
-                                        <div 
-                                            onClick={() => { setCustomerInfo({...customerInfo, city: ''}); setIsCityOpen(false); }}
-                                            className={`px-6 py-3 text-[14px] font-medium border-b border-gray-50 hover:bg-blue-600 hover:text-white cursor-pointer ${!customerInfo.city ? 'bg-blue-600 text-white' : 'text-gray-600'}`}
-                                        >
-                                            Tỉnh/Thành phố *
-                                        </div>
-                                        {VIETNAM_PROVINCES.map(province => (
-                                            <div 
-                                                key={province}
-                                                onClick={() => { setCustomerInfo({...customerInfo, city: province}); setIsCityOpen(false); }}
-                                                className={`px-6 py-3 text-[14px] font-medium border-b border-gray-50 hover:bg-blue-600 hover:text-white cursor-pointer ${customerInfo.city === province ? 'bg-blue-600 text-white' : 'text-gray-600'}`}
-                                            >
-                                                {province}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                            <select
+                                value={customerInfo.city}
+                                onChange={(e) =>
+                                    setCustomerInfo({
+                                        ...customerInfo,
+                                        city: e.target.value,
+                                        store: '',
+                                    })
+                                }
+                                className="w-full bg-white border border-gray-200 rounded-xl h-[52px] px-6 text-[14px] font-bold text-gray-800 outline-none focus:border-[#008d71] transition-all"
+                            >
+                                <option value="">Tỉnh/Thành phố *</option>
+                                {VIETNAM_PROVINCES.map((province) => (
+                                    <option key={province} value={province}>
+                                        {province}
+                                    </option>
+                                ))}
+                            </select>
 
-                            {/* Custom Store Dropdown */}
-                            <div className="relative">
-                                <div 
-                                    onClick={() => setIsStoreOpen(!isStoreOpen)}
-                                    className="w-full bg-white border border-gray-200 rounded-xl h-[52px] px-6 flex items-center justify-between text-[14px] font-bold text-gray-800 cursor-pointer hover:border-[#008d71] transition-all"
+                            {isStorePickup ? (
+                                <select
+                                    value={customerInfo.store}
+                                    onChange={(e) =>
+                                        setCustomerInfo({
+                                            ...customerInfo,
+                                            store: e.target.value,
+                                        })
+                                    }
+                                    className="w-full bg-white border border-gray-200 rounded-xl h-[52px] px-6 text-[14px] font-bold text-gray-800 outline-none focus:border-[#008d71] transition-all disabled:bg-gray-50 disabled:text-gray-400"
+                                    disabled={!customerInfo.city}
                                 >
-                                    <span className={customerInfo.store ? "text-gray-800" : "text-gray-400"}>
-                                        {customerInfo.store || "Cửa hàng *"}
-                                    </span>
-                                    <ChevronDown className={`transition-transform duration-300 ${isStoreOpen ? 'rotate-180' : ''}`} size={18} />
-                                </div>
-
-                                {isStoreOpen && (
-                                    <div className="absolute bottom-full mb-2 left-0 w-full bg-white border border-gray-200 rounded-xl shadow-2xl z-[100] max-h-[300px] overflow-y-auto">
-                                        <div 
-                                            onClick={() => { setCustomerInfo({...customerInfo, store: ''}); setIsStoreOpen(false); }}
-                                            className={`px-6 py-3 text-[14px] font-medium border-b border-gray-50 hover:bg-blue-600 hover:text-white cursor-pointer ${!customerInfo.store ? 'bg-blue-600 text-white' : 'text-gray-600'}`}
-                                        >
-                                            Cửa hàng *
-                                        </div>
-                                        {HCM_BRANCHES.map(branch => (
-                                            <div 
-                                                key={branch}
-                                                onClick={() => { setCustomerInfo({...customerInfo, store: branch}); setIsStoreOpen(false); }}
-                                                className={`px-6 py-3 text-[14px] font-medium border-b border-gray-50 hover:bg-blue-600 hover:text-white cursor-pointer ${customerInfo.store === branch ? 'bg-blue-600 text-white' : 'text-gray-600'}`}
-                                            >
-                                                {branch}
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
+                                    <option value="">Cửa hàng *</option>
+                                    {availableStores.map((branch) => (
+                                        <option key={branch} value={branch}>
+                                            {branch}
+                                        </option>
+                                    ))}
+                                </select>
+                            ) : (
+                                <input
+                                    type="text"
+                                    value={customerInfo.homeAddress}
+                                    onChange={(e) =>
+                                        setCustomerInfo({
+                                            ...customerInfo,
+                                            homeAddress: e.target.value,
+                                        })
+                                    }
+                                    placeholder="Địa chỉ nhận hàng tại nhà *"
+                                    className="w-full bg-white border border-gray-200 rounded-xl h-[52px] px-6 text-[14px] font-bold text-gray-800 outline-none focus:border-[#008d71] transition-all placeholder:text-gray-400"
+                                />
+                            )}
                         </div>
                     </div>
 
                     <textarea 
+                        value={customerInfo.note}
+                        onChange={(e) => setCustomerInfo({...customerInfo, note: e.target.value})}
                         placeholder="Ghi chú"
                         className="w-full bg-white border border-gray-200 rounded-xl p-6 text-[14px] font-bold text-gray-800 focus:ring-2 focus:ring-[#008d71]/20 transition-all min-h-[120px]"
                     />
@@ -478,11 +597,46 @@ const CartPage = () => {
                     <div className="flex gap-2">
                         <input 
                             type="text" 
+                            value={couponCode}
+                            onChange={(e) => {
+                                setCouponCode(e.target.value.toUpperCase());
+                                setCouponStatus(null);
+                            }}
                             placeholder="Mã giảm giá (Nếu có)"
-                            className="flex-1 bg-white border border-gray-200 rounded-xl h-[52px] px-6 text-[14px] font-bold text-gray-800 focus:ring-2 focus:ring-[#008d71]/20 transition-all"
+                            className="flex-1 bg-white border border-gray-200 rounded-xl h-[52px] px-6 text-[14px] font-bold text-gray-800 focus:ring-2 focus:ring-[#008d71]/20 transition-all uppercase disabled:bg-gray-50 disabled:text-gray-400"
+                            disabled={!!appliedCoupon}
                         />
-                        <button className="bg-[#444] text-white px-8 rounded-xl font-bold text-[13px] uppercase tracking-widest hover:bg-black transition-all">Sử dụng</button>
+                        {appliedCoupon ? (
+                            <button
+                                type="button"
+                                onClick={handleRemoveCoupon}
+                                disabled={isApplyingCoupon}
+                                className="bg-red-100 text-red-700 px-8 rounded-xl font-bold text-[13px] uppercase tracking-widest hover:bg-red-200 transition-all disabled:opacity-50"
+                            >
+                                {isApplyingCoupon ? '...' : 'Gỡ mã'}
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={handleApplyCoupon}
+                                disabled={isApplyingCoupon}
+                                className="bg-[#444] text-white px-8 rounded-xl font-bold text-[13px] uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50"
+                            >
+                                {isApplyingCoupon ? '...' : 'Sử dụng'}
+                            </button>
+                        )}
                     </div>
+                    {couponStatus && (
+                        <p
+                            className={`text-[12px] font-bold -mt-3 ${
+                                couponStatus.type === 'success'
+                                    ? 'text-emerald-600'
+                                    : 'text-red-500'
+                            }`}
+                        >
+                            {couponStatus.message}
+                        </p>
+                    )}
 
                     <div className="pt-4 border-t border-gray-100 flex flex-col items-center">
                         <p className="text-[11px] font-medium text-gray-500 text-center leading-relaxed mb-6">

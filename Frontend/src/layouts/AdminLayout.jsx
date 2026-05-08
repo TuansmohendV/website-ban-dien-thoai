@@ -9,8 +9,8 @@ import {
   Users, 
   MessageSquare, 
   Ticket, 
-  Bell, 
-  Settings, 
+  Bell,
+  Home,
   LogOut, 
   Menu, 
   X,
@@ -22,6 +22,7 @@ import {
   Hash,
   Dna
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 const AdminLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -30,6 +31,7 @@ const AdminLayout = () => {
   const [primaryColor, setPrimaryColor] = useState(localStorage.getItem('primaryColor') || '#2563eb');
   const [sidebarTheme, setSidebarTheme] = useState(localStorage.getItem('sidebarTheme') || 'dark');
   const location = useLocation();
+  const { user, logout } = useAuth();
 
   // Listen for changes in localStorage to update assets and theme instantly
   React.useEffect(() => {
@@ -98,15 +100,19 @@ const AdminLayout = () => {
         </nav>
 
         <div className="sidebar-footer">
+          <Link to="/" className="nav-item">
+            <span className="nav-icon"><Home size={20} /></span>
+            {isSidebarOpen && <span className="nav-label">Quay lại trang chủ</span>}
+          </Link>
           <button 
             className="nav-item logout-btn" 
             onClick={() => {
               if(window.confirm('Bạn có chắc chắn muốn đăng xuất?')) {
-                // Clear any auth tokens here if they exist
+                logout();
                 window.location.href = '/login';
               }
             }}
-            style={{ width: '100%', border: 'none', background: 'transparent', cursor: 'pointer' }}
+            style={{ width: '100%', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', padding: '12px 15px' }}
           >
             <span className="nav-icon"><LogOut size={20} /></span>
             {isSidebarOpen && <span className="nav-label">Đăng xuất</span>}
@@ -178,8 +184,8 @@ const AdminLayout = () => {
                 <User size={20} />
               </div>
               <div className="admin-info">
-                <span className="admin-name">Quản trị viên</span>
-                <span className="admin-role">Super Admin</span>
+                <span className="admin-name">{user?.fullName || user?.name || 'Quản trị viên'}</span>
+                <span className="admin-role">Admin</span>
               </div>
             </div>
           </div>

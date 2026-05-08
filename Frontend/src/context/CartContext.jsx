@@ -1,87 +1,221 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, startTransition, useContext, useEffect, useState } from 'react';
+import api, { getApiErrorMessage } from '../lib/api';
+import { useAuth } from './AuthContext';
 
 const CartContext = createContext();
 
+const EMPTY_CART = {
+    cartItems: [],
+    cartCount: 0,
+    cartSubtotal: 0,
+    cartDiscount: 0,
+    cartTotal: 0,
+    voucherCode: '',
+};
+
+const normalizeCartItem = (item = {}) => {
+    const productId = item.product?._id || item.product || '';
+    const variantId = item.variant?._id || item.variant || '';
+    const quantity = Number(item.quantity || item.qty || 1);
+    const price = Number(item.unitPrice || item.price || 0);
+    const originalPrice = Number(
+        item.variant?.originalPrice || item.product?.originalPrice || 0
+    );
+
+    return {
+        ...item,
+        id: item.product?.slug || productId || item._id,
+        cartItemId: item._id || '',
+        backendProductId: productId,
+        variantId,
+        name: item.name || item.product?.name || 'San pham',
+        image: item.image || item.product?.image || '',
+        qty: quantity,
+        quantity,
+        price,
+        priceNum: price,
+        oldPrice: originalPrice > price ? originalPrice : price,
+        selectedVariant: variantId
+            ? {
+                id: variantId,
+                color: item.selectedColor || item.variant?.color || '',
+                storage: item.selectedStorage || item.variant?.storage || '',
+                price,
+                stock: Number(item.variant?.stock || item.maxStock || 0),
+                image: item.image || item.variant?.image || item.product?.image || '',
+            }
+            : null,
+        selectedColor: item.selectedColor
+            ? {
+                name: item.selectedColor,
+                image: item.image || item.variant?.image || item.product?.image || '',
+            }
+            : null,
+        color: item.selectedColor || '',
+        maxStock: Number(item.maxStock || item.variant?.stock || item.product?.countInStock || 0),
+    };
+};
+
+const normalizeCartState = (cart = {}) => {
+    const cartItems = Array.isArray(cart.items) ? cart.items.map(normalizeCartItem) : [];
+
+    return {
+        cartItems,
+        cartCount:
+            Number(cart.totalItems) ||
+            cartItems.reduce((sum, item) => sum + Number(item.qty || 0), 0),
+        cartSubtotal: Number(cart.subtotal || 0),
+        cartDiscount: Number(cart.discountTotal || 0),
+        cartTotal:
+            Number(cart.total) ||
+            cartItems.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.qty || 0), 0),
+        voucherCode: cart.voucherCode || '',
+    };
+};
+
 export const CartProvider = ({ children }) => {
-    const [cartItems, setCartItems] = useState(() => {
-        // Load initial cart from localStorage
-        const savedCart = localStorage.getItem('cart');
-        return savedCart ? JSON.parse(savedCart) : [];
-    });
+    const { user } = useAuth();
+    const [cartState, setCartState] = useState(EMPTY_CART);
+    const [loading, setLoading] = useState(true);
+
+    const applyCartState = (payload = {}) => {
+        const normalized = normalizeCartState(payload);
+        startTransition(() => {
+            setCartState(normalized);
+        });
+        return normalized;
+    };
+
+    const refreshCart = async () => {
+        setLoading(true);
+
+        try {
+            const response = await api.get('/api/cart');
+            applyCartState(response.data || {});
+        } catch {
+            applyCartState(EMPTY_CART);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        // Save cart to localStorage whenever it changes
-        localStorage.setItem('cart', JSON.stringify(cartItems));
-    }, [cartItems]);
+        refreshCart();
+    }, [user?.id]);
 
-    const addToCart = (product, variant, color) => {
-        setCartItems(prevItems => {
-            // Check if item already exists in cart with same variant and color
-            const existingItemIndex = prevItems.findIndex(item => 
-                item.id === product.id && 
-                item.selectedVariant?.id === variant?.id && 
-                item.selectedColor?.name === color?.name
+    const findCartItem = (itemId, variantId, colorName) =>
+        cartState.cartItems.find(
+            (item) =>
+                item.id === itemId &&
+                String(item.variantId || item.selectedVariant?.id || '') ===
+                    String(variantId || item.variantId || item.selectedVariant?.id || '') &&
+                String(item.selectedColor?.name || item.color || '') ===
+                    String(colorName || item.selectedColor?.name || item.color || '')
+        );
+
+    const addToCart = async (product, variant, color, quantity = 1) => {
+        const productId = product?.backendId || product?.backendProductId || product?._id;
+
+        if (!productId) {
+            throw new Error('Khong xac dinh duoc san pham de them vao gio hang.');
+        }
+
+        const rawVariantId = variant?.id || variant?._id || '';
+        const variantId =
+            rawVariantId &&
+            !String(rawVariantId).startsWith('variant-') &&
+            !String(rawVariantId).startsWith('color-')
+                ? rawVariantId
+                : undefined;
+
+        try {
+            const response = await api.post('/api/cart', {
+                productId,
+                variantId,
+                quantity,
+            });
+
+            return applyCartState(response.data?.cart || response.data || {});
+        } catch (error) {
+            throw new Error(
+                getApiErrorMessage(error, 'Khong the them san pham vao gio hang.')
             );
-
-            if (existingItemIndex > -1) {
-                // Update quantity if exists
-                const newItems = [...prevItems];
-                newItems[existingItemIndex] = {
-                    ...newItems[existingItemIndex],
-                    qty: newItems[existingItemIndex].qty + 1
-                };
-                return newItems;
-            } else {
-                // Add new item if not exists
-                return [...prevItems, {
-                    ...product,
-                    selectedVariant: variant,
-                    selectedColor: color,
-                    qty: 1,
-                    // Map product fields to what CartPage expects if they differ
-                    price: variant?.price || product.priceNum,
-                    oldPrice: (variant?.price || product.priceNum) * 1.2, // Dummy old price
-                    image: color?.image || product.image
-                }];
-            }
-        });
+        }
     };
 
-    const removeFromCart = (itemId, variantId, colorName) => {
-        setCartItems(prevItems => prevItems.filter(item => 
-            !(item.id === itemId && 
-              item.selectedVariant?.id === variantId && 
-              item.selectedColor?.name === colorName)
-        ));
+    const updateQuantity = async (itemId, variantId, colorName, delta) => {
+        const targetItem = findCartItem(itemId, variantId, colorName);
+
+        if (!targetItem) {
+            return null;
+        }
+
+        const nextQuantity = Math.max(0, Number(targetItem.qty || 0) + Number(delta || 0));
+
+        try {
+            const response = await api.put('/api/cart', {
+                itemId: targetItem.cartItemId,
+                quantity: nextQuantity,
+                productId: targetItem.backendProductId,
+                currentVariantId: targetItem.variantId || undefined,
+            });
+
+            return applyCartState(response.data?.cart || response.data || {});
+        } catch (error) {
+            throw new Error(
+                getApiErrorMessage(error, 'Khong the cap nhat so luong san pham.')
+            );
+        }
     };
 
-    const updateQuantity = (itemId, variantId, colorName, delta) => {
-        setCartItems(prevItems => prevItems.map(item => {
-            if (item.id === itemId && 
-                item.selectedVariant?.id === variantId && 
-                item.selectedColor?.name === colorName) {
-                return { ...item, qty: Math.max(1, item.qty + delta) };
-            }
-            return item;
-        }));
+    const removeFromCart = async (itemId, variantId, colorName) => {
+        const targetItem = findCartItem(itemId, variantId, colorName);
+
+        try {
+            const response = await api.delete('/api/cart', {
+                data: {
+                    itemId: targetItem?.cartItemId,
+                    productId: targetItem?.backendProductId || itemId,
+                    variantId: targetItem?.variantId || variantId,
+                },
+            });
+
+            return applyCartState(response.data?.cart || response.data || {});
+        } catch (error) {
+            throw new Error(
+                getApiErrorMessage(error, 'Khong the xoa san pham khoi gio hang.')
+            );
+        }
     };
 
-    const clearCart = () => {
-        setCartItems([]);
-    };
+    const clearCart = async () => {
+        try {
+            const response = await api.delete('/api/cart', {
+                data: { clearAll: true },
+            });
 
-    const cartCount = cartItems.reduce((acc, item) => acc + item.qty, 0);
-    const cartTotal = cartItems.reduce((acc, item) => acc + (item.price * item.qty), 0);
+            return applyCartState(response.data?.cart || response.data || {});
+        } catch (error) {
+            throw new Error(
+                getApiErrorMessage(error, 'Khong the lam trong gio hang.')
+            );
+        }
+    };
 
     return (
         <CartContext.Provider value={{ 
-            cartItems, 
+            cartItems: cartState.cartItems, 
             addToCart, 
             removeFromCart, 
             updateQuantity, 
             clearCart,
-            cartCount,
-            cartTotal
+            refreshCart,
+            cartCount: cartState.cartCount,
+            cartSubtotal: cartState.cartSubtotal,
+            cartDiscount: cartState.cartDiscount,
+            cartTotal: cartState.cartTotal,
+            voucherCode: cartState.voucherCode,
+            loading,
         }}>
             {children}
         </CartContext.Provider>

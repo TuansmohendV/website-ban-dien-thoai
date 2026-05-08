@@ -4,12 +4,14 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { Search, MapPin, User, ShoppingCart } from 'lucide-react';
-import { allProducts } from '../data/allProducts';
+import api from '../lib/api';
+import { normalizeProduct } from '../lib/products';
 
 const Navbar = () => {
     const { t } = useLanguage();
     const { user } = useAuth();
     const { cartCount } = useCart();
+    const [unreadCount, setUnreadCount] = useState(0);
     const [searchQuery, setSearchQuery] = useState('');
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -30,19 +32,32 @@ const Navbar = () => {
             clearInterval(interval);
         };
     }, [logo]);
-
-    // Filter products for suggestions
     useEffect(() => {
-        if (searchQuery.trim().length >= 1) {
-            const matches = allProducts
-                .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
-                .slice(0, 5); // Limit to top 5 suggested products
-            setSuggestions(matches);
-            setShowSuggestions(true);
-        } else {
+        if (searchQuery.trim().length < 1) {
             setSuggestions([]);
             setShowSuggestions(false);
+            return;
         }
+
+        const timer = setTimeout(async () => {
+            try {
+                const response = await api.get('/api/products/suggest', {
+                    params: { q: searchQuery.trim() }
+                });
+
+                const matches = (response.data?.data || [])
+                    .map(normalizeProduct)
+                    .slice(0, 5);
+
+                setSuggestions(matches);
+                setShowSuggestions(matches.length > 0);
+            } catch (error) {
+                setSuggestions([]);
+                setShowSuggestions(false);
+            }
+        }, 250);
+
+        return () => clearTimeout(timer);
     }, [searchQuery]);
 
     // Handle click outside suggestions
@@ -55,6 +70,24 @@ const Navbar = () => {
         document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
+
+    useEffect(() => {
+        const loadUnreadCount = async () => {
+            if (!user?.id) {
+                setUnreadCount(0);
+                return;
+            }
+
+            try {
+                const response = await api.get('/api/notifications/unread-count');
+                setUnreadCount(Number(response.data?.data?.count || 0));
+            } catch {
+                setUnreadCount(0);
+            }
+        };
+
+        loadUnreadCount();
+    }, [user?.id]);
 
     const handleSearch = (e) => {
         if (e) e.preventDefault();
@@ -106,11 +139,11 @@ const Navbar = () => {
     };
 
     return (
-        <nav className="w-full z-50 flex flex-col font-sans sticky top-11 bg-[#f0f2f5] py-4">
+        <nav className="w-full z-50 flex flex-col font-sans sticky top-10 sm:top-11 bg-[#f0f2f5] py-2.5 md:py-4">
             <div className="max-w-[1200px] mx-auto px-4 w-full">
                 
                 {/* Main Row */}
-                <div className="flex items-center gap-x-12 h-[46px]">
+                <div className="flex flex-wrap lg:flex-nowrap items-center gap-2.5 lg:gap-x-10 h-auto lg:h-[46px]">
                     
                     {/* 1. Logo (Customizable) */}
                     <Link to="/" className="flex items-center gap-2 shrink-0 group h-full">
@@ -131,13 +164,14 @@ const Navbar = () => {
                                 <span className="text-[11px] font-black text-[#004f44]/80 tracking-[0.22em] uppercase">MOBILE.COM</span>
                             </div>
                         </div>
+                        </div>
                     </Link>
 
                     {/* 2. Middle & Right Group */}
-                    <div className="flex-1 flex items-center justify-between gap-x-8 h-full">
+                    <div className="w-full lg:flex-1 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 lg:gap-x-6 h-auto lg:h-full min-w-0">
                         
                         {/* Search Bar Wrapper */}
-                        <div className="w-[680px] flex flex-col relative h-full" ref={suggestionRef}>
+                        <div className="w-full lg:max-w-[680px] lg:flex-1 flex flex-col relative h-[42px] sm:h-[44px] lg:h-full min-w-0" ref={suggestionRef}>
                             <div className="relative group flex items-center h-full">
                                 <input 
                                     type="text" 
@@ -146,14 +180,14 @@ const Navbar = () => {
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                     onKeyDown={handleKeyDown}
                                     onFocus={() => searchQuery.trim().length >= 1 && setShowSuggestions(true)}
-                                    className="w-full bg-white border border-gray-200 rounded-lg h-full pl-5 pr-28 text-[14px] text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#008d71] shadow-sm font-medium placeholder-gray-400"
+                                    className="w-full bg-white border border-gray-200 rounded-lg h-full pl-3.5 sm:pl-5 pr-12 sm:pr-28 text-[13px] sm:text-[14px] text-gray-800 focus:outline-none focus:ring-1 focus:ring-[#008d71] shadow-sm font-medium placeholder-gray-400"
                                 />
                                 <button 
                                     onClick={handleSearch}
-                                    className="absolute right-0 h-full px-5 text-[#008d71] font-semibold text-[15px] flex items-center gap-2 hover:bg-gray-50 transition-all border-l border-gray-200"
+                                    className="absolute right-0 h-full px-3 sm:px-5 text-[#008d71] font-semibold text-[14px] sm:text-[15px] flex items-center gap-1.5 sm:gap-2 hover:bg-gray-50 transition-all border-l border-gray-200"
                                 >
                                     <Search size={18} strokeWidth={1.5} />
-                                    <span>Tìm kiếm</span>
+                                    <span className="hidden sm:inline">Tìm kiếm</span>
                                 </button>
                             </div>
 
@@ -176,7 +210,7 @@ const Navbar = () => {
                                                 </div>
                                                 <div className="flex-1 flex flex-col gap-1">
                                                     <h4 className="text-[13px] font-bold text-gray-900 leading-tight line-clamp-2">{p.name}</h4>
-                                                    <span className="text-[14px] font-black text-red-500">{p.price}</span>
+                                                    <span className="text-[14px] font-black text-red-500">{p.priceDisplay}</span>
                                                 </div>
                                             </Link>
                                         ))}
@@ -194,30 +228,39 @@ const Navbar = () => {
                         </div>
 
                         {/* Right Actions */}
-                        <div className="flex items-center gap-7 shrink-0 h-full">
+                        <div className="flex items-center justify-end gap-2 sm:gap-4 lg:gap-7 shrink-0 h-9 sm:h-11 lg:h-full min-w-0">
                             {/* Location */}
                             <Link to="/store-locator" className="flex items-center gap-1.5 cursor-pointer group h-full focus-within:ring-2 ring-[#008d71] rounded-md transition-shadow">
-                                <MapPin size={22} className="text-[#008d71]" strokeWidth={1.5} />
-                                <span className="text-[15px] font-semibold text-[#008d71] whitespace-nowrap">Tìm siêu thị</span>
+                                <MapPin size={20} className="text-[#008d71]" strokeWidth={1.5} />
+                                <span className="hidden md:inline text-[15px] font-semibold text-[#008d71] whitespace-nowrap">Tìm siêu thị</span>
                             </Link>
 
                             {/* User Profile */}
                             <Link to={user ? "/profile" : "/login"} className="flex items-center gap-1.5 cursor-pointer group h-full">
-                                <User size={22} className="text-[#008d71]" strokeWidth={1.5} />
-                                <span className="text-[15px] font-semibold text-[#008d71] whitespace-nowrap">
+                                <div className="relative">
+                                    <User size={20} className="text-[#008d71]" strokeWidth={1.5} />
+                                    {unreadCount > 0 && (
+                                        <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 bg-[#ff424e] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                                            {unreadCount > 99 ? '99+' : unreadCount}
+                                        </span>
+                                    )}
+                                </div>
+                                <span className="hidden md:inline text-[15px] font-semibold text-[#008d71] whitespace-nowrap">
                                     {user ? `Chào, ${user.name.split(' ')[0]}` : 'Tài khoản'}
                                 </span>
                             </Link>
 
                             {/* Admin Shortcut (Temporary for testing) */}
-                            <Link to="/admin" className="flex items-center gap-1.5 px-3 py-1 bg-[#008d71]/10 rounded-full hover:bg-[#008d71]/20 transition-all">
-                                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                                <span className="text-[13px] font-bold text-[#008d71]">Admin Panel</span>
-                            </Link>
+                            {(user?.role === 'admin' || user?.isAdmin) && (
+                                <Link to="/admin" className="hidden xl:flex items-center gap-1.5 px-3 py-1 bg-[#008d71]/10 rounded-full hover:bg-[#008d71]/20 transition-all">
+                                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                                    <span className="text-[13px] font-bold text-[#008d71]">Admin Panel</span>
+                                </Link>
+                            )}
 
                             {/* Simple Cart Bag */}
                             <Link to="/cart" className="flex items-center gap-1.5 p-1 group">
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:stroke-[#008d71] transition-colors">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:stroke-[#008d71] transition-colors">
                                     <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>
                                 </svg>
                                 <div className="bg-[#ff424e] text-white text-[12px] font-semibold w-[20px] h-[20px] rounded-full flex items-center justify-center">
@@ -231,9 +274,9 @@ const Navbar = () => {
                 </div>
 
                 {/* Sub Row: Trending Keywords (Align with Search Bar) */}
-                <div className="flex items-center gap-3 mt-2.5 ml-[215px]">
-                    <span className="text-[14px] font-black text-[#008d71] uppercase whitespace-nowrap">Từ khóa xu hướng</span>
-                    <div className="flex gap-4">
+                <div className="flex items-center gap-2 sm:gap-3 mt-2 lg:ml-[200px] overflow-x-auto no-scrollbar pb-1">
+                    <span className="text-[12px] sm:text-[14px] font-black text-[#008d71] uppercase whitespace-nowrap">Từ khóa xu hướng</span>
+                    <div className="flex gap-3 sm:gap-4 flex-nowrap">
                         {[
                             { name: 'iPhone', link: '/category/iphone' },
                             { name: 'Samsung', link: '/category/samsung' },
@@ -242,7 +285,7 @@ const Navbar = () => {
                             { name: 'Màn hình', link: '/category/man-hinh' },
                             { name: 'Đồng hồ', link: '/category/dong-ho' }
                         ].map(kw => (
-                            <Link key={kw.name} to={kw.link} className="text-[14px] font-bold text-gray-500/80 hover:text-[#008d71] transition-colors whitespace-nowrap">{kw.name}</Link>
+                            <Link key={kw.name} to={kw.link} className="text-[13px] sm:text-[14px] font-bold text-gray-500/80 hover:text-[#008d71] transition-colors whitespace-nowrap">{kw.name}</Link>
                         ))}
                     </div>
                 </div>

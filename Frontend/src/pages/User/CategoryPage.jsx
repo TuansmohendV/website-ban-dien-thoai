@@ -12,22 +12,27 @@ import BuyNowModal from '../../components/BuyNowModal';
 
 import CategoryDiscovery from '../../components/CategoryDiscovery';
 import { useLanguage } from '../../context/LanguageContext';
-import { allProducts } from '../../data/allProducts';
+import api from '../../lib/api';
+import { inflateProducts, normalizeProduct } from '../../lib/products';
 
 // 1. FeaturedMonitorSlider Component for Dynamic Carousel
-const FeaturedMonitorSlider = () => {
+const FeaturedMonitorSlider = ({ products: externalProducts = [] }) => {
   const [index, setIndex] = useState(0);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  const products = [
-    { name: 'Màn hình MSI PRO MP243L E14', price: '2,190,000 ₫', oldPrice: '3,190,000 ₫', discount: '-31%', img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/03/07/man-hinh-msi-pro-mp243l-e1.png' },
-    { name: 'Màn hình Samsung LS24D300GAEXXV', price: '2,170,000 ₫', oldPrice: '2,890,000 ₫', discount: '-25%', img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/10/30/man-hinh-samsung-ls24d300gaexxv-1.png' },
-    { name: 'Màn hình ViewSonic VA2215-H', price: '1,400,000 ₫', oldPrice: '1,890,000 ₫', discount: '-26%', img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2022/10/26/image-removebg-preview-1.png' },
-    { name: 'Màn hình EDRA EGM25F18', price: '2,200,000 ₫', oldPrice: '2,890,000 ₫', discount: '-24%', img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/07/29/man-hinh-edra-egm25f180-egm25f100-3.png' },
-    { name: 'Màn hình Dell UltraSharp U2723QE', price: '14,500,000 ₫', oldPrice: '16,500,000 ₫', discount: '-12%', img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2023/06/08/dell-u2723qe.png' },
-    { name: 'Màn hình ASUS ProArt PA278CV', price: '8,900,000 ₫', oldPrice: '10,200,000 ₫', discount: '-13%', img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2021/11/11/asus-proart.png' },
-    { name: 'Màn hình LG 27UP850N-W', price: '7,990,000 ₫', oldPrice: '9,500,000 ₫', discount: '-16%', img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/01/18/lg-27up850.png' },
-    { name: 'Màn hình MSI G274F 27" IPS 180Hz', price: '4,500,000 ₫', oldPrice: '5,900,000 ₫', discount: '-24%', img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/03/07/msi-g274f.png' }
-  ];
+  const apiProducts = inflateProducts(externalProducts, 8, 'featured-monitor');
+  const products = apiProducts.map((item) => ({
+    ...item,
+    img: item.image,
+    price: item.priceDisplay,
+    oldPrice: item.oldPriceNum
+      ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.oldPriceNum)
+      : '',
+    discount: `-${item.discount || '0%'}`,
+  }));
+
+  if (products.length === 0) {
+    return null;
+  }
 
   const maxIndex = Math.ceil(products.length / 4) - 1;
 
@@ -43,7 +48,7 @@ const FeaturedMonitorSlider = () => {
       {/* Header with Generated Image Background */}
       <div className="relative h-[120px] sm:h-[150px] w-full flex items-center px-10 overflow-hidden">
         <img
-          src="file:///C:/Users/admin/.gemini/antigravity/brain/c4883c24-57fc-448b-b312-1bbfd9f3f265/featured_monitors_banner_1775836405180.png"
+          src="/banners/cat-samsung.png"
           className="absolute inset-0 w-full h-full object-cover"
           alt="Featured Background"
         />
@@ -80,7 +85,7 @@ const FeaturedMonitorSlider = () => {
           style={{ transform: `translateX(-${index * 100}%)` }}
         >
           {products.map((p, idx) => (
-            <div key={idx} className="min-w-[calc(25%-12px)] bg-white rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-blue-100 group flex flex-col">
+            <div key={idx} className="min-w-full sm:min-w-[calc(50%-8px)] lg:min-w-[calc(25%-12px)] bg-white rounded-2xl p-5 shadow-sm hover:shadow-xl transition-all border border-transparent hover:border-blue-100 group flex flex-col">
               <div className="aspect-square mb-4 overflow-hidden flex items-center justify-center p-2">
                 <img src={p.img} alt={p.name} className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
               </div>
@@ -121,6 +126,7 @@ const FeaturedMonitorSlider = () => {
 const CategoryPage = () => {
   const { t } = useLanguage();
   const { id: slug } = useParams();
+  const [backendProducts, setBackendProducts] = useState([]);
 
   // Danh sách brand hợp lệ trong hệ thống
   const validBrands = ['samsung', 'iphone', 'xiaomi', 'oppo', 'vivo', 'realme', 'nokia', 'sony', 'huawei', 'honor', 'motorola', 'tcl'];
@@ -216,21 +222,47 @@ const CategoryPage = () => {
     setFilters(prev => ({ ...prev, brand: newBrand }));
   }, [slug]);
 
+  useEffect(() => {
+    let ignore = false;
+
+    const loadProducts = async () => {
+      try {
+        const response = await api.get('/api/products', {
+          params: { limit: 50 },
+        });
+
+        if (!ignore) {
+          setBackendProducts((response.data?.data || []).map(normalizeProduct));
+        }
+      } catch (error) {
+        if (!ignore) {
+          setBackendProducts([]);
+        }
+      }
+    };
+
+    loadProducts();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
   // 4. Logic lọc và sắp xếp
   const filteredProducts = useMemo(() => {
-    let result = allProducts.filter(p => {
+    let result = backendProducts.filter(p => {
       // 4.1 Filter by Category/Brand Slug
       if (categoryMetadata[slug]) {
         if (p.category !== slug) return false;
       } else if (validBrands.includes(slug?.toLowerCase())) {
-        if (p.brand.toLowerCase() !== slug.toLowerCase()) return false;
+        if ((p.brandKey || p.brand.toLowerCase()) !== slug.toLowerCase()) return false;
       } else if (slug !== 'dien-thoai') {
         // Fallback for unknown slugs or main entry points
         if (p.category !== 'dien-thoai') return false; 
       }
 
       // 4.2 Filter by Sidebar Selections
-      if (filters.brand && p.brand.toLowerCase() !== filters.brand.toLowerCase()) return false;
+      if (filters.brand && (p.brandKey || p.brand.toLowerCase()) !== filters.brand.toLowerCase()) return false;
 
       // 4.3 Price Range Filtering (Smart Parser)
       if (filters.priceRange && filters.priceRange !== 'Tất cả') {
@@ -273,7 +305,7 @@ const CategoryPage = () => {
       }
 
       if (filters.batteryTier && filters.batteryTier !== 'Tất cả') {
-        const b = p.battery || 0;
+        const b = p.batteryValue || 0;
         if (filters.batteryTier === 'Dưới 4000mAh' && b >= 4000) return false;
         if (filters.batteryTier === '4000mAh - 5000mAh' && (b < 4000 || b > 5000)) return false;
         if (filters.batteryTier === 'Trên 5000mAh' && b <= 5000) return false;
@@ -282,19 +314,18 @@ const CategoryPage = () => {
       return true;
     });
 
-    if (filters.sortBy === 'priceAsc') {
+    if (filters.sortBy === 'priceAsc' || filters.sortBy === 'price') {
       result.sort((a, b) => a.priceNum - b.priceNum);
     } else if (filters.sortBy === 'priceDesc') {
       result.sort((a, b) => b.priceNum - a.priceNum);
     } else if (filters.sortBy === 'newest') {
-      result.sort((a, b) => b.id.localeCompare(a.id));
+      result.sort((a, b) => String(b.createdAt || b.id).localeCompare(String(a.createdAt || a.id)));
     } else if (filters.sortBy === 'bestseller') {
-      // Mock bestseller logic
-      result.sort((a, b) => (b.discount || '0').localeCompare(a.discount || '0'));
+      result.sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0));
     }
 
     return result;
-  }, [filters, slug]);
+  }, [backendProducts, filters, slug]);
 
   // 5. Cắt sản phẩm cho trang hiện tại
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
@@ -429,7 +460,7 @@ const CategoryPage = () => {
   return (
     <div className="bg-[#f0f2f5] min-h-screen pb-20 font-sans">
         {/* Mobile Filter Toggle Button */}
-        <div className="lg:hidden sticky top-[110px] z-40 px-4 py-3 bg-[#f0f2f5]/80 backdrop-blur-md">
+        <div className="lg:hidden sticky top-[128px] z-40 px-4 py-3 bg-[#f0f2f5]/80 backdrop-blur-md">
           <button 
             onClick={() => setShowMobileFilters(!showMobileFilters)}
             className="w-full h-12 bg-white border border-gray-200 rounded-xl flex items-center justify-center gap-2 shadow-sm font-bold text-gray-700 active:scale-95 transition-all"
@@ -485,7 +516,7 @@ const CategoryPage = () => {
                 ${showMobileFilters ? 'fixed inset-0 z-[100] p-4 bg-black/60 backdrop-blur-sm overflow-y-auto block' : 'hidden'} 
                 lg:relative lg:block lg:inset-auto lg:p-0 lg:bg-transparent lg:z-0 lg:w-[320px] shrink-0
               `}>
-                <div className="relative bg-white lg:bg-transparent rounded-3xl p-6 lg:p-0 shadow-2xl lg:shadow-none min-h-screen lg:min-h-0">
+                <div className="relative bg-white lg:bg-transparent rounded-3xl p-4 sm:p-6 lg:p-0 shadow-2xl lg:shadow-none min-h-screen lg:min-h-0">
                   <div className="flex lg:hidden justify-between items-center mb-6">
                     <h3 className="text-xl font-bold">Bộ lọc sản phẩm</h3>
                     <button onClick={() => setShowMobileFilters(false)} className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">&times;</button>
@@ -511,9 +542,9 @@ const CategoryPage = () => {
               {/* 3. Product Area */}
               <div className="flex-1 w-full overflow-hidden">
                 {/* Sort Bar */}
-                <div className="bg-white/60 backdrop-blur-md rounded-2xl p-3 flex flex-wrap items-center gap-3 mb-6 shadow-sm border border-white/40">
+                  <div className="bg-white/60 backdrop-blur-md rounded-2xl p-3 flex flex-wrap items-center gap-3 mb-6 shadow-sm border border-white/40">
                   <span className="text-[14px] text-gray-500 ml-2 font-medium">Sắp xếp:</span>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                     {[
                       { id: 'relate', label: 'Liên quan' },
                       { id: 'newest', label: 'Mới nhất' },
@@ -523,7 +554,7 @@ const CategoryPage = () => {
                     <button
                       key={opt.id}
                       onClick={() => setFilters(f => ({ ...f, sortBy: opt.id }))}
-                      className={`px-8 py-2.5 bg-white border border-gray-200 rounded-lg text-[14px] flex items-center justify-center transition-all min-w-[130px] shadow-sm ${filters.sortBy === opt.id
+                      className={`flex-1 sm:flex-none px-4 sm:px-8 py-2.5 bg-white border border-gray-200 rounded-lg text-[14px] flex items-center justify-center transition-all min-w-[120px] sm:min-w-[130px] shadow-sm ${filters.sortBy === opt.id
                         ? 'text-[#008d71] font-bold border-[#008d71]'
                         : 'text-gray-800 hover:border-[#008d71] active:bg-gray-50'
                         }`}
@@ -607,7 +638,7 @@ const CategoryPage = () => {
 
               {/* FEATURED PRODUCTS (SẢN PHẨM NỔI BẬT - Slider Version) */}
               {slug === 'man-hinh' && (
-                <FeaturedMonitorSlider />
+                <FeaturedMonitorSlider products={currentProducts.length > 0 ? currentProducts : backendProducts} />
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

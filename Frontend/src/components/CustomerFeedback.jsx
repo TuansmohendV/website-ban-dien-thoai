@@ -57,9 +57,9 @@ const CustomerFeedback = () => {
                     {displayFeedbacks.map((item, idx) => (
                         <div 
                             key={idx} 
-                            className="w-[500px] md:w-[600px] flex gap-6 bg-gray-50/50 p-6 rounded-[24px] border border-gray-100 shrink-0 select-none hover:bg-white hover:shadow-xl hover:-translate-y-1 transition-all duration-500"
+                            className="w-[min(82vw,500px)] md:w-[600px] flex flex-col sm:flex-row gap-5 md:gap-6 bg-gray-50/50 p-5 md:p-6 rounded-[24px] border border-gray-100 shrink-0 select-none hover:bg-white hover:shadow-xl hover:-translate-y-1 transition-all duration-500"
                         >
-                            <div className="w-[140px] md:w-[180px] h-[140px] md:h-[180px] shrink-0 rounded-2xl overflow-hidden shadow-md">
+                            <div className="w-full sm:w-[140px] md:w-[180px] h-[170px] sm:h-[140px] md:h-[180px] shrink-0 rounded-2xl overflow-hidden shadow-md">
                                 <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                             </div>
                             <div className="flex flex-col justify-center gap-2">

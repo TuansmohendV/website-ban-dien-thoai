@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useOrders } from '../../context/OrdersContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNavigate, Link } from 'react-router-dom';
+import api, { getApiErrorMessage } from '../../lib/api';
 import { 
   BarChart3, 
   ShoppingBag, 
@@ -31,7 +32,7 @@ import {
 } from 'lucide-react';
 
 const ProfilePage = () => {
-    const { user, logout } = useAuth();
+    const { user, logout, updateProfile } = useAuth();
     const { orders, cancelOrder, clearCancelledOrders, clearAllOrders } = useOrders();
     const { formatPrice } = useLanguage();
     const navigate = useNavigate();
@@ -39,20 +40,70 @@ const ProfilePage = () => {
     const [showOTP, setShowOTP] = useState(false);
     const [isVip, setIsVip] = useState(false);
     const [avatarUrl, setAvatarUrl] = useState("https://cdn.hoanghamobile.vn/Uploads/2025/06/16/2025-06-16-141858.png");
+    const [isSavingProfile, setIsSavingProfile] = useState(false);
+    const [profileNotice, setProfileNotice] = useState(null);
+    const [tabNotice, setTabNotice] = useState('');
+    const [tabLoading, setTabLoading] = useState(false);
+    const [myReviews, setMyReviews] = useState([]);
+    const [editingReviewId, setEditingReviewId] = useState('');
+    const [editingReviewRating, setEditingReviewRating] = useState(0);
+    const [editingReviewContent, setEditingReviewContent] = useState('');
+    const [reviewActionLoadingId, setReviewActionLoadingId] = useState('');
+    const [reviewStats, setReviewStats] = useState({ total: 0, average: 0 });
+    const [searchHistoryItems, setSearchHistoryItems] = useState([]);
+    const [orderHistoryItems, setOrderHistoryItems] = useState([]);
+    const [notifications, setNotifications] = useState([]);
+    const [addresses, setAddresses] = useState([]);
+    const [addressForm, setAddressForm] = useState({
+        label: 'Nha',
+        recipientName: '',
+        phone: '',
+        province: '',
+        district: '',
+        ward: '',
+        street: '',
+        note: '',
+        isDefault: false,
+    });
+    const [isSavingAddress, setIsSavingAddress] = useState(false);
     const fileInputRef = React.useRef(null);
 
     const [profileData, setProfileData] = useState({
-        fullName: user?.name || 'Mai Thanh Tuấn',
+        fullName: user?.name || '',
         gender: 'Nam',
-        phone: user?.phone || '0336133880',
-        email: user?.email || 'thanhtuannnn09@gmail.com',
-        dob: '09/12/2004',
+        phone: user?.phone || '',
+        email: user?.email || '',
+        dob: '',
         address: '',
         city: 'Hồ Chí Minh',
         ward: 'Phường Thủ Đức',
         newPassword: '',
         confirmPassword: ''
     });
+
+    useEffect(() => {
+        if (!user) {
+            return;
+        }
+
+        const parsedDob = user.dateOfBirth
+            ? new Date(user.dateOfBirth).toLocaleDateString('vi-VN')
+            : '';
+
+        setProfileData((prevData) => ({
+            ...prevData,
+            fullName: user.fullName || user.name || '',
+            phone: user.phone || '',
+            email: user.email || '',
+            dob: parsedDob,
+            gender:
+                user.gender === 'female'
+                    ? 'Nữ'
+                    : user.gender === 'male'
+                        ? 'Nam'
+                        : 'Khác',
+        }));
+    }, [user]);
 
     const sidebarItems = [
         { id: 'overview', label: 'Tổng quan', icon: <BarChart3 size={20} /> },
@@ -63,7 +114,15 @@ const ProfilePage = () => {
         { id: 'referral', label: 'Giới thiệu bạn bè', icon: <Ticket size={20} className="text-red-500" /> },
         { id: 'comments', label: 'Quản lý bình luận', icon: <MessageSquare size={20} /> },
         { id: 'ratings', label: 'Quản lý đánh giá', icon: <Star size={20} /> },
-        { id: 'logout', label: 'Đăng xuất', icon: <LogOut size={20} />, action: () => { logout(); navigate('/login'); } },
+        {
+            id: 'logout',
+            label: 'Đăng xuất',
+            icon: <LogOut size={20} />,
+            action: async () => {
+                await logout();
+                navigate('/login');
+            },
+        },
     ];
 
     const membershipTiers = [
@@ -82,9 +141,52 @@ const ProfilePage = () => {
         { icon: <PhoneCall className="text-emerald-600" />, title: 'Hotline tư vấn đặc quyền', desc: '1900.2091' },
     ];
 
-    const handleUpdateInfo = (e) => {
+    const handleUpdateInfo = async (e) => {
         e.preventDefault();
-        setShowOTP(true);
+        setProfileNotice(null);
+
+        const rawDob = String(profileData.dob || '').trim();
+        const dobSlashFormat = rawDob.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        const dobIsoFormat = rawDob.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+        let normalizedDob;
+        if (!rawDob) {
+            normalizedDob = undefined;
+        } else if (dobSlashFormat) {
+            normalizedDob = `${dobSlashFormat[3]}-${dobSlashFormat[2]}-${dobSlashFormat[1]}`;
+        } else if (dobIsoFormat) {
+            normalizedDob = rawDob;
+        } else {
+            setProfileNotice({
+                type: 'error',
+                message: 'Ngay sinh khong hop le. Vui long nhap theo dinh dang DD/MM/YYYY.',
+            });
+            return;
+        }
+
+        try {
+            setIsSavingProfile(true);
+            await updateProfile({
+                fullName: profileData.fullName,
+                email: profileData.email,
+                gender:
+                    profileData.gender === 'Nữ'
+                        ? 'female'
+                        : profileData.gender === 'Nam'
+                            ? 'male'
+                            : 'other',
+                dateOfBirth: normalizedDob,
+                avatar: avatarUrl,
+            });
+            setShowOTP(true);
+        } catch (error) {
+            setProfileNotice({
+                type: 'error',
+                message: error.message || 'Khong the cap nhat thong tin luc nay.',
+            });
+        } finally {
+            setIsSavingProfile(false);
+        }
     };
 
     const handleAvatarChange = (e) => {
@@ -95,9 +197,212 @@ const ProfilePage = () => {
         }
     };
 
+    const loadTabData = async (tabId) => {
+        if (!['vouchers', 'history', 'comments', 'ratings'].includes(tabId)) {
+            return;
+        }
+
+        setTabLoading(true);
+        setTabNotice('');
+
+        try {
+            if (tabId === 'history') {
+                const response = await api.get('/api/orders/user');
+                setOrderHistoryItems(response.data?.data || []);
+            }
+
+            if (tabId === 'comments') {
+                const response = await api.get('/api/reviews/my');
+                const items = response.data?.data || [];
+                setMyReviews(items);
+                const total = items.length;
+                const average =
+                    total > 0
+                        ? items.reduce((sum, item) => sum + Number(item.rating || 0), 0) / total
+                        : 0;
+                setReviewStats({ total, average });
+            }
+
+            if (tabId === 'ratings') {
+                const response = await api.get('/api/reviews/my');
+                const items = response.data?.data || [];
+                setMyReviews(items);
+                const total = items.length;
+                const average =
+                    total > 0
+                        ? items.reduce((sum, item) => sum + Number(item.rating || 0), 0) / total
+                        : 0;
+                setReviewStats({ total, average });
+            }
+
+            if (tabId === 'vouchers') {
+                const response = await api.get('/api/address');
+                const nextAddresses = response.data?.data || [];
+                setAddresses(nextAddresses);
+                if (nextAddresses.length > 0) {
+                    setAddressForm((prev) => ({
+                        ...prev,
+                        recipientName: prev.recipientName || nextAddresses[0].recipientName || '',
+                        phone: prev.phone || nextAddresses[0].phone || '',
+                    }));
+                }
+            }
+        } catch (error) {
+            setTabNotice(getApiErrorMessage(error, 'Khong tai du lieu cho tab nay.'));
+        } finally {
+            setTabLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadTabData(activeTab);
+    }, [activeTab]);
+
+    const handleDeleteSearchHistoryItem = async (id) => {
+        try {
+            await api.delete(`/api/user/search-history/${id}`);
+            setSearchHistoryItems((prev) => prev.filter((item) => item._id !== id));
+        } catch (error) {
+            setTabNotice(getApiErrorMessage(error, 'Khong xoa duoc lich su tim kiem.'));
+        }
+    };
+
+    const handleClearSearchHistory = async () => {
+        try {
+            await api.delete('/api/user/search-history');
+            setSearchHistoryItems([]);
+        } catch (error) {
+            setTabNotice(getApiErrorMessage(error, 'Khong xoa duoc toan bo lich su tim kiem.'));
+        }
+    };
+
+    const handleMarkNotificationRead = async (id) => {
+        try {
+            await api.patch(`/api/notifications/${id}/read`);
+            setNotifications((prev) =>
+                prev.map((item) => (item._id === id ? { ...item, isRead: true } : item))
+            );
+        } catch (error) {
+            setTabNotice(getApiErrorMessage(error, 'Khong danh dau da doc duoc.'));
+        }
+    };
+
+    const handleMarkAllNotificationsRead = async () => {
+        try {
+            await api.patch('/api/notifications/read-all');
+            setNotifications((prev) => prev.map((item) => ({ ...item, isRead: true })));
+        } catch (error) {
+            setTabNotice(getApiErrorMessage(error, 'Khong danh dau tat ca da doc duoc.'));
+        }
+    };
+
+    const handleRemoveWishlistItem = async (id) => {
+        try {
+            await api.delete(`/api/user/wishlist/${id}`);
+            // kept for backwards compatibility
+        } catch (error) {
+            setTabNotice(getApiErrorMessage(error, 'Khong xoa duoc san pham yeu thich.'));
+        }
+    };
+
+    const handleStartEditReview = (item) => {
+        setEditingReviewId(item._id);
+        setEditingReviewRating(Number(item.rating || 0));
+        setEditingReviewContent(item.comment || '');
+    };
+
+    const handleCancelEditReview = () => {
+        setEditingReviewId('');
+        setEditingReviewRating(0);
+        setEditingReviewContent('');
+    };
+
+    const handleSaveEditReview = async (reviewId) => {
+        if (editingReviewRating < 1 || editingReviewRating > 5) {
+            setTabNotice('Vui long chon so sao tu 1 den 5.');
+            return;
+        }
+
+        if (!editingReviewContent.trim()) {
+            setTabNotice('Vui long nhap noi dung danh gia.');
+            return;
+        }
+
+        try {
+            setReviewActionLoadingId(reviewId);
+            await api.patch(`/api/reviews/${reviewId}`, {
+                rating: editingReviewRating,
+                comment: editingReviewContent.trim(),
+                title: `Danh gia ${editingReviewRating} sao`,
+            });
+            handleCancelEditReview();
+            await loadTabData(activeTab);
+        } catch (error) {
+            setTabNotice(getApiErrorMessage(error, 'Khong cap nhat duoc danh gia.'));
+        } finally {
+            setReviewActionLoadingId('');
+        }
+    };
+
+    const handleDeleteMyReview = async (reviewId) => {
+        if (!window.confirm('Ban chac chan muon xoa danh gia nay?')) {
+            return;
+        }
+
+        try {
+            setReviewActionLoadingId(reviewId);
+            await api.delete(`/api/reviews/${reviewId}`);
+            await loadTabData(activeTab);
+        } catch (error) {
+            setTabNotice(getApiErrorMessage(error, 'Khong xoa duoc danh gia.'));
+        } finally {
+            setReviewActionLoadingId('');
+        }
+    };
+
+    const handleCreateAddress = async (e) => {
+        e.preventDefault();
+        setIsSavingAddress(true);
+        setTabNotice('');
+        try {
+            await api.post('/api/address', addressForm);
+            setAddressForm((prev) => ({
+                ...prev,
+                district: '',
+                ward: '',
+                street: '',
+                note: '',
+                isDefault: false,
+            }));
+            await loadTabData('vouchers');
+        } catch (error) {
+            setTabNotice(getApiErrorMessage(error, 'Khong them duoc dia chi.'));
+        } finally {
+            setIsSavingAddress(false);
+        }
+    };
+
+    const handleDeleteAddress = async (id) => {
+        try {
+            await api.delete(`/api/address/${id}`);
+            await loadTabData('vouchers');
+        } catch (error) {
+            setTabNotice(getApiErrorMessage(error, 'Khong xoa duoc dia chi.'));
+        }
+    };
+
+    const handleSetDefaultAddress = async (address) => {
+        try {
+            await api.put(`/api/address/${address._id}`, { ...address, isDefault: true });
+            await loadTabData('vouchers');
+        } catch (error) {
+            setTabNotice(getApiErrorMessage(error, 'Khong dat duoc dia chi mac dinh.'));
+        }
+    };
+
     return (
         <div className="min-h-screen bg-[#f1f3f6] py-10 font-sans">
-            <div className="max-w-[1500px] mx-auto px-6">
+            <div className="max-w-[1500px] mx-auto px-4 sm:px-6">
                 
                 <div className="flex flex-col lg:flex-row gap-8">
                     
@@ -109,7 +414,7 @@ const ProfilePage = () => {
                                     <button
                                         key={item.id}
                                         onClick={item.action || (() => { setActiveTab(item.id); setShowOTP(false); })}
-                                        className={`w-full flex items-center gap-4 px-5 py-4 rounded-xl text-[15px] font-bold transition-all ${
+                                        className={`w-full flex items-center gap-3 sm:gap-4 px-3 sm:px-5 py-3 sm:py-4 rounded-xl text-sm sm:text-[15px] font-bold transition-all ${
                                             activeTab === item.id 
                                             ? 'bg-[#e5f9e0] text-[#008d71] shadow-sm shadow-[#008d71]/10' 
                                             : 'text-gray-500 hover:bg-gray-50'
@@ -131,7 +436,7 @@ const ProfilePage = () => {
                         {/* 1. OVERVIEW TAB */}
                         {activeTab === 'overview' && (
                             <div className="space-y-6 animate-in fade-in duration-300">
-                                <h2 className="text-[28px] font-black text-gray-900 tracking-tight">Tổng quan</h2>
+                                <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Tổng quan</h2>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {/* Spending Card */}
                                     <div className={`rounded-3xl p-8 border shadow-sm flex items-center gap-6 transition-all duration-500 ${isVip ? 'bg-gradient-to-br from-slate-900 to-black border-yellow-500/50 shadow-yellow-500/20' : 'bg-white border-gray-100'}`}>
@@ -193,7 +498,7 @@ const ProfilePage = () => {
                                           </div>
                                         ))}
                                     </div>
-                                    <div className="flex items-center justify-between px-10 relative pt-4">
+                                    <div className="hidden md:flex items-center justify-between px-10 relative pt-4">
                                         <div className="absolute left-10 right-10 h-1 bg-gray-200 top-1/2 -translate-y-1/2 z-0"></div>
                                         <div className="absolute left-10 w-1/3 h-1 bg-[#008d71] top-1/2 -translate-y-1/2 z-0"></div>
                                         {[1,2,3,4,5].map(i => (<div key={i} className={`w-4 h-4 rounded-full border-4 border-white shadow-sm z-10 ${i <= 2 ? 'bg-[#008d71]' : 'bg-gray-200'}`}></div>))}
@@ -216,26 +521,25 @@ const ProfilePage = () => {
                         {/* 2. PERSONAL INFO TAB */}
                         {activeTab === 'info' && (
                             <div className="space-y-6 animate-in slide-in-from-bottom-5 duration-300">
-                                <h2 className="text-[28px] font-black text-gray-900 tracking-tight">
-                                    {showOTP ? 'Xác thực số điện thoại của bạn' : 'Cập nhật thông tin cá nhân'}
+                                <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">
+                                    {showOTP ? 'Cap nhat thong tin thanh cong' : 'Cập nhật thông tin cá nhân'}
                                 </h2>
 
                                 {showOTP ? (
-                                    <div className="bg-white rounded-3xl p-10 border border-gray-100 shadow-sm space-y-8 flex flex-col items-center">
+                                    <div className="bg-white rounded-3xl p-6 sm:p-10 border border-gray-100 shadow-sm space-y-8 flex flex-col items-center">
                                         <div className="text-center space-y-2">
-                                            <p className="text-gray-600 font-bold">Nhập mã OTP được gửi tới số Zalo: <span className="text-[#008d71]">{profileData.phone}</span>.</p>
+                                            <p className="text-gray-600 font-bold">Thong tin tai khoan cua ban da duoc dong bo len backend thanh cong.</p>
                                         </div>
                                         <div className="w-full max-w-lg space-y-6">
-                                            <div className="space-y-2">
-                                                <label className="text-sm font-black text-gray-900 uppercase">Nhập mã OTP:</label>
-                                                <input 
-                                                    type="text" 
-                                                    placeholder="Nhập mã OTP"
-                                                    className="w-full h-16 bg-white border border-gray-200 rounded-xl px-6 font-bold text-gray-900 focus:border-[#008d71] focus:ring-1 focus:ring-[#008d71] outline-none transition-all"
-                                                />
+                                            <div className="rounded-2xl border border-[#008d71]/20 bg-[#e5f9e0] px-6 py-5 text-sm font-bold text-[#008d71] text-center">
+                                                Ho ten, email, gioi tinh va ngay sinh hien da lay du lieu tu backend va cap nhat thanh cong.
                                             </div>
-                                            <button className="w-full bg-[#008d71] text-white h-16 rounded-xl font-black uppercase tracking-wider hover:bg-[#007a62] transition-colors shadow-lg shadow-[#008d71]/20">
-                                                Xác nhận
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowOTP(false)}
+                                                className="w-full bg-[#008d71] text-white h-12 sm:h-16 rounded-xl font-black uppercase tracking-wider hover:bg-[#007a62] transition-colors shadow-lg shadow-[#008d71]/20"
+                                            >
+                                                Quay lai form
                                             </button>
                                         </div>
                                     </div>
@@ -258,11 +562,11 @@ const ProfilePage = () => {
                                                     <label className="text-[13px] font-black text-gray-500 uppercase tracking-wide">Giới tính:</label>
                                                     <div className="flex gap-8 pl-1">
                                                         <label className="flex items-center gap-3 cursor-pointer group">
-                                                            <input type="radio" name="gender" defaultChecked className="w-5 h-5 accent-[#008d71]" />
+                                                            <input type="radio" name="gender" checked={profileData.gender === 'Nam'} onChange={() => setProfileData({...profileData, gender: 'Nam'})} className="w-5 h-5 accent-[#008d71]" />
                                                             <span className="text-[15px] font-bold text-gray-700 group-hover:text-gray-900">Nam</span>
                                                         </label>
                                                         <label className="flex items-center gap-3 cursor-pointer group">
-                                                            <input type="radio" name="gender" className="w-5 h-5 accent-[#008d71]" />
+                                                            <input type="radio" name="gender" checked={profileData.gender === 'Nữ'} onChange={() => setProfileData({...profileData, gender: 'Nữ'})} className="w-5 h-5 accent-[#008d71]" />
                                                             <span className="text-[15px] font-bold text-gray-700 group-hover:text-gray-900">Nữ</span>
                                                         </label>
                                                     </div>
@@ -303,6 +607,8 @@ const ProfilePage = () => {
                                                     <label className="text-[13px] font-black text-gray-500 uppercase tracking-wide">Địa chỉ:</label>
                                                     <input 
                                                         type="text" 
+                                                        value={profileData.address}
+                                                        onChange={(e) => setProfileData({...profileData, address: e.target.value})}
                                                         placeholder="Địa chỉ *"
                                                         className="w-full h-[58px] bg-white border border-gray-200 rounded-xl px-5 font-bold text-gray-900 shadow-sm focus:border-[#008d71] outline-none transition-all"
                                                     />
@@ -311,7 +617,7 @@ const ProfilePage = () => {
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                     <div className="space-y-2">
                                                         <label className="text-[13px] font-black text-gray-500 uppercase tracking-wide">Tỉnh/Thành phố:</label>
-                                                        <select className="w-full h-[58px] bg-white border border-gray-200 rounded-xl px-4 font-bold text-gray-900 outline-none focus:border-[#008d71]">
+                                                        <select value={profileData.city} onChange={(e) => setProfileData({...profileData, city: e.target.value})} className="w-full h-[58px] bg-white border border-gray-200 rounded-xl px-4 font-bold text-gray-900 outline-none focus:border-[#008d71]">
                                                             <option>Hồ Chí Minh</option>
                                                             <option>Hà Nội</option>
                                                             <option>Đà Nẵng</option>
@@ -319,7 +625,7 @@ const ProfilePage = () => {
                                                     </div>
                                                     <div className="space-y-2">
                                                         <label className="text-[13px] font-black text-gray-500 uppercase tracking-wide">Xã/Phường:</label>
-                                                        <select className="w-full h-[58px] bg-white border border-gray-200 rounded-xl px-4 font-bold text-gray-900 outline-none focus:border-[#008d71]">
+                                                        <select value={profileData.ward} onChange={(e) => setProfileData({...profileData, ward: e.target.value})} className="w-full h-[58px] bg-white border border-gray-200 rounded-xl px-4 font-bold text-gray-900 outline-none focus:border-[#008d71]">
                                                             <option>Phường Thủ Đức</option>
                                                             <option>Quận 1</option>
                                                             <option>Quận 3</option>
@@ -330,41 +636,35 @@ const ProfilePage = () => {
                                                 <div className="pt-4 space-y-6">
                                                     <div className="flex flex-col items-center">
                                                         <div className="w-full h-[1px] bg-gray-100 relative">
-                                                            <span className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-4 text-[12px] font-bold text-gray-400 italic whitespace-nowrap">Để trống nếu không muốn thay đổi mật khẩu.</span>
+                                                            <span className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white px-4 text-[12px] font-bold text-gray-400 italic whitespace-nowrap">Đổi mật khẩu tại trang riêng để bảo mật hơn.</span>
                                                         </div>
                                                     </div>
-
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                        <div className="space-y-2">
-                                                            <label className="text-[13px] font-black text-gray-500 uppercase tracking-wide">Mật khẩu mới:</label>
-                                                            <input 
-                                                                type="password" 
-                                                                placeholder="Mật khẩu mới"
-                                                                className="w-full h-[58px] bg-white border border-gray-200 rounded-xl px-5 font-bold text-gray-900 shadow-sm focus:border-[#008d71] outline-none transition-all"
-                                                            />
-                                                        </div>
-                                                        <div className="space-y-2">
-                                                            <label className="text-[13px] font-black text-gray-500 uppercase tracking-wide">Nhập lại mật khẩu mới:</label>
-                                                            <input 
-                                                                type="password" 
-                                                                placeholder="Nhập lại mật khẩu mới"
-                                                                className="w-full h-[58px] bg-white border border-gray-200 rounded-xl px-5 font-bold text-gray-900 shadow-sm focus:border-[#008d71] outline-none transition-all"
-                                                            />
-                                                        </div>
-                                                    </div>
+                                                    <Link
+                                                        to="/change-password"
+                                                        className="w-full h-[52px] rounded-2xl bg-gray-900 text-white font-black uppercase tracking-wider hover:bg-black transition-colors active:scale-[0.98] flex items-center justify-center"
+                                                    >
+                                                        Đổi mật khẩu
+                                                    </Link>
                                                 </div>
+
+                                                {profileNotice && (
+                                                    <div className={`rounded-2xl px-5 py-4 text-sm font-bold ${profileNotice.type === 'error' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-[#e5f9e0] text-[#008d71] border border-[#008d71]/20'}`}>
+                                                        {profileNotice.message}
+                                                    </div>
+                                                )}
 
                                                 <button 
                                                     type="submit"
-                                                    className="w-full bg-[#008d71] text-white h-[58px] rounded-2xl font-black uppercase tracking-wider hover:bg-[#007a62] transition-colors shadow-xl shadow-[#008d71]/20 mt-4 active:scale-[0.98]"
+                                                    disabled={isSavingProfile}
+                                                    className="w-full bg-[#008d71] text-white h-[58px] rounded-2xl font-black uppercase tracking-wider hover:bg-[#007a62] transition-colors shadow-xl shadow-[#008d71]/20 mt-4 active:scale-[0.98] disabled:opacity-70"
                                                 >
-                                                    Xác nhận
+                                                    {isSavingProfile ? 'Dang luu...' : 'Xác nhận'}
                                                 </button>
                                             </form>
                                         </div>
 
                                         {/* Right Profile Summary Column */}
-                                        <div className={`w-full lg:w-[400px] rounded-3xl p-8 border shadow-sm flex flex-col items-center transition-all duration-500 ${isVip ? 'bg-gradient-to-br from-slate-900 to-black border-yellow-500/30' : 'bg-white border-gray-100'}`}>
+                                        <div className={`w-full xl:w-[400px] rounded-3xl p-6 sm:p-8 border shadow-sm flex flex-col items-center transition-all duration-500 ${isVip ? 'bg-gradient-to-br from-slate-900 to-black border-yellow-500/30' : 'bg-white border-gray-100'}`}>
                                             <h4 className={`text-[18px] font-black mb-8 self-start ${isVip ? 'text-yellow-500' : 'text-gray-900'}`}>Tư cách hiển thị</h4>
                                             
                                             <div className="relative group mb-6">
@@ -465,13 +765,13 @@ const ProfilePage = () => {
                         {/* 3. REFERRAL TAB */}
                         {activeTab === 'referral' && (
                             <div className="space-y-6 animate-in fade-in duration-300">
-                                <h2 className="text-[28px] font-black text-gray-900 tracking-tight text-center">Mời bạn, Nhận quà!</h2>
-                                <div className="bg-slate-900 rounded-[40px] p-10 text-white relative overflow-hidden shadow-2xl">
+                                <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight text-center">Mời bạn, Nhận quà!</h2>
+                                <div className="bg-slate-900 rounded-3xl sm:rounded-[40px] p-6 sm:p-10 text-white relative overflow-hidden shadow-2xl">
                                     <div className="absolute top-0 right-0 w-64 h-64 bg-red-600/20 blur-[100px] -translate-y-1/2 translate-x-1/2 rounded-full"></div>
-                                    <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
+                                    <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 sm:gap-10">
                                         <div className="flex-1 space-y-6">
                                             <p className="text-red-400 font-black uppercase tracking-[0.3em] text-xs">Chương trình đối tác Sin</p>
-                                            <h3 className="text-4xl font-black italic tracking-tighter uppercase leading-none">Kiếm tiền triệu mỗi tháng cùng PhoneSin</h3>
+                                            <h3 className="text-2xl sm:text-4xl font-black italic tracking-tighter uppercase leading-tight sm:leading-none">Kiếm tiền triệu mỗi tháng cùng PhoneSin</h3>
                                             <p className="text-white/60 font-bold leading-relaxed">Chia sẻ mã giới thiệu của bạn cho bạn bè. Nhận ngay 500k cho mỗi đơn hàng thành công đầu tiên của họ.</p>
                                             
                                             <div className="flex flex-col sm:flex-row gap-4 pt-4">
@@ -484,7 +784,7 @@ const ProfilePage = () => {
                                                 </button>
                                             </div>
                                         </div>
-                                        <div className="w-56 h-56 bg-gradient-to-br from-red-600 to-red-400 rounded-[60px] flex items-center justify-center rotate-12 shadow-2xl shadow-red-500/20">
+                                        <div className="w-40 h-40 sm:w-56 sm:h-56 bg-gradient-to-br from-red-600 to-red-400 rounded-[40px] sm:rounded-[60px] flex items-center justify-center rotate-12 shadow-2xl shadow-red-500/20">
                                             <span className="text-7xl">🎁</span>
                                         </div>
                                     </div>
@@ -527,7 +827,7 @@ const ProfilePage = () => {
                                 {/* Header */}
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                     <div className="flex items-center gap-3">
-                                        <h2 className="text-[28px] font-black text-gray-900 tracking-tight">Đơn hàng của bạn</h2>
+                                        <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Đơn hàng của bạn</h2>
                                         {orders.length > 0 && (
                                             <span className="bg-[#008d71]/10 text-[#008d71] text-sm font-black px-3 py-1 rounded-full">
                                                 {orders.length} / 50
@@ -554,7 +854,7 @@ const ProfilePage = () => {
                                     )}
                                 </div>
                                 {orders.length === 0 ? (
-                                    <div className="bg-white rounded-3xl py-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center px-10">
+                                    <div className="bg-white rounded-3xl py-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center px-4 sm:px-10">
                                         <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-8">
                                             <ShoppingBag size={40} className="text-gray-200" />
                                         </div>
@@ -642,19 +942,218 @@ const ProfilePage = () => {
                             );
                         })()}
 
-                        {/* 5. OTHER TABS (Empty/Placeholder) */}
-                        {['vouchers', 'history', 'comments', 'ratings'].includes(activeTab) && (
+                        {activeTab === 'history' && (
                             <div className="space-y-6 animate-in fade-in duration-300">
-                                <h2 className="text-[28px] font-black text-gray-900 tracking-tight">
-                                    {sidebarItems.find(i => i.id === activeTab)?.label}
-                                </h2>
-                                <div className="bg-white rounded-3xl py-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center px-10">
-                                    <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-8">
-                                        <Info size={40} className="text-gray-200" />
+                                <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Lịch sử mua hàng</h2>
+                                {tabLoading ? (
+                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Dang tai du lieu...</div>
+                                ) : orderHistoryItems.length === 0 ? (
+                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Chua co lich su mua hang.</div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {orderHistoryItems.map((item) => (
+                                            <div key={item._id} className="bg-white rounded-2xl p-4 border border-gray-100 flex items-center justify-between">
+                                                <div>
+                                                    <p className="font-black text-gray-900">Don hang #{item._id?.slice(-6) || ''}</p>
+                                                    <p className="text-xs text-gray-400">
+                                                        {item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : ''}
+                                                        {' · '}
+                                                        {item.items?.length || 0} san pham
+                                                    </p>
+                                                    <p className="text-sm text-[#008d71] font-bold mt-1">
+                                                        {formatPrice(item.totalAmount || 0)}
+                                                    </p>
+                                                </div>
+                                                <span className="text-xs font-black text-gray-500 uppercase">{item.status || 'pending'}</span>
+                                            </div>
+                                        ))}
                                     </div>
-                                    <h4 className="text-gray-900 font-black text-[20px] mb-2">Chưa có dữ liệu</h4>
-                                    <p className="text-gray-400 font-bold max-w-sm">Dữ liệu về {sidebarItems.find(i => i.id === activeTab)?.label.toLowerCase()} đang được cập nhật và hiển thị tại đây.</p>
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'comments' && (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Quản lý bình luận</h2>
                                 </div>
+                                {tabLoading ? (
+                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Dang tai du lieu...</div>
+                                ) : myReviews.length === 0 ? (
+                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Ban chua co binh luan nao.</div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {myReviews.map((item) => (
+                                            <div key={item._id} className="bg-white rounded-2xl p-4 border border-gray-100">
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <p className="font-black text-gray-900">{item.product?.name || 'San pham'}</p>
+                                                    <span className="text-xs text-gray-400">
+                                                        {item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : ''}
+                                                    </span>
+                                                </div>
+                                                <div className="flex gap-1 mt-2">
+                                                    {[1, 2, 3, 4, 5].map((s) => (
+                                                        <Star key={s} size={14} fill={s <= Number(item.rating || 0) ? "#f59e0b" : "none"} color={s <= Number(item.rating || 0) ? "#f59e0b" : "#cbd5e1"} />
+                                                    ))}
+                                                </div>
+                                                {editingReviewId === item._id ? (
+                                                    <div className="mt-3 space-y-3">
+                                                        <div className="flex gap-1">
+                                                            {[1, 2, 3, 4, 5].map((s) => (
+                                                                <button key={s} onClick={() => setEditingReviewRating(s)} type="button">
+                                                                    <Star size={16} fill={s <= editingReviewRating ? "#f59e0b" : "none"} color={s <= editingReviewRating ? "#f59e0b" : "#cbd5e1"} />
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <textarea
+                                                            rows={3}
+                                                            value={editingReviewContent}
+                                                            onChange={(e) => setEditingReviewContent(e.target.value)}
+                                                            className="w-full border border-gray-200 rounded-xl px-4 py-2 text-sm"
+                                                        />
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                type="button"
+                                                                disabled={reviewActionLoadingId === item._id}
+                                                                onClick={() => handleSaveEditReview(item._id)}
+                                                                className="px-3 py-1.5 text-xs font-black rounded-lg bg-[#008d71] text-white disabled:opacity-60"
+                                                            >
+                                                                Luu
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleCancelEditReview}
+                                                                className="px-3 py-1.5 text-xs font-black rounded-lg bg-gray-100 text-gray-600"
+                                                            >
+                                                                Huy
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-sm text-gray-500 mt-2">{item.comment || item.title || 'Danh gia san pham'}</p>
+                                                )}
+                                                {editingReviewId !== item._id && (
+                                                    <div className="flex gap-2 mt-3">
+                                                        <button onClick={() => handleStartEditReview(item)} className="text-xs font-black text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg">
+                                                            Sua
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteMyReview(item._id)}
+                                                            disabled={reviewActionLoadingId === item._id}
+                                                            className="text-xs font-black text-red-600 bg-red-50 px-3 py-1.5 rounded-lg disabled:opacity-60"
+                                                        >
+                                                            Xoa
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'ratings' && (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Quản lý đánh giá</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="bg-white rounded-2xl p-5 border border-gray-100">
+                                        <p className="text-sm font-bold text-gray-500">Tong so danh gia</p>
+                                        <p className="text-3xl font-black text-gray-900 mt-2">{reviewStats.total}</p>
+                                    </div>
+                                    <div className="bg-white rounded-2xl p-5 border border-gray-100">
+                                        <p className="text-sm font-bold text-gray-500">Diem trung binh</p>
+                                        <p className="text-3xl font-black text-[#008d71] mt-2">{reviewStats.average.toFixed(1)} / 5</p>
+                                    </div>
+                                </div>
+                                {tabLoading ? (
+                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Dang tai du lieu...</div>
+                                ) : myReviews.length === 0 ? (
+                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Chua co danh gia nao.</div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {myReviews.map((item) => (
+                                            <div key={item._id} className="bg-white rounded-2xl p-4 border border-gray-100 flex items-center justify-between">
+                                                <div className="flex items-center gap-4">
+                                                    <img
+                                                        src={item.product?.image || ''}
+                                                        alt={item.product?.name || 'product'}
+                                                        className="w-14 h-14 object-cover rounded-lg border border-gray-100"
+                                                    />
+                                                    <div>
+                                                        <p className="font-black text-gray-900">{item.product?.name || 'San pham'}</p>
+                                                        <div className="flex gap-1 mt-1">
+                                                            {[1,2,3,4,5].map((s) => (
+                                                                <Star key={s} size={13} fill={s <= Number(item.rating || 0) ? "#f59e0b" : "none"} color={s <= Number(item.rating || 0) ? "#f59e0b" : "#cbd5e1"} />
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <button onClick={() => handleStartEditReview(item)} className="text-xs font-black text-amber-600">Sua</button>
+                                                    <button onClick={() => handleDeleteMyReview(item._id)} className="text-xs font-black text-red-500">Xoa</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'vouchers' && (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Sổ địa chỉ giao hàng</h2>
+                                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                                    <form onSubmit={handleCreateAddress} className="bg-white rounded-2xl p-5 border border-gray-100 space-y-3">
+                                        <input className="w-full h-11 border border-gray-200 rounded-xl px-4" placeholder="Ten nguoi nhan" value={addressForm.recipientName} onChange={(e) => setAddressForm((prev) => ({ ...prev, recipientName: e.target.value }))} required />
+                                        <input className="w-full h-11 border border-gray-200 rounded-xl px-4" placeholder="So dien thoai" value={addressForm.phone} onChange={(e) => setAddressForm((prev) => ({ ...prev, phone: e.target.value }))} required />
+                                        <input className="w-full h-11 border border-gray-200 rounded-xl px-4" placeholder="Tinh/Thanh pho" value={addressForm.province} onChange={(e) => setAddressForm((prev) => ({ ...prev, province: e.target.value }))} required />
+                                        <input className="w-full h-11 border border-gray-200 rounded-xl px-4" placeholder="Quan/Huyen" value={addressForm.district} onChange={(e) => setAddressForm((prev) => ({ ...prev, district: e.target.value }))} required />
+                                        <input className="w-full h-11 border border-gray-200 rounded-xl px-4" placeholder="Phuong/Xa" value={addressForm.ward} onChange={(e) => setAddressForm((prev) => ({ ...prev, ward: e.target.value }))} required />
+                                        <input className="w-full h-11 border border-gray-200 rounded-xl px-4" placeholder="So nha, ten duong" value={addressForm.street} onChange={(e) => setAddressForm((prev) => ({ ...prev, street: e.target.value }))} required />
+                                        <button disabled={isSavingAddress} className="h-11 px-5 bg-[#008d71] text-white rounded-xl font-black disabled:opacity-60">
+                                            {isSavingAddress ? 'Dang luu...' : 'Them dia chi'}
+                                        </button>
+                                    </form>
+                                    <div className="space-y-3">
+                                        {tabLoading ? (
+                                            <div className="bg-white rounded-2xl p-6 border border-gray-100 text-center">Dang tai du lieu...</div>
+                                        ) : addresses.length === 0 ? (
+                                            <div className="bg-white rounded-2xl p-6 border border-gray-100 text-center">Chua co dia chi nao.</div>
+                                        ) : (
+                                            addresses.map((address) => (
+                                                <div key={address._id} className="bg-white rounded-2xl p-4 border border-gray-100">
+                                                    <div className="flex items-center justify-between gap-3">
+                                                        <div>
+                                                            <p className="font-black text-gray-900">
+                                                                {address.recipientName} - {address.phone}
+                                                            </p>
+                                                            <p className="text-sm text-gray-500">
+                                                                {address.street}, {address.ward}, {address.district}, {address.province}
+                                                            </p>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            {!address.isDefault && (
+                                                                <button onClick={() => handleSetDefaultAddress(address)} className="text-xs font-black text-[#008d71]">
+                                                                    Dat mac dinh
+                                                                </button>
+                                                            )}
+                                                            <button onClick={() => handleDeleteAddress(address._id)} className="text-xs font-black text-red-500">
+                                                                Xoa
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {tabNotice && (
+                            <div className="mt-4 rounded-2xl px-5 py-4 text-sm font-bold bg-red-50 text-red-600 border border-red-100">
+                                {tabNotice}
                             </div>
                         )}
 

@@ -42,12 +42,10 @@ const productSchema = new mongoose.Schema(
   }
 );
 
-productSchema.pre('validate', function buildSlug(next) {
+productSchema.pre('validate', function buildSlug() {
   if (this.name && (!this.slug || this.isModified('name'))) {
     this.slug = toSlug(this.name);
   }
-
-  next();
 });
 
 productSchema.index({

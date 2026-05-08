@@ -6,6 +6,8 @@ import BuyNowModal from './BuyNowModal';
 const ProductCard = ({ product }) => {
   const { formatPrice } = useLanguage();
   const [showBuyModal, setShowBuyModal] = useState(false);
+  const productId = product.id || product.routeId || product.backendId;
+  const productDiscount = String(product.discount || '').replace(/^-+/, '');
   
   return (
     <div className="bg-white rounded-xl p-3 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col relative group border border-gray-100 hover:border-[#009981]/20 h-full">
@@ -20,14 +22,14 @@ const ProductCard = ({ product }) => {
       )}
 
       {/* Discount Badge */}
-      {product.discount && (
+      {productDiscount && (
         <div className="absolute top-2 left-2 z-10 bg-[#ee0000] text-white text-[10px] font-black px-1.5 py-0.5 rounded-full shadow-sm">
-          -{product.discount}
+          -{productDiscount}
         </div>
       )}
       
       {/* Image + Specs */}
-      <Link to={`/product/${product.id}`} className="flex items-center h-[180px] mb-3 relative">
+      <Link to={`/product/${productId}`} className="flex items-center h-[180px] mb-3 relative">
         <div className="flex-1 h-full flex items-center justify-center p-2">
           <img 
             src={product.image || product.img} 
@@ -78,7 +80,7 @@ const ProductCard = ({ product }) => {
       </Link>
 
       {/* Product Name */}
-      <Link to={`/product/${product.id}`} className="min-h-[40px] mb-3">
+      <Link to={`/product/${productId}`} className="min-h-[40px] mb-3">
         <h3 className="text-[13px] font-bold text-gray-800 leading-snug line-clamp-2 hover:text-[#008d71] transition-colors uppercase">
           {product.name}
         </h3>
@@ -86,8 +88,8 @@ const ProductCard = ({ product }) => {
 
       {/* Price Section */}
       <div className="mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-[#ee0000] font-black text-[17px]">{formatPrice(product.priceNum)}</span>
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
+          <span className="text-[#ee0000] font-black text-[16px] sm:text-[17px] break-words">{formatPrice(product.priceNum)}</span>
           {product.oldPriceNum && (
             <span className="text-gray-400 line-through text-[12px]">{formatPrice(product.oldPriceNum)}</span>
           )}
@@ -109,14 +111,14 @@ const ProductCard = ({ product }) => {
               <rect x="3" y="5" width="18" height="14" rx="2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </div>
-          <span className="text-[#fd6500] text-[11px] font-bold">
+          <span className="text-[#fd6500] text-[11px] font-bold leading-snug">
             {product.extraPromos || '5'} Ưu đãi cho sản phẩm
           </span>
         </div>
       </div>
 
       {/* Footer Branding - Context Aware */}
-      <div className="mt-auto pt-3 flex items-center justify-between">
+      <div className="mt-auto pt-3 flex flex-wrap items-center justify-between gap-2">
         {product.brand === 'UNV' ? (
           <div className="flex items-center gap-1.5 text-[#008d71] cursor-pointer hover:underline">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

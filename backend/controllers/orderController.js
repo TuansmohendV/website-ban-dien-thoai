@@ -66,6 +66,85 @@ const syncCartItemsWithInventory = async (cart) => {
   recalculateCart(cart);
 };
 
+const resolveDirectOrderItem = async ({ productId, variantId, quantity }) => {
+  if (!productId || quantity < 1) {
+    throw new AppError(400, 'Sản phẩm mua ngay không hợp lệ.');
+  }
+
+  const product = await Product.findById(productId);
+
+  if (!product || product.status !== 'active') {
+    throw new AppError(404, 'Sản phẩm không tồn tại hoặc đã ngừng kinh doanh.');
+  }
+
+  let variant = null;
+  let availableStock = product.countInStock;
+  let unitPrice = product.price;
+  let image = product.image;
+  let selectedColor = '';
+  let selectedStorage = product.storage || '';
+
+  if (variantId) {
+    variant = await ProductVariant.findById(variantId);
+
+    if (
+      !variant ||
+      String(variant.product) !== String(product._id) ||
+      !variant.isActive
+    ) {
+      throw new AppError(404, 'Biến thể sản phẩm không hợp lệ.');
+    }
+
+    availableStock = variant.stock;
+    unitPrice = variant.price;
+    image = variant.image || product.image;
+    selectedColor = variant.color || '';
+    selectedStorage = variant.storage || product.storage || '';
+  }
+
+  if (quantity > availableStock) {
+    throw new AppError(400, `Sản phẩm ${product.name} không đủ hàng trong kho.`);
+  }
+
+  return {
+    product: product._id,
+    variant: variant?._id || null,
+    name: product.name,
+    image,
+    selectedColor,
+    selectedStorage,
+    unitPrice,
+    quantity,
+    lineTotal: unitPrice * quantity,
+    maxStock: availableStock,
+  };
+};
+
+const buildDraftCartFromItems = async (items = []) => {
+  const draftCart = {
+    items: [],
+    voucherCode: '',
+    voucherSnapshot: undefined,
+    subtotal: 0,
+    discountTotal: 0,
+    total: 0,
+  };
+
+  for (const item of items) {
+    const quantity = Number(item.quantity) || 1;
+    const nextItem = await resolveDirectOrderItem({
+      productId: item.productId,
+      variantId: item.variantId,
+      quantity,
+    });
+
+    draftCart.items.push(nextItem);
+  }
+
+  recalculateCart(draftCart);
+  return draftCart;
+};
+
 const adjustInventory = async (items, direction) => {
   for (const item of items) {
     if (item.variant) {
@@ -245,23 +324,30 @@ const attachVoucherToCart = async (cart, code, userId) => {
 export const createOrder = asyncHandler(async (req, res) => {
   const owner = getRequestOwner(req, { allowGuest: true });
   const ownerQuery = buildOwnerQuery(owner);
-  const cart = await Cart.findOne(ownerQuery);
+  const hasDirectItems =
+    Array.isArray(req.body.items) && req.body.items.length > 0;
+  const cart = hasDirectItems ? null : await Cart.findOne(ownerQuery);
+  const sourceCart = hasDirectItems
+    ? await buildDraftCartFromItems(req.body.items)
+    : cart;
 
-  if (!cart || cart.items.length === 0) {
+  if (!sourceCart || sourceCart.items.length === 0) {
     throw new AppError(400, 'Giỏ hàng đang trống, chưa thể tạo đơn.');
   }
 
-  await syncCartItemsWithInventory(cart);
+  if (!hasDirectItems) {
+    await syncCartItemsWithInventory(sourceCart);
+  }
 
-  if (cart.voucherCode) {
-    await attachVoucherToCart(cart, cart.voucherCode, req.user?._id);
+  if (sourceCart.voucherCode) {
+    await attachVoucherToCart(sourceCart, sourceCart.voucherCode, req.user?._id);
   }
 
   if (
     req.body.voucherCode &&
-    req.body.voucherCode.toUpperCase() !== (cart.voucherCode || '')
+    req.body.voucherCode.toUpperCase() !== (sourceCart.voucherCode || '')
   ) {
-    await attachVoucherToCart(cart, req.body.voucherCode, req.user?._id);
+    await attachVoucherToCart(sourceCart, req.body.voucherCode, req.user?._id);
   }
 
   const shippingAddress = await resolveShippingAddress(req);
@@ -279,12 +365,43 @@ export const createOrder = asyncHandler(async (req, res) => {
       req.user?.phone ||
       shippingAddress.phone,
   };
+  const invoiceInput = req.body.invoiceInfo || {};
+  const hasInvoiceRequest = Boolean(invoiceInput.enabled);
+  let invoiceInfo = undefined;
+
+  if (hasInvoiceRequest) {
+    const invoiceEmail = invoiceInput.email || customerInfo.email || '';
+    const missingInvoiceFields = [
+      ['email', invoiceEmail],
+      ['companyName', invoiceInput.companyName],
+      ['taxCode', invoiceInput.taxCode],
+      ['companyAddress', invoiceInput.companyAddress],
+    ]
+      .filter(([, value]) => !String(value || '').trim())
+      .map(([field]) => field);
+
+    if (missingInvoiceFields.length > 0) {
+      throw new AppError(
+        400,
+        `Thiếu thông tin xuất hóa đơn: ${missingInvoiceFields.join(', ')}.`
+      );
+    }
+
+    invoiceInfo = {
+      enabled: true,
+      email: String(invoiceEmail).trim(),
+      companyName: String(invoiceInput.companyName).trim(),
+      taxCode: String(invoiceInput.taxCode).trim(),
+      companyAddress: String(invoiceInput.companyAddress).trim(),
+    };
+  }
 
   const order = await Order.create({
     ...ownerQuery,
     customerInfo,
+    invoiceInfo,
     shippingAddress,
-    items: cart.items.map((item) => ({
+    items: sourceCart.items.map((item) => ({
       product: item.product,
       variant: item.variant || null,
       name: item.name,
@@ -295,15 +412,15 @@ export const createOrder = asyncHandler(async (req, res) => {
       quantity: item.quantity,
       lineTotal: item.lineTotal,
     })),
-    subtotal: cart.subtotal,
-    discountTotal: cart.discountTotal,
+    subtotal: sourceCart.subtotal,
+    discountTotal: sourceCart.discountTotal,
     shippingFee,
-    total: cart.total + shippingFee,
-    voucherCode: cart.voucherCode,
-    voucherSnapshot: cart.voucherSnapshot
+    total: sourceCart.total + shippingFee,
+    voucherCode: sourceCart.voucherCode,
+    voucherSnapshot: sourceCart.voucherSnapshot
       ? {
-          ...cart.voucherSnapshot,
-          discountAmount: cart.discountTotal,
+          ...sourceCart.voucherSnapshot,
+          discountAmount: sourceCart.discountTotal,
         }
       : undefined,
     paymentMethod,
@@ -322,11 +439,13 @@ export const createOrder = asyncHandler(async (req, res) => {
   await adjustInventory(order.items, -1);
   await incrementVoucherUsage(order.voucherCode, req.user?._id);
 
-  cart.items = [];
-  cart.voucherCode = '';
-  cart.voucherSnapshot = undefined;
-  recalculateCart(cart);
-  await cart.save();
+  if (!hasDirectItems && cart) {
+    cart.items = [];
+    cart.voucherCode = '';
+    cart.voucherSnapshot = undefined;
+    recalculateCart(cart);
+    await cart.save();
+  }
 
   res.status(201).json({
     message: 'Tạo đơn hàng thành công.',
@@ -433,6 +552,121 @@ export const getUserOrders = asyncHandler(async (req, res) => {
 
   res.json({
     data: orders,
+  });
+});
+
+export const getAdminOrders = asyncHandler(async (req, res) => {
+  const orders = await Order.find({})
+    .sort({ createdAt: -1 })
+    .populate('items.product', 'name slug image')
+    .populate('items.variant', 'color storage image')
+    .populate('user', 'fullName email phone');
+
+  res.json({
+    data: orders,
+  });
+});
+
+export const updateAdminOrderStatus = asyncHandler(async (req, res) => {
+  const allowedStatuses = ['pending', 'confirmed', 'processing', 'packing', 'shipping', 'delivered', 'cancelled'];
+  const nextStatus = req.body.status;
+
+  if (!allowedStatuses.includes(nextStatus)) {
+    throw new AppError(400, 'Trạng thái đơn hàng không hợp lệ.');
+  }
+
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    throw new AppError(404, 'Không tìm thấy đơn hàng.');
+  }
+
+  order.status = nextStatus;
+
+  if (nextStatus === 'delivered' && order.paymentMethod === 'COD') {
+    order.paymentStatus = 'paid';
+    order.paidAt = order.paidAt || new Date();
+  }
+
+  if (nextStatus === 'cancelled') {
+    order.paymentStatus =
+      order.paymentStatus === 'paid' ? 'refunded' : order.paymentStatus;
+  }
+
+  order.timeline.push(
+    createTimelineEntry(
+      nextStatus,
+      'Admin cập nhật trạng thái',
+      req.body.note || `Đơn hàng được chuyển sang trạng thái ${nextStatus}.`
+    )
+  );
+
+  await order.save();
+
+  res.json({
+    message: 'Cập nhật trạng thái đơn hàng thành công.',
+    order: await hydrateOrder({ _id: order._id }),
+  });
+});
+
+export const getAdminOrderDetail = asyncHandler(async (req, res) => {
+  const order = await hydrateOrder({ _id: req.params.id });
+
+  if (!order) {
+    throw new AppError(404, 'Không tìm thấy đơn hàng.');
+  }
+
+  res.json({ order });
+});
+
+export const updateAdminOrder = asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.id);
+
+  if (!order) {
+    throw new AppError(404, 'Không tìm thấy đơn hàng.');
+  }
+
+  const allowedStatuses = ['pending', 'confirmed', 'processing', 'packing', 'shipping', 'delivered', 'cancelled'];
+
+  if (req.body.status && allowedStatuses.includes(req.body.status)) {
+    order.status = req.body.status;
+
+    if (req.body.status === 'delivered' && order.paymentMethod === 'COD') {
+      order.paymentStatus = 'paid';
+      order.paidAt = order.paidAt || new Date();
+    }
+
+    if (req.body.status === 'cancelled') {
+      order.paymentStatus =
+        order.paymentStatus === 'paid' ? 'refunded' : order.paymentStatus;
+    }
+  }
+
+  if (req.body.paymentStatus) {
+    order.paymentStatus = req.body.paymentStatus;
+    if (req.body.paymentStatus === 'paid') {
+      order.paidAt = order.paidAt || new Date();
+    }
+  }
+
+  if (req.body.notes !== undefined) {
+    order.notes = req.body.notes;
+  }
+
+  const timelineMsg = req.body.timelineMessage || req.body.note || 'Admin cập nhật đơn hàng';
+  order.timeline.push(
+    createTimelineEntry(
+      order.status,
+      timelineMsg,
+      req.body.paymentNote || `Đơn hàng được cập nhật bởi admin.`
+    )
+  );
+
+  await order.save();
+
+  res.json({
+    message: 'Cập nhật đơn hàng thành công.',
+    order: await hydrateOrder({ _id: order._id }),
   });
 });
 

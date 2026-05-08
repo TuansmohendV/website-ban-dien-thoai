@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { 
   MessageSquare, 
   Trash2, 
@@ -15,18 +15,30 @@ import {
   X,
   History
 } from 'lucide-react';
+import api, { getApiErrorMessage } from '../../lib/api';
 
-const initialComments = [
-  { id: 1, user: 'Hoàng Anh', rating: 5, content: 'Máy dùng rất tốt, nhân viên tư vấn nhiệt tình. Sẽ ủng hộ shop dài dài!', product: 'iPhone 15 Pro Max', date: '22/04/2026', status: 'Đã duyệt' },
-  { id: 2, user: 'Minh Quân', rating: 2, content: 'Sản phẩm giao hơi chậm, hộp bị móp méo nhẹ. Hy vọng shop cải thiện.', product: 'Samsung S24 Ultra', date: '21/04/2026', status: 'Chờ duyệt' },
-  { id: 3, user: 'Linh Chi', rating: 1, content: 'Quảng cáo sai sự thật, làm ăn không uy tín. Nội dung vi phạm chính sách của cửa hàng!', product: 'Tai nghe Airpods Pro', date: '20/04/2026', status: 'Vi phạm' },
-  { id: 4, user: 'Khánh Duy', rating: 4, content: 'Giá hợp lý, hàng chính hãng check ok nha mọi người.', product: 'Xiaomi 14', date: '19/04/2026', status: 'Đã duyệt' },
-];
+const moderationLabelMap = {
+  pending: 'Chờ duyệt',
+  approved: 'Đã duyệt',
+  rejected: 'Vi phạm',
+};
+
+const mapReviewForAdmin = (review = {}) => ({
+  id: review._id,
+  user: review.user?.fullName || 'Khách hàng',
+  rating: Number(review.rating || 0),
+  content: review.comment || review.title || 'Đánh giá sản phẩm',
+  product: review.product?.name || 'Sản phẩm',
+  date: review.createdAt ? new Date(review.createdAt).toLocaleDateString('vi-VN') : '',
+  status: moderationLabelMap[review.moderationStatus] || 'Chờ duyệt',
+});
 
 const FeedbackManagement = () => {
   const [activeTab, setActiveTab] = useState('comments');
   const [showNotifyModal, setShowNotifyModal] = useState(false);
-  const [comments, setComments] = useState(initialComments);
+  const [comments, setComments] = useState([]);
+  const [isLoadingComments, setIsLoadingComments] = useState(true);
+  const [commentsError, setCommentsError] = useState('');
   const [notifications, setNotifications] = useState([
     { id: 1, title: 'Khuyến mãi cuối tuần rực rỡ!', content: 'Giảm giá 50% cho tất cả phụ kiện iPhone...', target: 'Tất cả người dùng', date: '22/04/2026', status: 'Thành công' },
     { id: 2, title: 'Thông báo bảo trì hệ thống', content: 'Hệ thống sẽ bảo trì từ 12h đêm nay...', target: 'Tất cả người dùng', date: '21/04/2026', status: 'Thành công' },
@@ -35,20 +47,54 @@ const FeedbackManagement = () => {
   const [ratingFilter, setRatingFilter] = useState('Tất cả đánh giá');
   const [statusFilter, setStatusFilter] = useState('Trạng thái: Tất cả');
 
+  const loadComments = useCallback(async () => {
+    setIsLoadingComments(true);
+    setCommentsError('');
+    try {
+      const response = await api.get('/api/admin/reviews', {
+        params: { page: 1, limit: 200 },
+      });
+      const list = (response.data?.data || []).map(mapReviewForAdmin);
+      setComments(list);
+    } catch (error) {
+      setComments([]);
+      setCommentsError(getApiErrorMessage(error, 'Không thể tải bình luận từ database.'));
+    } finally {
+      setIsLoadingComments(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadComments();
+  }, [loadComments]);
+
   // Handle Actions
-  const handleApprove = (id) => {
-    setComments(comments.map(c => c.id === id ? { ...c, status: 'Đã duyệt' } : c));
-    alert('Đã duyệt bình luận thành công!');
+  const handleApprove = async (id) => {
+    try {
+      await api.patch(`/api/admin/reviews/${id}`, { moderationStatus: 'approved' });
+      await loadComments();
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Không thể duyệt bình luận.'));
+    }
   };
 
-  const handleFlag = (id) => {
-    setComments(comments.map(c => c.id === id ? { ...c, status: 'Vi phạm' } : c));
-    alert('Đã đánh dấu vi phạm bình luận này.');
+  const handleFlag = async (id) => {
+    try {
+      await api.patch(`/api/admin/reviews/${id}`, { moderationStatus: 'rejected' });
+      await loadComments();
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Không thể đánh dấu vi phạm.'));
+    }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa vĩnh viễn bình luận này?')) {
-      setComments(comments.filter(c => c.id !== id));
+      try {
+        await api.delete(`/api/admin/reviews/${id}`);
+        await loadComments();
+      } catch (error) {
+        alert(getApiErrorMessage(error, 'Không thể xóa bình luận.'));
+      }
     }
   };
 
@@ -88,8 +134,9 @@ const FeedbackManagement = () => {
       const matchesRating = ratingFilter === 'Tất cả đánh giá' || c.rating === parseInt(ratingFilter);
       
       // Nếu ở tab thường thì mới áp dụng lọc trạng thái (vì tab vi phạm đã cố định trạng thái)
-      const matchesStatus = activeTab === 'reports' ? true : 
-                          (statusFilter === 'Trạng thái: Tất cả' || c.status === statusFilter);
+      const statusText = statusFilter.replace('Trạng thái: ', '');
+      const matchesStatus = activeTab === 'reports' ? true :
+                          (statusFilter === 'Trạng thái: Tất cả' || c.status === statusText);
       
       return matchesSearch && matchesRating && matchesStatus;
     });
@@ -165,7 +212,15 @@ const FeedbackManagement = () => {
           </div>
         </div>
 
-        {activeTab === 'history' ? (
+        {isLoadingComments && activeTab !== 'history' ? (
+          <div style={{ textAlign: 'center', padding: '50px', color: '#64748b' }}>
+            Đang tải bình luận từ database...
+          </div>
+        ) : commentsError && activeTab !== 'history' ? (
+          <div style={{ textAlign: 'center', padding: '50px', color: '#ef4444' }}>
+            {commentsError}
+          </div>
+        ) : activeTab === 'history' ? (
           <div className="history-list">
             <table className="admin-table">
               <thead>

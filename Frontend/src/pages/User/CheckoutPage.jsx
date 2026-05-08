@@ -1,22 +1,37 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../context/AuthContext';
+import { useCart } from '../../context/CartContext';
 import { useOrders } from '../../context/OrdersContext';
 import DeliveryEstimator from '../../components/DeliveryEstimator';
+import api, { getApiErrorMessage } from '../../lib/api';
+import { mapPaymentMethodToBackend } from '../../lib/orders';
 
 const MapPinIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" /><circle cx="12" cy="10" r="3" /></svg>);
 const CreditCardIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></svg>);
 const TruckIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" /><path d="M15 18H9" /><path d="M19 18h2a1 1 0 0 0 1-1v-5h-7v7a1 1 0 0 0 1 1h2" /><circle cx="7" cy="18" r="2" /><circle cx="17" cy="18" r="2" /></svg>);
 
 const CheckoutPage = () => {
-    const { t, formatPrice } = useLanguage();
-    const { addOrder } = useOrders();
+    const { formatPrice } = useLanguage();
+    const { user } = useAuth();
+    const {
+        cartItems,
+        cartSubtotal,
+        cartDiscount,
+        cartTotal,
+        voucherCode,
+        refreshCart,
+    } = useCart();
+    const { createOrder, processPayment } = useOrders();
     const [paymentMethod, setPaymentMethod] = useState('cod');
     const [subMethod, setSubMethod] = useState('');
     const [couponCode, setCouponCode] = useState('');
     const [isApplying, setIsApplying] = useState(false);
     const [couponStatus, setCouponStatus] = useState(null); // { type: 'success'|'error', message, discountAmount }
     const [appliedCoupon, setAppliedCoupon] = useState(null);
+    const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+    const [successfulOrderId, setSuccessfulOrderId] = useState('');
 
     // Form validation state
     const [formData, setFormData] = useState({
@@ -32,6 +47,26 @@ const CheckoutPage = () => {
     const [isSuccess, setIsSuccess] = useState(false);
     const [isInfoVerified, setIsInfoVerified] = useState(false);
     const [deliveryEstimate, setDeliveryEstimate] = useState('');
+
+    useEffect(() => {
+        if (!user) {
+            return;
+        }
+
+        setFormData((prevData) => ({
+            ...prevData,
+            fullName: prevData.fullName || user.fullName || user.name || '',
+            phoneNumber: prevData.phoneNumber || user.phone || '',
+            email: prevData.email || user.email || '',
+        }));
+    }, [user]);
+
+    useEffect(() => {
+        setAppliedCoupon(voucherCode || null);
+        if (voucherCode) {
+            setCouponCode(voucherCode);
+        }
+    }, [voucherCode]);
 
     const calculateDelivery = (province) => {
         const now = new Date();
@@ -56,51 +91,58 @@ const CheckoutPage = () => {
     const phoneRegex = /^0\d{9}$/;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-
-    // Dữ liệu giả cho đơn hàng
-    const cartItems = [
-        { id: 1, name: 'iPhone 15 Pro Max 256GB', price: 29990000, qty: 1, image: 'https://cdn.tgdd.vn/Products/Images/42/305658/iphone-15-pro-max-blue-thumb-600x600.jpg' },
-        { id: 2, name: 'Ốp lưng iPhone 15 Pro Max Silicon', price: 490000, qty: 2, image: 'https://cdn.tgdd.vn/Products/Images/60/314224/op-lung-iphone-15-pro-max-nhua-deo-catalyst-influence-clear-thumb-600x600.jpg' }
-    ];
-
-    const subtotal = cartItems.reduce((acc, item) => acc + item.price * item.qty, 0);
+    const subtotal = cartSubtotal || cartItems.reduce((acc, item) => acc + item.price * item.qty, 0);
     const shippingFee = 35000;
+    const discount = cartDiscount;
+    const total = (cartTotal || Math.max(subtotal - discount, 0)) + shippingFee;
 
-    // Referral codes give 200k, PHONESIN gives 500k
-    const VALID_COUPONS = {
-        'PHONESIN': { discount: 500000, label: 'Ưu đãi Sin', type: 'voucher' },
-        'SINPHONEAVA': { discount: 200000, label: 'Mã bạn bè giới thiệu', type: 'referral' },
-        'SINPHONETEST': { discount: 200000, label: 'Mã bạn bè giới thiệu', type: 'referral' },
-    };
-    const discount = appliedCoupon ? (VALID_COUPONS[appliedCoupon]?.discount || 0) : 0;
-    const total = subtotal + shippingFee - discount;
-
-    const handleApplyCoupon = () => {
+    const handleApplyCoupon = async () => {
         if (!couponCode.trim()) return;
         setIsApplying(true);
         setCouponStatus(null);
-        setTimeout(() => {
+
+        try {
+            const response = await api.post('/api/voucher/apply', {
+                code: couponCode.trim().toUpperCase(),
+            });
+            await refreshCart();
+            setAppliedCoupon(response.data?.voucher?.code || couponCode.trim().toUpperCase());
+            setCouponStatus({
+                type: 'success',
+                message: response.data?.message || 'Ap dung ma giam gia thanh cong.',
+            });
+        } catch (error) {
+            setAppliedCoupon(null);
+            setCouponStatus({
+                type: 'error',
+                message: getApiErrorMessage(error, 'Ma giam gia khong hop le hoac da het han.'),
+            });
+        } finally {
             setIsApplying(false);
-            const found = VALID_COUPONS[couponCode.trim()];
-            if (found) {
-                setAppliedCoupon(couponCode.trim());
-                setCouponStatus({
-                    type: 'success',
-                    message: found.type === 'referral'
-                        ? `✅ Mã giới thiệu hợp lệ! Bạn tiết kiệm được ${found.discount.toLocaleString('vi-VN')}đ`
-                        : `✅ Mã ${couponCode} hợp lệ! Bạn tiết kiệm được ${found.discount.toLocaleString('vi-VN')}đ`,
-                });
-            } else {
-                setAppliedCoupon(null);
-                setCouponStatus({ type: 'error', message: '❌ Mã không hợp lệ hoặc đã hết hạn.' });
-            }
-        }, 800);
+        }
     };
 
-    const handleRemoveCoupon = () => {
-        setAppliedCoupon(null);
-        setCouponCode('');
+    const handleRemoveCoupon = async () => {
+        setIsApplying(true);
         setCouponStatus(null);
+
+        try {
+            await api.post('/api/voucher/apply', { code: '' });
+            await refreshCart();
+            setAppliedCoupon(null);
+            setCouponCode('');
+            setCouponStatus({
+                type: 'success',
+                message: 'Da go ma giam gia khoi gio hang.',
+            });
+        } catch (error) {
+            setCouponStatus({
+                type: 'error',
+                message: getApiErrorMessage(error, 'Khong the go ma giam gia luc nay.'),
+            });
+        } finally {
+            setIsApplying(false);
+        }
     };
 
     const validateForm = () => {
@@ -135,7 +177,15 @@ const CheckoutPage = () => {
         companyAddress: ''
     });
 
-    const handlePlaceOrder = () => {
+    const handlePlaceOrder = async () => {
+        if (cartItems.length === 0) {
+            setCouponStatus({
+                type: 'error',
+                message: 'Gio hang dang trong, chua the dat hang.',
+            });
+            return;
+        }
+
         if (validateForm()) {
             // Validate VAT info if requested
             if (requestVat) {
@@ -145,75 +195,58 @@ const CheckoutPage = () => {
                 }
             }
 
-            // Simulate saving invoice
-            const invoice = {
-                invoiceId: `SIN-${Math.floor(Math.random() * 1000000)}`,
-                date: new Date().toLocaleString('vi-VN'),
-                customer: formData,
-                items: cartItems,
-                payment: {
-                    method: paymentMethod,
-                    subMethod: subMethod
-                },
-                vatInfo: requestVat ? vatInfo : null,
-                totals: {
-                    subtotal,
-                    shippingFee,
-                    discount,
-                    total
-                }
-            };
-
-            console.log("Invoice Saved Successfully:", invoice);
-            localStorage.setItem('lastInvoice', JSON.stringify(invoice));
-
-            // Lưu vào OrdersContext để hiển thị ở trang lịch sử đơn hàng
-            const orderId = `PS-${Math.random().toString(36).substr(2,9).toUpperCase()}`;
-            const now = new Date().toLocaleString('vi-VN');
             const estimate = calculateDelivery(formData.province);
-            
-            addOrder({
-                id: orderId,
-                date: now,
-                status: 'pending',
-                items: cartItems.map(item => ({
-                    name: item.name,
-                    qty: item.qty,
-                    price: item.price,
-                    image: item.image,
-                })),
-                totalAmount: total,
-                customer: {
-                    fullName: formData.fullName,
-                    phone: formData.phoneNumber,
-                    email: formData.email,
-                    address: `${formData.address}, ${formData.ward}, ${formData.district}, ${formData.province}`,
-                    city: formData.province === 'HN' ? 'Hà Nội' : formData.province === 'HCM' ? 'TP. Hồ Chí Minh' : 'Đà Nẵng'
-                },
-                payment: {
-                    method: paymentMethod,
-                    methodLabel: paymentMethod === 'cod' ? 'Thanh toán khi nhận hàng'
-                               : paymentMethod === 'bank' ? 'Chuyển khoản ngân hàng'
-                               : 'Ví điện tử',
-                },
-                vatInfo: requestVat ? vatInfo : null,
-                estimatedDelivery: estimate,
-                summary: { subtotal, shipping: shippingFee, discount },
-                timeline: [
-                    { time: now, text: 'Đặt hàng thành công', active: true },
-                    { time: '', text: 'Chờ xác nhận', active: false },
-                ],
-            });
+            const backendPaymentMethod = mapPaymentMethodToBackend(paymentMethod, subMethod);
 
-            setDeliveryEstimate(estimate);
-            setIsSuccess(true);
-            // Redirect or show success state
+            try {
+                setIsPlacingOrder(true);
+                setCouponStatus(null);
+
+                const order = await createOrder({
+                    customerInfo: {
+                        fullName: formData.fullName.trim(),
+                        phone: formData.phoneNumber.trim(),
+                        email: formData.email.trim(),
+                    },
+                    shippingAddress: {
+                        recipientName: formData.fullName.trim(),
+                        phone: formData.phoneNumber.trim(),
+                        province: formData.province,
+                        district: formData.district,
+                        ward: formData.ward,
+                        street: formData.address.trim(),
+                    },
+                    shippingFee,
+                    paymentMethod: backendPaymentMethod,
+                    voucherCode: appliedCoupon || undefined,
+                    vatInfo: requestVat ? vatInfo : null, // Add VAT info if backend supports it
+                });
+
+                if (backendPaymentMethod !== 'COD') {
+                    await processPayment(order.backendId || order.id, backendPaymentMethod, {
+                        simulateSuccess: true,
+                    });
+                }
+
+                setSuccessfulOrderId(order.id);
+                setDeliveryEstimate(estimate);
+                setIsSuccess(true);
+            } catch (error) {
+                setCouponStatus({
+                    type: 'error',
+                    message: error.message || 'Khong the tao don hang luc nay.',
+                });
+            } finally {
+                setIsPlacingOrder(false);
+            }
         } else {
-            const firstError = Object.keys(errors)[0];
+            const nextErrors = Object.keys(errors);
+            const firstError = nextErrors[0];
             const errorElement = document.getElementsByName(firstError)[0];
             if (errorElement) errorElement.focus();
         }
     };
+
 
     const handleVerifyInfo = () => {
         if (validateForm()) {
@@ -626,8 +659,9 @@ const CheckoutPage = () => {
 
                             <button
                                 onClick={handlePlaceOrder}
-                                className="w-full h-16 bg-red-600 hover:bg-white hover:text-red-700 text-white font-black text-xl rounded-2xl mt-10 transition-all shadow-lg active:scale-95 uppercase tracking-widest flex items-center justify-center gap-3">
-                                HOÀN TẤT ĐẶT HÀNG
+                                disabled={isPlacingOrder || cartItems.length === 0}
+                                className="w-full h-16 bg-red-600 hover:bg-white hover:text-red-700 text-white font-black text-xl rounded-2xl mt-10 transition-all shadow-lg active:scale-95 uppercase tracking-widest flex items-center justify-center gap-3 disabled:opacity-60 disabled:hover:bg-red-600 disabled:hover:text-white">
+                                {isPlacingOrder ? 'DANG XU LY DON HANG' : 'HOÀN TẤT ĐẶT HÀNG'}
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
                             </button>
 
@@ -662,7 +696,7 @@ const CheckoutPage = () => {
                                 Xem lịch sử đơn hàng
                             </Link>
                             <Link
-                                to="/invoice/DEMO"
+                                to={`/invoice/${successfulOrderId}`}
                                 className="block w-full py-5 bg-red-600 text-white font-black uppercase tracking-widest rounded-2xl hover:bg-red-700 transition-all shadow-lg"
                             >
                                 Xem hóa đơn VAT

@@ -6,9 +6,12 @@ import ProductCard from '../../components/ProductCard';
 import FeaturedCategories from '../../components/FeaturedCategories';
 import CustomerFeedback from '../../components/CustomerFeedback';
 import PromotionSlider from '../../components/PromotionSlider';
+import api from '../../lib/api';
+import { inflateProducts, normalizeProduct } from '../../lib/products';
 
 const HomePage = () => {
     const [timeLeft, setTimeLeft] = useState({ h: 8, m: 0, s: 51 });
+    const [backendProducts, setBackendProducts] = useState([]);
 
     useEffect(() => {
         const timer = setInterval(() => {
@@ -50,6 +53,64 @@ const HomePage = () => {
     const [activeTab, setActiveTab] = useState('Tất cả');
     const flashSaleRef = useRef(null);
 
+    useEffect(() => {
+        let ignore = false;
+
+        const loadProducts = async () => {
+            try {
+                const response = await api.get('/api/products', {
+                    params: { limit: 50 },
+                });
+
+                if (!ignore) {
+                    setBackendProducts((response.data?.data || []).map(normalizeProduct));
+                }
+            } catch (error) {
+                if (!ignore) {
+                    setBackendProducts([]);
+                }
+            }
+        };
+
+        loadProducts();
+
+        return () => {
+            ignore = true;
+        };
+    }, []);
+
+    const flashSaleSource = React.useMemo(() => {
+        const tabs = {
+            'Tất cả': () => true,
+            'Điện thoại/Tablet': (product) => ['dien-thoai', 'tablet'].includes(product.category),
+            'Laptop/Màn hình': (product) => ['laptop', 'man-hinh'].includes(product.category),
+            'Phụ kiện công nghệ': (product) =>
+                ['am-thanh', 'dong-ho', 'linh-kien-may-tinh', 'smart-home'].includes(
+                    product.category
+                ),
+        };
+
+        const filtered = backendProducts.filter(tabs[activeTab] || tabs['Tất cả']);
+        return filtered.length > 0 ? filtered : backendProducts;
+    }, [activeTab, backendProducts]);
+
+    const flashSaleProducts = React.useMemo(
+        () => inflateProducts(flashSaleSource, 8, `home-flash-${activeTab}`),
+        [activeTab, flashSaleSource]
+    );
+
+    const forYouProducts = React.useMemo(
+        () => inflateProducts(backendProducts, 27, 'home-for-you'),
+        [backendProducts]
+    );
+
+    const primaryProducts = forYouProducts.slice(0, 8);
+    const secondaryProducts = forYouProducts.slice(8, 12);
+    const accessoryProducts = forYouProducts.slice(12, 14);
+    const mixedProducts = forYouProducts.slice(14, 20);
+    const budgetProducts = forYouProducts.slice(20, 24);
+    const endingProducts = forYouProducts.slice(24, 27);
+
     // Auto scroll logic for Flash Sale
     useEffect(() => {
         const interval = setInterval(() => {
@@ -68,7 +129,7 @@ const HomePage = () => {
 
     return (
         <div className="bg-[#f0f2f5] min-h-screen pb-20 font-sans">
-            <div className="max-w-[1850px] mx-auto flex gap-6 pt-6 px-4 sm:px-8 relative items-start">
+            <div className="max-w-[1850px] mx-auto flex gap-4 lg:gap-6 pt-3 sm:pt-6 px-3 sm:px-8 relative items-start">
                 
                 {/* 1. LEFT POSTER - Refined Height & Premium Look */}
                 <div className="hidden 2xl:block w-[185px] shrink-0 sticky top-[130px] h-[700px] rounded-2xl overflow-hidden shadow-2xl border border-white/50 group">
@@ -142,7 +203,7 @@ const HomePage = () => {
                         <div className="rounded-xl overflow-hidden shadow-sm">
                             <HeroCarousel />
                         </div>
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
                             {[
                                 { img: 'https://cdn.hoanghamobile.vn/i/home/Uploads/2026/03/16/iphone-17e-hot-sp.png', link: '/category/iphone' },
                                 { img: 'https://cdn.hoanghamobile.vn/i/home/Uploads/2025/11/22/sanphamhot2-x6c.png', link: '/category/honor' },
@@ -162,7 +223,7 @@ const HomePage = () => {
                         {/* Header Image (Festive Banner) */}
                         <div className="w-full relative rounded-t-2xl overflow-hidden shadow-lg border-x border-t border-[#c00]">
                             <img src="https://cdn.hoanghamobile.vn/i/home/Uploads/2026/01/19/khung-sale-tet-fill-danh-muc.png" className="w-full h-auto" alt="Flash Sale Banner" />
-                            <Link to="/flash-sale" className="absolute top-4 right-4 bg-white/95 hover:bg-white text-gray-800 px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-1 transition-all shadow-md group">
+                            <Link to="/flash-sale" className="hidden sm:flex absolute top-4 right-4 bg-white/95 hover:bg-white text-gray-800 px-4 py-1.5 rounded-full text-xs font-bold items-center gap-1 transition-all shadow-md group">
                                 Xem thêm <ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" />
                             </Link>
                         </div>
@@ -172,13 +233,13 @@ const HomePage = () => {
                             {/* Header: Countdown + Chips (Stacked) */}
                             <div className="flex flex-col gap-6 mb-8 items-center md:items-start">
                                 {/* Countdown Timer Digital Style */}
-                                <div className="bg-[#fff1f0] border border-red-100 rounded-xl p-3 flex items-center gap-6 w-fit">
+                                <div className="bg-[#fff1f0] border border-red-100 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6 w-full md:w-fit">
                                     <div className="text-red-600 font-black text-sm uppercase italic tracking-wider">
                                         Đang diễn ra • {new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
                                         <span className="text-gray-700 font-black text-[11px] uppercase">Kết thúc trong</span>
-                                        <div className="flex items-center gap-1">
+                                        <div className="flex items-center gap-1 shrink-0">
                                             {[
                                                 { val: timeLeft.h.toString().padStart(2, '0')[0] },
                                                 { val: timeLeft.h.toString().padStart(2, '0')[1] },
@@ -209,7 +270,7 @@ const HomePage = () => {
                                         <button 
                                             key={i} 
                                             onClick={() => setActiveTab(tab.name)}
-                                            className={`px-5 py-2 rounded-full text-[13px] font-black transition-all border-2 ${
+                                            className={`px-3 sm:px-5 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-[13px] font-black transition-all border-2 ${
                                                 activeTab === tab.name 
                                                 ? 'bg-[#00917a] text-white border-[#00917a] shadow-md' 
                                                 : 'bg-white text-[#00917a] border-[#00917a] hover:bg-emerald-50'
@@ -232,32 +293,9 @@ const HomePage = () => {
                                         WebkitOverflowScrolling: 'touch'
                                     }}
                                 >
-                                    {[
-                                        { id: 1, name: 'iPhone 15 Pro Max 256GB - Titanium', price: 29990000, oldPrice: 34990000, discount: '-14%', img: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?q=80&w=800&auto=format&fit=crop' },
-                                        { id: 2, name: 'Samsung Galaxy S24 Ultra 5G (12GB/256GB)', price: 28490000, oldPrice: 33990000, discount: '-16%', img: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?q=80&w=800&auto=format&fit=crop' },
-                                        { id: 3, name: 'Xiaomi 14 Ultra 5G (16GB/512GB)', price: 29990000, oldPrice: 32990000, discount: '-9%', img: 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?q=80&w=800&auto=format&fit=crop' },
-                                        { id: 4, name: 'Google Pixel 8 Pro (12GB/128GB)', price: 18490000, oldPrice: 21990000, discount: '-15%', img: 'https://images.unsplash.com/photo-1580910051074-3eb694886505?q=80&w=800&auto=format&fit=crop' },
-                                        { id: 5, name: 'iPhone 15 Pink 128GB - New', price: 17490000, oldPrice: 19990000, discount: '-12%', img: 'https://images.unsplash.com/photo-1696446701796-da61225697cc?q=80&w=800&auto=format&fit=crop' },
-                                        { id: 6, name: 'Nothing Phone (2) 12GB/256GB', price: 14990000, oldPrice: 17990000, discount: '-17%', img: 'https://images.unsplash.com/photo-1690463428387-930f781df052?q=80&w=800&auto=format&fit=crop' },
-                                        { id: 7, name: 'Redmi Note 13 Pro 5G', price: 8490000, oldPrice: 9990000, discount: '-15%', img: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=800&auto=format&fit=crop' },
-                                        { id: 8, name: 'Sony Xperia 5 V 5G', price: 20990000, oldPrice: 22990000, discount: '-8%', img: 'https://images.unsplash.com/photo-1546054454-aa26e2b734c7?q=80&w=800&auto=format&fit=crop' },
-                                    ].map((item, i) => (
-                                        <div key={i} className="min-w-[210px] md:min-w-[240px] flex-shrink-0 snap-start">
-                                            <ProductCard 
-                                                product={{
-                                                    id: 'flash-phone-' + item.id,
-                                                    name: item.name,
-                                                    priceNum: item.price,
-                                                    image: item.img,
-                                                    discount: item.discount,
-                                                    oldPrice: item.oldPrice.toLocaleString() + 'đ',
-                                                    specs: {
-                                                        camera: i % 2 === 0 ? '50MP' : '200MP',
-                                                        chip: i % 2 === 0 ? 'Apple A17' : 'Snapdragon 8 Gen 3',
-                                                        pin: '5000mAh'
-                                                    }
-                                                }} 
-                                            />
+                                    {flashSaleProducts.map((item, i) => (
+                                        <div key={item.uiKey || item.id || i} className="min-w-[178px] sm:min-w-[210px] md:min-w-[240px] flex-shrink-0 snap-start">
+                                            <ProductCard product={item} />
                                         </div>
                                     ))}
                                 </div>
@@ -265,13 +303,13 @@ const HomePage = () => {
                                 {/* Carousel Navigation - Fixed Precision and Visibility */}
                                 <button 
                                     onClick={() => flashSaleRef.current.scrollBy({ left: -flashSaleRef.current.offsetWidth/2, behavior: 'smooth' })}
-                                    className="absolute -left-4 top-[40%] -translate-y-1/2 bg-white/95 backdrop-blur-md w-11 h-11 rounded-full shadow-[0_5px_20px_rgba(0,0,0,0.2)] flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 z-50 transition-all hover:scale-110 active:scale-90 border border-gray-100"
+                                    className="hidden sm:flex absolute -left-4 top-[40%] -translate-y-1/2 bg-white/95 backdrop-blur-md w-11 h-11 rounded-full shadow-[0_5px_20px_rgba(0,0,0,0.2)] items-center justify-center opacity-0 group-hover/carousel:opacity-100 z-50 transition-all hover:scale-110 active:scale-90 border border-gray-100"
                                 >
                                     <ChevronLeft size={24} className="text-[#00917a]" strokeWidth={3} />
                                 </button>
                                 <button 
                                     onClick={() => flashSaleRef.current.scrollBy({ left: flashSaleRef.current.offsetWidth/2, behavior: 'smooth' })}
-                                    className="absolute -right-4 top-[40%] -translate-y-1/2 bg-white/95 backdrop-blur-md w-11 h-11 rounded-full shadow-[0_5px_20px_rgba(0,0,0,0.2)] flex items-center justify-center opacity-0 group-hover/carousel:opacity-100 z-50 transition-all hover:scale-110 active:scale-90 border border-gray-100"
+                                    className="hidden sm:flex absolute -right-4 top-[40%] -translate-y-1/2 bg-white/95 backdrop-blur-md w-11 h-11 rounded-full shadow-[0_5px_20px_rgba(0,0,0,0.2)] items-center justify-center opacity-0 group-hover/carousel:opacity-100 z-50 transition-all hover:scale-110 active:scale-90 border border-gray-100"
                                 >
                                     <ChevronRight size={24} className="text-[#00917a]" strokeWidth={3} />
                                 </button>
@@ -290,8 +328,8 @@ const HomePage = () => {
 
                     {/* DÀNH CHO BẠN - GIANT MASTER GRID */}
                     <div className="mt-10">
-                        <div className="flex items-center justify-between mb-6 px-1">
-                            <h2 className="text-[20px] font-black text-gray-800 uppercase tracking-tight flex items-center gap-3">
+                            <div className="flex items-center justify-between mb-6 px-1">
+                                <h2 className="text-[20px] font-black text-gray-800 uppercase tracking-tight flex items-center gap-3">
                                 <div className="bg-[#cc0000] w-1.5 h-6 rounded-full"></div>
                                 Dành cho bạn
                             </h2>
@@ -304,30 +342,21 @@ const HomePage = () => {
                                 <div className="flex-1 w-full relative overflow-hidden bg-gray-50/50">
                                     <img src="https://cdn.hoanghamobile.vn//Uploads/2026/03/18/xiaomi-17-ultra-webb.png" className="absolute inset-0 w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-1000" alt="Xiaomi 17 Ultra" />
                                 </div>
-                                <div className="px-4 md:px-5 py-3 border-t border-gray-100 flex items-center justify-between shrink-0 z-10 bg-white">
-                                    <div className="text-left pr-4">
+                                <div className="px-4 md:px-5 py-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0 z-10 bg-white">
+                                    <div className="text-left sm:pr-4 min-w-0">
                                         <p className="text-xs md:text-sm font-bold text-gray-800 uppercase tracking-wide">Xiaomi 17 | 17 Pro | 17 Ultra</p>
                                         <p className="text-[10px] md:text-xs text-gray-500 mt-0.5 line-clamp-1">Trải nghiệm nhiếp ảnh Leica đỉnh sáng tạo, cấu hình vượt trội.</p>
                                     </div>
-                                    <button className="text-blue-600 font-bold uppercase text-[10px] md:text-xs tracking-wider border border-blue-600 px-3 md:px-4 py-1.5 rounded-full hover:bg-blue-600 hover:text-white transition-all shrink-0">
+                                    <button className="text-blue-600 font-bold uppercase text-[10px] md:text-xs tracking-wider border border-blue-600 px-3 md:px-4 py-1.5 rounded-full hover:bg-blue-600 hover:text-white transition-all shrink-0 self-start sm:self-auto">
                                         Xem chi tiết
                                     </button>
                                 </div>
                             </div>
 
                             {/* Apple and Samsung products (normal) */}
-                            {[
-                                { id: 'm-1', name: 'iPhone 17 Pro Max 256GB - Chính hãng Apple Việt Nam', price: 36790000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2023/09/13/iphone-15-pro-max-titan-tu-nhien-1.png', specs: { chip: 'A19 Pro', pin: '4422mAh', camera: '48MP' } },
-                                { id: 'm-2', name: 'iPhone 16e 128GB - Chính hãng VN/A', price: 12490000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2021/10/11/apple-iphone-13-1.png', specs: { chip: 'A18', pin: '3110mAh', camera: '12MP' } },
-                                { id: 'm-3', name: 'iPhone 13 128GB - Chính hãng VN/A', price: 12590000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2021/10/11/apple-iphone-13-1.png', specs: { chip: 'A15', pin: '3240mAh', camera: '12MP' } },
-                                { id: 'm-4', name: 'MacBook Air M4 13 inch 16GB/256GB', price: 25090000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/03/11/mac-air-m3-gray.png', specs: { chip: 'Apple M4', pin: '18h lướt web', camera: 'Liquid Retina' } },
-                                { id: 'm-5', name: 'Samsung Galaxy S26 Ultra - 12GB/512GB', price: 36990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/01/18/titan-black-1_638411516247055417.png', specs: { chip: 'Snap 8 Gen 5', pin: '5000mAh', camera: '200MP' } },
-                                { id: 'm-6', name: 'Samsung Galaxy S26 Ultra - 12GB/256GB', price: 30990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/01/18/titan-gray-1_638411516361546200.png', specs: { chip: 'Snap 8 Gen 5', pin: '5000mAh', camera: '200MP' } },
-                                { id: 'm-6-1', name: 'iPad Pro M4 11-inch (2024)', price: 28990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/05/08/ipad-pro-11-den.png', specs: { chip: 'Apple M4', pin: '10h web', camera: 'OLED 120Hz' } },
-                                { id: 'm-6-2', name: 'Apple Watch Series 9 GPS 41mm', price: 9290000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2023/09/13/watch-s9-nhom-vien-hong.png', specs: { chip: 'Apple S9', pin: '18h', camera: 'Retina' } },
-                            ].map((item) => (
-                                <div key={item.id} className="col-span-1">
-                                    <ProductCard product={{ ...item, priceNum: item.price, image: item.img, discount: '10%' }} />
+                            {primaryProducts.map((item) => (
+                                <div key={item.uiKey || item.id} className="col-span-1">
+                                    <ProductCard product={item} />
                                 </div>
                             ))}
 
@@ -340,26 +369,21 @@ const HomePage = () => {
                                         <p className="text-blue-100 font-medium mb-2 drop-shadow-md pb-2">Giảm thêm 2.000.000đ qua VNPAY</p>
                                     </div>
                                 </div>
-                                <div className="px-4 md:px-5 py-3 border-t border-gray-100 flex items-center justify-between shrink-0 z-10 bg-white">
-                                    <div className="text-left pr-4">
+                                <div className="px-4 md:px-5 py-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0 z-10 bg-white">
+                                    <div className="text-left sm:pr-4 min-w-0">
                                         <p className="text-xs md:text-sm font-bold text-gray-800 uppercase tracking-wide">Galaxy S25 | Z Fold6 | Z Flip6</p>
                                         <p className="text-[10px] md:text-xs text-gray-500 mt-0.5 line-clamp-1">Trợ lý AI quyền năng, thế hệ gập mở tiên phong nhất.</p>
                                     </div>
-                                    <button className="text-blue-600 font-bold uppercase text-[10px] md:text-xs tracking-wider border border-blue-600 px-3 md:px-4 py-1.5 rounded-full hover:bg-blue-600 hover:text-white transition-all shrink-0">
+                                    <button className="text-blue-600 font-bold uppercase text-[10px] md:text-xs tracking-wider border border-blue-600 px-3 md:px-4 py-1.5 rounded-full hover:bg-blue-600 hover:text-white transition-all shrink-0 self-start sm:self-auto">
                                         Xem chi tiết
                                     </button>
                                 </div>
                             </div>
 
                             {/* Other mixed products part 1 */}
-                            {[
-                                { id: 'm-7', name: 'Samsung Galaxy A57 5G - 8GB/128GB', price: 11290000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/03/15/samsung-galaxy-a35-5g-vang.png', specs: { chip: 'Exynos 1680', pin: '5000mAh', camera: '50MP' } },
-                                { id: 'm-8', name: 'Xiaomi 17 Ultra 16GB/512GB', price: 36990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/05/17/mi-14-u.png', specs: { chip: 'Snap 8 Gen 5', pin: '6000mAh', camera: 'Leica 50MP' } },
-                                { id: 'm-8-1', name: 'Samsung Galaxy Z Fold6 5G', price: 41990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/07/11/z-fold6-xam-1.png', specs: { chip: 'Snap 8 Gen 3', pin: '4400mAh', camera: '50MP' } },
-                                { id: 'm-8-2', name: 'Samsung Galaxy Z Flip6 5G', price: 26990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/07/11/z-flip6-xanh-1.png', specs: { chip: 'Snap 8 Gen 3', pin: '4000mAh', camera: '50MP' } },
-                            ].map((item) => (
-                                <div key={item.id} className="col-span-1">
-                                    <ProductCard product={{ ...item, priceNum: item.price, image: item.img, discount: '8%' }} />
+                            {secondaryProducts.map((item) => (
+                                <div key={item.uiKey || item.id} className="col-span-1">
+                                    <ProductCard product={item} />
                                 </div>
                             ))}
 
@@ -372,38 +396,28 @@ const HomePage = () => {
                                         <p className="text-yellow-300 font-black text-[24px] uppercase tracking-tighter drop-shadow-md pb-2">Trả góp 0%</p>
                                     </div>
                                 </div>
-                                <div className="px-4 md:px-5 py-3 border-t border-gray-100 flex items-center justify-between shrink-0 z-10 bg-white">
-                                    <div className="text-left pr-4">
+                                <div className="px-4 md:px-5 py-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0 z-10 bg-white">
+                                    <div className="text-left sm:pr-4 min-w-0">
                                         <p className="text-xs md:text-sm font-bold text-gray-800 uppercase tracking-wide">iPhone, Samsung, OPPO 99%</p>
                                         <p className="text-[10px] md:text-xs text-gray-500 mt-0.5 line-clamp-1">Hàng zin ngoại hình đẹp, bảo hành dài hạn - Trả góp 0đ.</p>
                                     </div>
-                                    <button className="text-blue-600 font-bold uppercase text-[10px] md:text-xs tracking-wider border border-blue-600 px-3 md:px-4 py-1.5 rounded-full hover:bg-blue-600 hover:text-white transition-all shrink-0">
+                                    <button className="text-blue-600 font-bold uppercase text-[10px] md:text-xs tracking-wider border border-blue-600 px-3 md:px-4 py-1.5 rounded-full hover:bg-blue-600 hover:text-white transition-all shrink-0 self-start sm:self-auto">
                                         Xem chi tiết
                                     </button>
                                 </div>
                             </div>
                             
                             {/* Other mixed products part 2 */}
-                            {[
-                                { id: 'm-8-3', name: 'OPPO Find N3 Flip 5G', price: 19990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/01/18/titan-black-1_638411516247055417.png', specs: { chip: 'Dimensity 9200', pin: '4300mAh', camera: '50MP' } },
-                                { id: 'm-8-4', name: 'AirPods Pro 2 USB-C', price: 5890000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2023/09/13/airpods-pro-2-type-c-1.png', specs: { chip: 'Apple H2', pin: '30h case', camera: 'ANC' } },
-                            ].map((item) => (
-                                <div key={item.id} className="col-span-1">
-                                    <ProductCard product={{ ...item, priceNum: item.price, image: item.img, discount: '8%' }} />
+                            {accessoryProducts.map((item) => (
+                                <div key={item.uiKey || item.id} className="col-span-1">
+                                    <ProductCard product={item} />
                                 </div>
                             ))}
 
                             {/* More random products */}
-                            {[
-                                { id: 'm-9', name: 'HONOR Magic V5', price: 39990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/08/21/honor-200-pro-trang.png', specs: { chip: 'Snap 8 Gen 4', pin: '5820mAh', camera: '50MP' } },
-                                { id: 'm-10', name: 'Samsung Galaxy S25 Ultra 5G', price: 25990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/01/18/titan-gray-1_638411516361546200.png', specs: { chip: 'Snap 8 Gen 4', pin: '5000mAh', camera: '200MP' } },
-                                { id: 'm-11', name: 'iPhone Air 256GB - VN/A', price: 23990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2021/10/11/apple-iphone-13-1.png', specs: { chip: 'A19 Pro', pin: '3500mAh', camera: '48MP' } },
-                                { id: 'm-12', name: 'Xiaomi POCO M7 6GB/128GB', price: 3990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/07/04/image-removebg-preview-1.png', specs: { chip: 'Snapdragon 685', pin: '7000mAh', camera: '64MP' } },
-                                { id: 'm-13', name: 'HONOR X7d 4G 8GB/256GB', price: 6290000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/08/21/honor-200-pro-trang.png', specs: { chip: 'Snapdragon', pin: '6500mAh', camera: '108MP' } },
-                                { id: 'm-14', name: 'Xiaomi Redmi Note 15 Pro 5G', price: 10290000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/05/17/mi-14-u.png', specs: { chip: 'Dimensity', pin: '6580mAh', camera: '200MP' } },
-                            ].map((item) => (
-                                <div key={item.id} className="col-span-1">
-                                    <ProductCard product={{ ...item, priceNum: item.price, image: item.img, discount: '5%' }} />
+                            {mixedProducts.map((item) => (
+                                <div key={item.uiKey || item.id} className="col-span-1">
+                                    <ProductCard product={item} />
                                 </div>
                             ))}
 
@@ -412,26 +426,21 @@ const HomePage = () => {
                                 <div className="flex-1 w-full relative overflow-hidden bg-white">
                                     <img src="https://cdn.hoanghamobile.vn/Uploads/2026/04/06/note-15-series-web.png" className="absolute inset-0 w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-1000" alt="Redmi Note 15 Series" />
                                 </div>
-                                <div className="px-4 md:px-5 py-3 border-t border-gray-100 flex items-center justify-between shrink-0 z-10 bg-white">
-                                    <div className="text-left pr-4">
+                                <div className="px-4 md:px-5 py-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0 z-10 bg-white">
+                                    <div className="text-left sm:pr-4 min-w-0">
                                         <p className="text-xs md:text-sm font-bold text-gray-800 uppercase tracking-wide">Redmi Note 15 | 15 Pro | 15 Pro+</p>
                                         <p className="text-[10px] md:text-xs text-gray-500 mt-0.5 line-clamp-1">Hiệu năng bền bỉ, vô địch phân khúc với mức giá siêu ưu đãi.</p>
                                     </div>
-                                    <button className="text-blue-600 font-bold uppercase text-[10px] md:text-xs tracking-wider border border-blue-600 px-3 md:px-4 py-1.5 rounded-full hover:bg-blue-600 hover:text-white transition-all shrink-0">
+                                    <button className="text-blue-600 font-bold uppercase text-[10px] md:text-xs tracking-wider border border-blue-600 px-3 md:px-4 py-1.5 rounded-full hover:bg-blue-600 hover:text-white transition-all shrink-0 self-start sm:self-auto">
                                         Xem chi tiết
                                     </button>
                                 </div>
                             </div>
 
                             {/* Even more products part 1 */}
-                            {[
-                                { id: 'm-15', name: 'Samsung Galaxy S25 FE 8GB/128GB', price: 12990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/03/15/samsung-galaxy-a35-5g-vang.png', specs: { chip: 'Exynos 2400', pin: '4500mAh', camera: '50MP' } },
-                                { id: 'm-16', name: 'Samsung Galaxy A17 LTE 8GB/128GB', price: 4690000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/03/15/samsung-galaxy-a35-5g-vang.png', specs: { chip: 'Helio G99', pin: '5000mAh', camera: '50MP' } },
-                                { id: 'm-17', name: 'HONOR X5c Plus', price: 3090000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/08/21/honor-200-pro-trang.png', specs: { chip: 'Helio G85', pin: '5200mAh', camera: '50MP' } },
-                                { id: 'm-18', name: 'Samsung Galaxy A07', price: 2990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/03/15/samsung-galaxy-a35-5g-vang.png', specs: { chip: 'Helio G85', pin: '5000mAh', camera: '50MP' } },
-                            ].map((item) => (
-                                <div key={item.id} className="col-span-1">
-                                    <ProductCard product={{ ...item, priceNum: item.price, image: item.img, discount: '12%' }} />
+                            {budgetProducts.map((item) => (
+                                <div key={item.uiKey || item.id} className="col-span-1">
+                                    <ProductCard product={item} />
                                 </div>
                             ))}
 
@@ -441,13 +450,9 @@ const HomePage = () => {
                             </div>
 
                             {/* Even more products part 2 */}
-                            {[
-                                { id: 'm-19', name: 'Huawei P70 Pro', price: 21990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/05/17/mi-14-u.png', specs: { chip: 'Kirin', pin: '5050mAh', camera: 'OIS' } },
-                                { id: 'm-20', name: 'OnePlus 12 5G', price: 18990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/01/18/titan-black-1_638411516247055417.png', specs: { chip: 'Snap 8 Gen 3', pin: '5400mAh', camera: 'Hasselblad' } },
-                                { id: 'm-21', name: 'Vivo X100 Pro', price: 23990000, img: 'https://cdn.hoanghamobile.vn/i/productlist/ts/Uploads/2024/08/21/honor-200-pro-trang.png', specs: { chip: 'Dimensity 9300', pin: '5400mAh', camera: 'Zeiss' } },
-                            ].map((item) => (
-                                <div key={item.id} className="col-span-1">
-                                    <ProductCard product={{ ...item, priceNum: item.price, image: item.img, discount: '12%' }} />
+                            {endingProducts.map((item) => (
+                                <div key={item.uiKey || item.id} className="col-span-1">
+                                    <ProductCard product={item} />
                                 </div>
                             ))}
 

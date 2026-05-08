@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { 
   Ticket, 
   Plus, 
@@ -13,23 +13,72 @@ import {
   Percent,
   X
 } from 'lucide-react';
+import api, { getApiErrorMessage } from '../../lib/api';
 
-const initialPromos = [
-  { id: 1, code: 'VOUCHER10', type: 'Giảm tiền', value: 500000, minSpend: 10000000, used: 45, total: 100, expiry: '2026-04-30', status: 'Hoạt động' },
-  { id: 2, code: 'SAVE20', type: 'Phần trăm', value: 20, minSpend: 2000000, used: 120, total: 0, expiry: '2026-05-15', status: 'Hoạt động' },
-  { id: 3, code: 'FREESHIP', type: 'Vận chuyển', value: 50000, minSpend: 0, used: 890, total: 1000, expiry: '2026-05-01', status: 'Hết hạn' },
-  { id: 4, code: 'WELCOME5', type: 'Phần trăm', value: 5, minSpend: 0, used: 12, total: 0, expiry: '2026-12-31', status: 'Hoạt động' },
-];
+const typeLabels = {
+  fixed: 'Giảm tiền',
+  percentage: 'Phần trăm',
+};
+
+const typeValues = {
+  'Giảm tiền': 'fixed',
+  'Vận chuyển': 'fixed',
+  'Phần trăm': 'percentage',
+};
+
+const toDateInput = (value) => {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+};
+
+const mapVoucherForAdmin = (voucher = {}) => ({
+  id: voucher._id || voucher.id,
+  code: voucher.code || '',
+  type: typeLabels[voucher.discountType] || 'Giảm tiền',
+  discountType: voucher.discountType || 'fixed',
+  value: Number(voucher.discountValue || 0),
+  minSpend: Number(voucher.minOrderValue || 0),
+  maxDiscount: Number(voucher.maxDiscount || 0),
+  used: Number(voucher.usedCount || 0),
+  total: Number(voucher.usageLimit || 0),
+  usageLimitPerUser: Number(voucher.usageLimitPerUser || 1),
+  expiry: toDateInput(voucher.expiresAt),
+  status: voucher.status || (voucher.isActive === false ? 'Tạm tắt' : 'Hoạt động'),
+  isActive: voucher.isActive !== false,
+});
 
 const PromotionManagement = () => {
-  const [promos, setPromos] = useState(initialPromos);
+  const [promos, setPromos] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [editingPromo, setEditingPromo] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   
   const [formData, setFormData] = useState({
-    code: '', type: 'Giảm tiền', value: '', minSpend: '', total: '', expiry: ''
+    code: '', type: 'Giảm tiền', value: '', minSpend: '', total: '', expiry: '', isActive: true
   });
+
+  const loadPromos = useCallback(async () => {
+    setIsLoading(true);
+
+    try {
+      const response = await api.get('/api/voucher/admin');
+      setPromos((response.data?.data || []).map(mapVoucherForAdmin));
+      setLoadError('');
+    } catch (error) {
+      setPromos([]);
+      setLoadError(getApiErrorMessage(error, 'Không thể tải mã khuyến mãi từ database.'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPromos();
+  }, [loadPromos]);
 
   // Derived Stats
   const stats = useMemo(() => {
@@ -56,16 +105,17 @@ const PromotionManagement = () => {
         value: promo.value,
         minSpend: promo.minSpend,
         total: promo.total,
-        expiry: promo.expiry
+        expiry: promo.expiry,
+        isActive: promo.isActive,
       });
     } else {
       setEditingPromo(null);
-      setFormData({ code: '', type: 'Giảm tiền', value: '', minSpend: 0, total: 0, expiry: '' });
+      setFormData({ code: '', type: 'Giảm tiền', value: '', minSpend: 0, total: 0, expiry: '', isActive: true });
     }
     setShowModal(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.code || !formData.value || !formData.expiry) {
       alert('Vui lòng nhập đầy đủ thông tin bắt buộc!');
       return;
@@ -78,27 +128,42 @@ const PromotionManagement = () => {
       total: Math.max(0, Number(formData.total) || 0)
     };
 
-    if (editingPromo) {
-      setPromos(promos.map(p => p.id === editingPromo.id ? { 
-        ...p, 
-        ...cleanData,
-        status: new Date(formData.expiry) < new Date() ? 'Hết hạn' : 'Hoạt động' 
-      } : p));
-    } else {
-      const newPromo = {
-        id: Date.now(),
-        ...cleanData,
-        used: 0,
-        status: new Date(formData.expiry) < new Date() ? 'Hết hạn' : 'Hoạt động'
-      };
-      setPromos([newPromo, ...promos]);
+    const payload = {
+      code: cleanData.code,
+      discountType: typeValues[cleanData.type] || 'fixed',
+      discountValue: cleanData.value,
+      minOrderValue: cleanData.minSpend,
+      usageLimit: cleanData.total,
+      expiresAt: cleanData.expiry,
+      isActive: cleanData.isActive,
+    };
+
+    setIsSaving(true);
+
+    try {
+      if (editingPromo) {
+        await api.put(`/api/voucher/admin/${editingPromo.id}`, payload);
+      } else {
+        await api.post('/api/voucher/admin', payload);
+      }
+
+      await loadPromos();
+      setShowModal(false);
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Không thể lưu mã khuyến mãi.'));
+    } finally {
+      setIsSaving(false);
     }
-    setShowModal(false);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa mã khuyến mãi này?')) {
-      setPromos(promos.filter(p => p.id !== id));
+      try {
+        await api.delete(`/api/voucher/admin/${id}`);
+        setPromos(promos.filter(p => p.id !== id));
+      } catch (error) {
+        alert(getApiErrorMessage(error, 'Không thể xóa mã khuyến mãi.'));
+      }
     }
   };
 
@@ -170,7 +235,7 @@ const PromotionManagement = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredPromos.map((promo) => (
+              {filteredPromos.length > 0 ? filteredPromos.map((promo) => (
                 <tr key={promo.id}>
                   <td>
                     <div className="promo-code-container">
@@ -219,7 +284,13 @@ const PromotionManagement = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+              )) : (
+                <tr>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748b' }}>
+                    {isLoading ? 'Đang tải mã khuyến mãi từ database...' : loadError || 'Không tìm thấy mã khuyến mãi nào.'}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -288,11 +359,22 @@ const PromotionManagement = () => {
                     onChange={e => setFormData({...formData, expiry: e.target.value})}
                   />
                 </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#334155' }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.isActive}
+                    onChange={e => setFormData({...formData, isActive: e.target.checked})}
+                    style={{ width: '18px', height: '18px', accentColor: '#2563eb' }}
+                  />
+                  Kích hoạt mã
+                </label>
               </div>
             </div>
             <div className="modal-footer">
               <button className="btn-outline" onClick={() => setShowModal(false)}>Hủy</button>
-              <button className="btn-primary" onClick={handleSave}>Lưu thông tin</button>
+              <button className="btn-primary" onClick={handleSave} disabled={isSaving}>
+                {isSaving ? 'Đang lưu...' : 'Lưu thông tin'}
+              </button>
             </div>
           </div>
         </div>

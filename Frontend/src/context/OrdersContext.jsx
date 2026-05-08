@@ -1,130 +1,199 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, startTransition, useContext, useEffect, useState } from 'react';
+import api, { getApiErrorMessage } from '../lib/api';
+import { applyLocalOrderStatus, normalizeOrder } from '../lib/orders';
+import { useAuth } from './AuthContext';
+import { useCart } from './CartContext';
 
 const OrdersContext = createContext();
 
-// ─── Cấu hình dọn rác ──────────────────────────────────────────────────────
-const MAX_ORDERS       = 50;                      // Giữ tối đa 50 đơn
-const CANCELLED_TTL    = 3  * 24 * 60 * 60 * 1000; // Xóa đơn HỦY sau 3 ngày
-const DELIVERED_TTL    = 90 * 24 * 60 * 60 * 1000; // Xóa đơn HOÀN THÀNH sau 90 ngày
-const DUMMY_IDS        = ['ORD-54321', 'ORD-12345'];
-
-/** Chạy toàn bộ logic dọn rác, trả về mảng đã sạch */
-function runGarbageCollection(rawOrders) {
-    const now = Date.now();
-
-    let cleaned = rawOrders.filter(o => {
-        // 1. Xóa đơn dummy cũ
-        if (DUMMY_IDS.includes(o.id)) return false;
-
-        // 2. Xóa đơn đã hủy quá CANCELLED_TTL
-        if (o.status === 'cancelled' && o.cancelledAt && (now - o.cancelledAt > CANCELLED_TTL))
-            return false;
-
-        // 3. Xóa đơn hoàn thành quá DELIVERED_TTL
-        if (o.status === 'delivered' && o.deliveredAt && (now - o.deliveredAt > DELIVERED_TTL))
-            return false;
-
-        return true;
-    });
-
-    // 4. Giới hạn tối đa MAX_ORDERS (giữ đơn mới nhất)
-    if (cleaned.length > MAX_ORDERS) {
-        cleaned = cleaned.slice(0, MAX_ORDERS);
-    }
-
-    return cleaned;
-}
-
 export const OrdersProvider = ({ children }) => {
-    const [orders, setOrders] = useState(() => {
-        try {
-            // Migrate từ key cũ 'orders' sang 'phonesin_orders' (chạy 1 lần)
-            const legacy = localStorage.getItem('orders');
-            if (legacy) {
-                const legacyData = JSON.parse(legacy);
-                const existing   = JSON.parse(localStorage.getItem('phonesin_orders') || '[]');
-                const merged     = [...legacyData, ...existing].filter(
-                    (o, i, arr) => arr.findIndex(x => x.id === o.id) === i
+    const { user } = useAuth();
+    const { refreshCart } = useCart();
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    const replaceOrder = (nextOrder) => {
+        startTransition(() => {
+            setOrders((prevOrders) => {
+                const remainingOrders = prevOrders.filter(
+                    (order) => order.id !== nextOrder.id
                 );
-                localStorage.setItem('phonesin_orders', JSON.stringify(merged));
-                localStorage.removeItem('orders'); // Dọn key cũ
+                return [nextOrder, ...remainingOrders];
+            });
+        });
+
+        return nextOrder;
+    };
+
+    const refreshOrders = async () => {
+        setLoading(true);
+
+        try {
+            if (user?.id) {
+                const response = await api.get(
+                    user.role === 'admin' || user.isAdmin ? '/api/orders/admin' : '/api/orders/user'
+                );
+                const nextOrders = Array.isArray(response.data?.data)
+                    ? response.data.data.map(normalizeOrder)
+                    : [];
+
+                startTransition(() => {
+                    setOrders(nextOrders);
+                });
+            } else {
+                startTransition(() => {
+                    setOrders([]);
+                });
             }
-
-            const saved = localStorage.getItem('phonesin_orders');
-            const raw   = saved ? JSON.parse(saved) : [];
-            // Chạy GC ngay khi load để dọn rác từ phiên trước
-            return runGarbageCollection(raw);
         } catch {
-            return [];
+            startTransition(() => {
+                setOrders([]);
+            });
+        } finally {
+            setLoading(false);
         }
-    });
+    };
 
-    // Đồng bộ xuống localStorage mỗi khi orders thay đổi
     useEffect(() => {
-        localStorage.setItem('phonesin_orders', JSON.stringify(orders));
-    }, [orders]);
+        refreshOrders();
+    }, [user?.id]);
 
-    /** Thêm đơn mới, tự động GC sau khi thêm */
-    const addOrder = (newOrder) => {
-        setOrders(prev => {
-            const updated = [newOrder, ...prev];
-            return runGarbageCollection(updated);
+    const addOrder = async (payload) => {
+        if (
+            payload?.customerInfo ||
+            payload?.shippingAddress ||
+            payload?.paymentMethod ||
+            payload?.items?.[0]?.productId
+        ) {
+            return createOrder(payload);
+        }
+
+        const nextOrder = normalizeOrder(payload);
+        replaceOrder(nextOrder);
+
+        return nextOrder;
+    };
+
+    const createOrder = async (payload) => {
+        try {
+            const response = await api.post('/api/orders', payload);
+            const nextOrder = normalizeOrder(response.data?.order || {});
+
+            replaceOrder(nextOrder);
+
+            await refreshCart();
+            return nextOrder;
+        } catch (error) {
+            throw new Error(
+                getApiErrorMessage(error, 'Khong the tao don hang luc nay.')
+            );
+        }
+    };
+
+    const processPayment = async (orderId, method, options = {}) => {
+        try {
+            const response = await api.post('/api/payment', {
+                orderId,
+                method,
+                ...options,
+            });
+            const nextOrder = normalizeOrder(response.data?.order || {});
+            replaceOrder(nextOrder);
+            return nextOrder;
+        } catch (error) {
+            throw new Error(
+                getApiErrorMessage(error, 'Khong the xu ly thanh toan luc nay.')
+            );
+        }
+    };
+
+    const cancelOrder = async (orderId, reason) => {
+        if (user?.role === 'admin' || user?.isAdmin) {
+            return updateOrderStatus(orderId, 'cancelled');
+        }
+
+        try {
+            const response = await api.put(`/api/orders/cancel/${orderId}`, {
+                reason,
+            });
+            const nextOrder = normalizeOrder(response.data?.order || {});
+            replaceOrder(nextOrder);
+            return nextOrder;
+        } catch (error) {
+            throw new Error(
+                getApiErrorMessage(error, 'Khong the huy don hang luc nay.')
+            );
+        }
+    };
+
+    const markDelivered = (orderId) => {
+        startTransition(() => {
+            setOrders((prevOrders) =>
+                prevOrders.map((order) =>
+                    order.id === orderId
+                        ? applyLocalOrderStatus(order, 'delivered')
+                        : order
+                )
+            );
         });
     };
 
-    /** Hủy đơn — đánh dấu status + cancelledAt để GC dọn sau 3 ngày */
-    const cancelOrder = (orderId) => {
-        setOrders(prev =>
-            prev.map(o =>
-                o.id === orderId
-                    ? { ...o, status: 'cancelled', cancelledAt: Date.now() }
-                    : o
-            )
-        );
+    const updateOrderStatus = async (orderId, newStatus) => {
+        if (user?.role === 'admin' || user?.isAdmin) {
+            try {
+                const response = await api.put(`/api/orders/admin/${orderId}/status`, {
+                    status: newStatus,
+                });
+                const nextOrder = normalizeOrder(response.data?.order || {});
+                replaceOrder(nextOrder);
+                return nextOrder;
+            } catch (error) {
+                throw new Error(
+                    getApiErrorMessage(error, 'Khong the cap nhat trang thai don hang.')
+                );
+            }
+        }
+
+        startTransition(() => {
+            setOrders((prevOrders) =>
+                prevOrders.map((order) =>
+                    order.id === orderId
+                        ? applyLocalOrderStatus(order, newStatus)
+                        : order
+                )
+            );
+        });
     };
 
-    /** Đánh dấu đơn đã giao — để GC tự dọn sau 90 ngày */
-    const markDelivered = (orderId) => {
-        setOrders(prev =>
-            prev.map(o =>
-                o.id === orderId
-                    ? { ...o, status: 'delivered', deliveredAt: Date.now() }
-                    : o
-            )
-        );
-    };
-
-    /** Xóa ngay tất cả đơn đã hủy (dùng cho nút "Xóa đơn đã hủy") */
     const clearCancelledOrders = () => {
-        setOrders(prev => prev.filter(o => o.status !== 'cancelled'));
+        startTransition(() => {
+            setOrders((prevOrders) =>
+                prevOrders.filter((order) => order.status !== 'cancelled')
+            );
+        });
+
     };
 
-    /** Xóa toàn bộ lịch sử (reset) */
     const clearAllOrders = () => {
-        setOrders([]);
-        localStorage.removeItem('phonesin_orders');
-    };
+        startTransition(() => {
+            setOrders([]);
+        });
 
-    /** Cập nhật trạng thái đơn hàng bất kỳ */
-    const updateOrderStatus = (orderId, newStatus) => {
-        setOrders(prev =>
-            prev.map(o =>
-                o.id === orderId
-                    ? { ...o, status: newStatus, updatedAt: Date.now() }
-                    : o
-            )
-        );
     };
 
     return (
         <OrdersContext.Provider value={{
             orders,
             addOrder,
+            createOrder,
+            processPayment,
             cancelOrder,
             markDelivered,
             updateOrderStatus,
             clearCancelledOrders,
             clearAllOrders,
+            refreshOrders,
+            loading,
         }}>
             {children}
         </OrdersContext.Provider>

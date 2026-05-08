@@ -44,26 +44,26 @@ const TopInfoBar = () => {
             onMouseEnter={() => setIsPaused(true)}
             onMouseLeave={() => setIsPaused(false)}
         >
-            <div className="max-w-[1400px] mx-auto px-4 sm:px-8">
-                <div className="flex items-center justify-between h-11 relative">
+            <div className="max-w-[1400px] mx-auto px-2 sm:px-8">
+                <div className="flex items-center justify-between h-10 sm:h-11 relative">
                     
                     {/* Left Navigation */}
                     <button 
                         onClick={prevSlide}
-                        className={`z-10 p-1.5 rounded-full hover:bg-black/5 active:scale-95 transition-all ${slides[currentSlide].color}`}
+                        className={`z-10 p-1 sm:p-1.5 rounded-full hover:bg-black/5 active:scale-95 transition-all ${slides[currentSlide].color}`}
                     >
                         <ChevronLeft size={18} strokeWidth={2.5} />
                     </button>
                     
                     {/* Content Area */}
                     <div className="flex-1 flex items-center justify-center overflow-hidden h-full">
-                        <div className="flex items-center animate-fadeIn justify-center w-full px-4 text-center">
+                        <div className="flex items-center animate-fadeIn justify-center w-full px-1 sm:px-4 text-center">
                             {slides[currentSlide].type === 'promo' ? (
-                                <div className={`flex items-center gap-2.5 cursor-pointer group`}>
+                                <div className={`flex items-center gap-1.5 sm:gap-2.5 cursor-pointer group min-w-0`}>
                                     <span className={`${slides[currentSlide].color} group-hover:rotate-12 transition-transform duration-300`}>
                                         {slides[currentSlide].icon}
                                     </span>
-                                    <span className={`text-[13px] md:text-[14px] font-bold ${slides[currentSlide].color} tracking-wide uppercase`}>
+                                    <span className={`text-[11px] sm:text-[13px] md:text-[14px] font-bold ${slides[currentSlide].color} tracking-wide uppercase whitespace-nowrap truncate`}>
                                         {slides[currentSlide].text}
                                     </span>
                                 </div>
@@ -93,7 +93,7 @@ const TopInfoBar = () => {
                     {/* Right Navigation */}
                     <button 
                         onClick={nextSlide}
-                        className={`z-10 p-1.5 rounded-full hover:bg-black/5 active:scale-95 transition-all ${slides[currentSlide].color}`}
+                        className={`z-10 p-1 sm:p-1.5 rounded-full hover:bg-black/5 active:scale-95 transition-all ${slides[currentSlide].color}`}
                     >
                         <ChevronRight size={18} strokeWidth={2.5} />
                     </button>
