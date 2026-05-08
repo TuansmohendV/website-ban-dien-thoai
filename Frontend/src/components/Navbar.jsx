@@ -13,8 +13,23 @@ const Navbar = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
+    const [logo, setLogo] = useState(localStorage.getItem('adminLogo') || null);
     const navigate = useNavigate();
     const suggestionRef = useRef(null);
+
+    // Sync logo from localStorage
+    useEffect(() => {
+        const checkLogo = () => {
+            const savedLogo = localStorage.getItem('adminLogo');
+            if (savedLogo !== logo) setLogo(savedLogo);
+        };
+        window.addEventListener('storage', checkLogo);
+        const interval = setInterval(checkLogo, 2000);
+        return () => {
+            window.removeEventListener('storage', checkLogo);
+            clearInterval(interval);
+        };
+    }, [logo]);
 
     // Filter products for suggestions
     useEffect(() => {
@@ -97,14 +112,24 @@ const Navbar = () => {
                 {/* Main Row */}
                 <div className="flex items-center gap-x-12 h-[46px]">
                     
-                    {/* 1. Logo (Simple Dark Green) */}
+                    {/* 1. Logo (Customizable) */}
                     <Link to="/" className="flex items-center gap-2 shrink-0 group h-full">
-                        <div className="text-[#004f44]">
-                             <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor"><path d="M17,19H7V5H17M17,1H7C5.89,1 5,1.89 5,3V21C5,22.11 5.89,23 7,23H17C18.11,23 19,22.11 19,21V3C19,1.89 18.11,1 17,1Z" /></svg>
-                        </div>
-                        <div className="flex flex-col leading-[0.9]">
-                            <span className="text-[22px] font-black text-[#004f44] tracking-tighter uppercase">PhoneSin</span>
-                            <span className="text-[11px] font-black text-[#004f44]/80 tracking-[0.22em] uppercase">MOBILE.COM</span>
+                        <div className="flex items-center gap-2">
+                            {logo ? (
+                                <div className="h-[36px] w-[36px] flex items-center justify-center overflow-hidden rounded-lg">
+                                    <img src={logo} alt="Logo" className="w-full h-full object-contain" />
+                                </div>
+                            ) : (
+                                <div className="text-[#004f44]">
+                                    <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor"><path d="M17,19H7V5H17M17,1H7C5.89,1 5,1.89 5,3V21C5,22.11 5.89,23 7,23H17C18.11,23 19,22.11 19,21V3C19,1.89 18.11,1 17,1Z" /></svg>
+                                </div>
+                            )}
+                            <div className="flex flex-col leading-[0.9]">
+                                <span className="text-[22px] font-black text-[#004f44] tracking-tighter uppercase">
+                                    {localStorage.getItem('websiteName')?.split(' ')[0] || 'PhoneSin'}
+                                </span>
+                                <span className="text-[11px] font-black text-[#004f44]/80 tracking-[0.22em] uppercase">MOBILE.COM</span>
+                            </div>
                         </div>
                     </Link>
 

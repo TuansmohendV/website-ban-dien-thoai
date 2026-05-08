@@ -18,12 +18,15 @@ import {
   HardDrive,
   Dna,
   Smartphone,
-  X
+  X,
+  Hash
 } from 'lucide-react';
 import { allProducts } from '../../data/allProducts';
+import HashtagManagement from './HashtagManagement';
 
 const ProductManagement = () => {
   const [showForm, setShowForm] = useState(false);
+  const [showHashtagManager, setShowHashtagManager] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Tất cả danh mục');
@@ -211,6 +214,10 @@ const ProductManagement = () => {
               Xóa {selectedIds.length} mục đã chọn
             </button>
           )}
+          <button className="btn-outline" onClick={() => setShowHashtagManager(true)}>
+            <Hash size={18} />
+            Quản lý Hashtag
+          </button>
           <button className="btn-primary" onClick={() => toggleForm()}>
             <Plus size={20} />
             Thêm sản phẩm mới
@@ -897,6 +904,19 @@ const ProductManagement = () => {
           .form-grid { grid-template-columns: 1fr; }
         }
       `}</style>
+      {/* Hashtag Manager Modal */}
+      {showHashtagManager && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content" style={{ maxWidth: '1000px', width: '95%', height: '90vh', overflow: 'hidden', padding: 0 }}>
+             <div style={{ height: '100%', overflowY: 'auto', padding: '30px' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '-40px' }}>
+                   <button className="close-btn" onClick={() => setShowHashtagManager(false)} style={{ zIndex: 10 }}><X size={24} /></button>
+                </div>
+                <HashtagManagement />
+             </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

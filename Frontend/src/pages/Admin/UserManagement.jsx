@@ -32,6 +32,8 @@ const UserManagement = () => {
   const [statusFilter, setStatusFilter] = useState('Tất cả');
   const [sortOrder, setSortOrder] = useState('newest');
   const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
   const [selectedRole, setSelectedRole] = useState('Nhân viên');
 
   const [rolePermissions, setRolePermissions] = useState({
@@ -86,8 +88,13 @@ const UserManagement = () => {
     }));
   };
 
-  const handleActionClick = (actionName) => {
-    alert(`Chức năng ${actionName} đang được phát triển.`);
+  const handleActionClick = (actionName, user = null) => {
+    if (actionName === 'Xem chi tiết' && user) {
+      setSelectedUser(user);
+      setShowDetailModal(true);
+    } else {
+      alert(`Chức năng ${actionName} đang được phát triển.`);
+    }
   };
 
   const filteredUsers = usersData.filter(user => {
@@ -241,7 +248,7 @@ const UserManagement = () => {
                     </td>
                     <td>
                       <div className="actions-cell">
-                        <button className="action-btn view" title="Lịch sử mua hàng" onClick={() => handleActionClick('Xem chi tiết')}><ChevronRight size={18} /></button>
+                        <button className="action-btn view" title="Lịch sử mua hàng" onClick={() => handleActionClick('Xem chi tiết', user)}><ChevronRight size={18} /></button>
                         <button 
                           className={`action-btn ${user.status === 'Hoạt động' ? 'lock' : 'unlock'}`} 
                           title={user.status === 'Hoạt động' ? 'Khóa tài khoản' : 'Mở khóa'}
@@ -357,6 +364,91 @@ const UserManagement = () => {
               }}>
                 Cập nhật cấu hình
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Customer Detail Modal */}
+      {showDetailModal && selectedUser && (
+        <div className="modal-overlay" onClick={() => setShowDetailModal(false)} style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{
+            background: 'white', padding: '0', borderRadius: '24px',
+            width: '95%', maxWidth: '800px', overflow: 'hidden', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)'
+          }}>
+            <div style={{ background: '#f8fafc', padding: '30px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+               <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                  <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: '#2563eb', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: '900' }}>
+                     {selectedUser.name.charAt(0)}
+                  </div>
+                  <div>
+                     <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#0f172a' }}>{selectedUser.name}</h2>
+                     <span className={`role-badge ${selectedUser.role.toLowerCase()}`}>{selectedUser.role}</span>
+                  </div>
+               </div>
+               <button onClick={() => setShowDetailModal(false)} style={{ border: 'none', background: '#fff', borderRadius: '50%', width: '40px', height: '40px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <XCircle size={24} color="#64748b" />
+               </button>
+            </div>
+            <div style={{ padding: '30px', display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '30px' }}>
+               <div>
+                  <h3 style={{ fontSize: '1rem', marginBottom: '15px' }}>Thông tin cá nhân</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                     <div>
+                        <label style={{ fontSize: '0.75rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>Email</label>
+                        <div style={{ fontWeight: '600' }}>{selectedUser.email}</div>
+                     </div>
+                     <div>
+                        <label style={{ fontSize: '0.75rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>Số điện thoại</label>
+                        <div style={{ fontWeight: '600' }}>{selectedUser.phone}</div>
+                     </div>
+                     <div>
+                        <label style={{ fontSize: '0.75rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>Ngày tham gia</label>
+                        <div style={{ fontWeight: '600' }}>{selectedUser.joinedDate}</div>
+                     </div>
+                     <div>
+                        <label style={{ fontSize: '0.75rem', color: '#64748b', display: 'block', marginBottom: '4px' }}>Trạng thái tài khoản</label>
+                        <span className={`status-pill ${selectedUser.status === 'Hoạt động' ? 'active' : 'locked'}`}>{selectedUser.status}</span>
+                     </div>
+                  </div>
+               </div>
+               <div>
+                  <h3 style={{ fontSize: '1rem', marginBottom: '15px', display: 'flex', justifyContent: 'space-between' }}>
+                     Lịch sử mua hàng
+                     <span style={{ fontSize: '0.8rem', fontWeight: 'normal', color: '#2563eb' }}>Tổng chi tiêu: {selectedUser.spent}</span>
+                  </h3>
+                  <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                        <thead style={{ background: '#f8fafc' }}>
+                           <tr>
+                              <th style={{ textAlign: 'left', padding: '12px' }}>Mã đơn</th>
+                              <th style={{ textAlign: 'left', padding: '12px' }}>Sản phẩm</th>
+                              <th style={{ textAlign: 'right', padding: '12px' }}>Giá trị</th>
+                           </tr>
+                        </thead>
+                        <tbody>
+                           {[
+                              { id: 'ORD-5521', product: 'iPhone 15 Pro Max', price: '34,990,000 ₫' },
+                              { id: 'ORD-4120', product: 'Sạc 20W Apple', price: '590,000 ₫' },
+                              { id: 'ORD-3091', product: 'Ốp lưng Clear Case', price: '1,290,000 ₫' },
+                           ].map(order => (
+                              <tr key={order.id} style={{ borderTop: '1px solid #e2e8f0' }}>
+                                 <td style={{ padding: '12px', color: '#2563eb', fontWeight: '600' }}>#{order.id}</td>
+                                 <td style={{ padding: '12px' }}>{order.product}</td>
+                                 <td style={{ padding: '12px', textAlign: 'right' }}>{order.price}</td>
+                              </tr>
+                           ))}
+                        </tbody>
+                     </table>
+                  </div>
+               </div>
+            </div>
+            <div style={{ background: '#f8fafc', padding: '20px 30px', display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+               <button onClick={() => setShowDetailModal(false)} style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', fontWeight: '600', cursor: 'pointer' }}>Đóng</button>
+               <button className="btn-primary" style={{ padding: '10px 25px' }}>Gửi email ưu đãi</button>
             </div>
           </div>
         </div>

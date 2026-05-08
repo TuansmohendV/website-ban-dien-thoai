@@ -45,8 +45,47 @@ import UserManagement from './pages/Admin/UserManagement';
 import FeedbackManagement from './pages/Admin/FeedbackManagement';
 import PromotionManagement from './pages/Admin/PromotionManagement';
 import IconManagement from './pages/Admin/IconManagement';
+import BannerManagement from './pages/Admin/BannerManagement';
+import NewsManagement from './pages/Admin/NewsManagement';
+import SystemSettings from './pages/Admin/SystemSettings';
+import MediaManagement from './pages/Admin/MediaManagement';
+import NotificationManagement from './pages/Admin/NotificationManagement';
+import HashtagManagement from './pages/Admin/HashtagManagement';
 
 function App() {
+  // Sync Brand Assets (Logo, Favicon, Title) from localStorage
+  React.useEffect(() => {
+    const updateGlobalBrand = () => {
+      // 1. Update Favicon
+      const savedFavicon = localStorage.getItem('adminFavicon');
+      if (savedFavicon) {
+        let link = document.querySelector("link[rel~='icon']");
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = 'icon';
+          document.getElementsByTagName('head')[0].appendChild(link);
+        }
+        link.href = savedFavicon;
+      }
+
+      // 2. Update Document Title (SEO)
+      const savedTitle = localStorage.getItem('websiteName');
+      if (savedTitle && !window.location.pathname.startsWith('/admin')) {
+        document.title = savedTitle;
+      } else if (window.location.pathname.startsWith('/admin')) {
+        document.title = 'PhoneSin Admin';
+      }
+    };
+
+    updateGlobalBrand();
+    window.addEventListener('storage', updateGlobalBrand);
+    const interval = setInterval(updateGlobalBrand, 1000); 
+    return () => {
+      window.removeEventListener('storage', updateGlobalBrand);
+      clearInterval(interval);
+    };
+  }, []);
+
   return (
     <LanguageProvider>
       <AuthProvider>
@@ -93,6 +132,12 @@ function App() {
               <Route path="promotions" element={<PromotionManagement />} />
               <Route path="feedback" element={<FeedbackManagement />} />
               <Route path="icons" element={<IconManagement />} />
+              <Route path="banners" element={<BannerManagement />} />
+              <Route path="news" element={<NewsManagement />} />
+              <Route path="media" element={<MediaManagement />} />
+              <Route path="settings" element={<SystemSettings />} />
+              <Route path="notifications" element={<NotificationManagement />} />
+              <Route path="hashtags" element={<HashtagManagement />} />
             </Route>
           </Routes>
         </OrdersProvider>
@@ -103,4 +148,3 @@ function App() {
 }
 
 export default App;
-

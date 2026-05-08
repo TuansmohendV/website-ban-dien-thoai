@@ -127,8 +127,24 @@ const CheckoutPage = () => {
         return Object.keys(newErrors).length === 0;
     };
 
+    // VAT Invoice State
+    const [requestVat, setRequestVat] = useState(false);
+    const [vatInfo, setVatInfo] = useState({
+        companyName: '',
+        taxCode: '',
+        companyAddress: ''
+    });
+
     const handlePlaceOrder = () => {
         if (validateForm()) {
+            // Validate VAT info if requested
+            if (requestVat) {
+                if (!vatInfo.companyName.trim() || !vatInfo.taxCode.trim() || !vatInfo.companyAddress.trim()) {
+                    setErrors({ ...errors, vat: 'Vui lòng nhập đầy đủ thông tin hóa đơn công ty' });
+                    return;
+                }
+            }
+
             // Simulate saving invoice
             const invoice = {
                 invoiceId: `SIN-${Math.floor(Math.random() * 1000000)}`,
@@ -139,6 +155,7 @@ const CheckoutPage = () => {
                     method: paymentMethod,
                     subMethod: subMethod
                 },
+                vatInfo: requestVat ? vatInfo : null,
                 totals: {
                     subtotal,
                     shippingFee,
@@ -153,6 +170,8 @@ const CheckoutPage = () => {
             // Lưu vào OrdersContext để hiển thị ở trang lịch sử đơn hàng
             const orderId = `PS-${Math.random().toString(36).substr(2,9).toUpperCase()}`;
             const now = new Date().toLocaleString('vi-VN');
+            const estimate = calculateDelivery(formData.province);
+            
             addOrder({
                 id: orderId,
                 date: now,
@@ -169,6 +188,7 @@ const CheckoutPage = () => {
                     phone: formData.phoneNumber,
                     email: formData.email,
                     address: `${formData.address}, ${formData.ward}, ${formData.district}, ${formData.province}`,
+                    city: formData.province === 'HN' ? 'Hà Nội' : formData.province === 'HCM' ? 'TP. Hồ Chí Minh' : 'Đà Nẵng'
                 },
                 payment: {
                     method: paymentMethod,
@@ -176,6 +196,7 @@ const CheckoutPage = () => {
                                : paymentMethod === 'bank' ? 'Chuyển khoản ngân hàng'
                                : 'Ví điện tử',
                 },
+                vatInfo: requestVat ? vatInfo : null,
                 estimatedDelivery: estimate,
                 summary: { subtotal, shipping: shippingFee, discount },
                 timeline: [
@@ -184,10 +205,7 @@ const CheckoutPage = () => {
                 ],
             });
 
-            // Calculate delivery estimate
-            const estimate = calculateDelivery(formData.province);
             setDeliveryEstimate(estimate);
-
             setIsSuccess(true);
             // Redirect or show success state
         } else {
@@ -370,7 +388,7 @@ const CheckoutPage = () => {
                                 </div>
                                 <h2 className="text-2xl font-black uppercase text-slate-800">Định vị địa chỉ</h2>
                             </div>
-                            <div className="w-full h-[400px] rounded-2xl overflow-hidden border-4 border-gray-50 shadow-inner relative group">
+                            <div className="w-full h-[300px] rounded-2xl overflow-hidden border-4 border-gray-50 shadow-inner relative group">
 
                                 <iframe
                                     src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3725.195708298!2d105.79374!3d20.9847!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3135accdd847d7d7%3A0x29837945e9974268!2zSOG7jWMgdmnhu4duIEPDtG5n nghu4cgQuBuIGNow61uaCBWaeG7hW4gdGjDtG5n!5e0!3m2!1svi!2s!4v1712150000000!5m2!1svi!2s"
@@ -384,7 +402,62 @@ const CheckoutPage = () => {
                             </div>
                         </div>
 
-                        {/* 3. Ước tính thời gian giao hàng */}
+                        {/* 3. Xuất hóa đơn công ty (VAT) */}
+                        <div className="bg-white rounded-3xl p-8 shadow-xl border border-gray-100">
+                            <label className="flex items-center gap-4 cursor-pointer group">
+                                <div className={`w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${requestVat ? 'bg-red-600 border-red-600' : 'border-gray-200 group-hover:border-black'}`}>
+                                    {requestVat && <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>}
+                                </div>
+                                <input 
+                                    type="checkbox" 
+                                    className="hidden" 
+                                    checked={requestVat} 
+                                    onChange={(e) => setRequestVat(e.target.checked)} 
+                                />
+                                <div className="flex-1">
+                                    <h3 className="text-lg font-black uppercase tracking-tighter text-slate-800">Xuất hóa đơn công ty (VAT)</h3>
+                                    <p className="text-xs font-bold text-gray-400 italic mt-0.5">PhoneSin sẽ gửi hóa đơn điện tử qua email cho bạn</p>
+                                </div>
+                            </label>
+
+                            {requestVat && (
+                                <div className="mt-8 space-y-5 animate-in slide-in-from-top-4 duration-300">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Tên công ty</label>
+                                        <input 
+                                            type="text"
+                                            placeholder="Công ty TNHH Giải pháp PhoneSin"
+                                            className="w-full h-12 px-4 rounded-xl border-2 border-gray-50 focus:border-black outline-none font-black text-slate-900 transition-all bg-gray-50/30"
+                                            value={vatInfo.companyName}
+                                            onChange={(e) => setVatInfo({...vatInfo, companyName: e.target.value})}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Mã số thuế</label>
+                                        <input 
+                                            type="text"
+                                            placeholder="0123456789"
+                                            className="w-full h-12 px-4 rounded-xl border-2 border-gray-50 focus:border-black outline-none font-black text-slate-900 transition-all bg-gray-50/30"
+                                            value={vatInfo.taxCode}
+                                            onChange={(e) => setVatInfo({...vatInfo, taxCode: e.target.value})}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Địa chỉ công ty</label>
+                                        <input 
+                                            type="text"
+                                            placeholder="99 Cầu Giấy, Dịch Vọng, Hà Nội"
+                                            className="w-full h-12 px-4 rounded-xl border-2 border-gray-50 focus:border-black outline-none font-black text-slate-900 transition-all bg-gray-50/30"
+                                            value={vatInfo.companyAddress}
+                                            onChange={(e) => setVatInfo({...vatInfo, companyAddress: e.target.value})}
+                                        />
+                                    </div>
+                                    {errors.vat && <p className="text-[10px] text-red-500 font-bold uppercase">{errors.vat}</p>}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 4. Ước tính thời gian giao hàng */}
                         <DeliveryEstimator />
 
                     </div>

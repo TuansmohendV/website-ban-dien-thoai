@@ -927,6 +927,59 @@ textarea:focus {
   box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
 }
 
+/* Table Footer & Pagination */
+.table-footer {
+  padding: 20px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--admin-border);
+  background: #fcfdfe;
+}
+
+.pagination-info {
+  font-size: 0.875rem;
+  color: var(--admin-text-light);
+  font-weight: 500;
+}
+
+.pagination-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.p-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  border: 1px solid var(--admin-border);
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.2s;
+}
+
+.p-btn:hover:not(.disabled) {
+  border-color: var(--admin-primary);
+  color: var(--admin-primary);
+  background: #eff6ff;
+}
+
+.p-btn.active {
+  background: var(--admin-primary);
+  color: white;
+  border-color: var(--admin-primary);
+}
+
+.p-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f8fafc;
+}
+
 @media (max-width: 768px) {
   .comments-grid { grid-template-columns: 1fr; }
 }
