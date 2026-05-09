@@ -114,6 +114,10 @@ export const CartProvider = ({ children }) => {
         );
 
     const addToCart = async (product, variant, color, quantity = 1) => {
+        if (!user) {
+            throw new Error('AUTH_REQUIRED');
+        }
+
         const productId = product?.backendId || product?.backendProductId || product?._id;
 
         if (!productId) {
@@ -144,6 +148,9 @@ export const CartProvider = ({ children }) => {
     };
 
     const updateQuantity = async (itemId, variantId, colorName, delta) => {
+        if (!user) {
+            throw new Error('AUTH_REQUIRED');
+        }
         const targetItem = findCartItem(itemId, variantId, colorName);
 
         if (!targetItem) {
@@ -169,6 +176,9 @@ export const CartProvider = ({ children }) => {
     };
 
     const removeFromCart = async (itemId, variantId, colorName) => {
+        if (!user) {
+            throw new Error('AUTH_REQUIRED');
+        }
         const targetItem = findCartItem(itemId, variantId, colorName);
 
         try {
@@ -189,6 +199,9 @@ export const CartProvider = ({ children }) => {
     };
 
     const clearCart = async () => {
+        if (!user) {
+            throw new Error('AUTH_REQUIRED');
+        }
         try {
             const response = await api.delete('/api/cart', {
                 data: { clearAll: true },

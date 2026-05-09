@@ -20,46 +20,48 @@ const FeaturedMonitorSlider = ({ products: externalProducts = [] }) => {
   const [index, setIndex] = useState(0);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const apiProducts = inflateProducts(externalProducts, 8, 'featured-monitor');
-  const products = apiProducts.map((item) => ({
+  const products = (apiProducts || []).map((item) => ({
     ...item,
-    img: item.image,
-    price: item.priceDisplay,
-    oldPrice: item.oldPriceNum
+    img: item?.image || item?.img || '',
+    price: item?.priceDisplay || (item?.priceNum ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.priceNum) : 'Liên hệ'),
+    oldPrice: item?.oldPriceNum
       ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.oldPriceNum)
       : '',
-    discount: `-${item.discount || '0%'}`,
+    discount: item?.discount ? `-${String(item.discount).replace(/^-+/, '')}` : '',
   }));
+
+  const maxIndex = products.length > 0 ? Math.ceil(products.length / 4) - 1 : 0;
+
+  useEffect(() => {
+    if (products.length === 0) return;
+    const timer = setInterval(() => {
+      setIndex(prev => (prev >= maxIndex ? 0 : prev + 1));
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [maxIndex, products.length]);
 
   if (products.length === 0) {
     return null;
   }
 
-  const maxIndex = Math.ceil(products.length / 4) - 1;
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setIndex(prev => (prev >= maxIndex ? 0 : prev + 1));
-    }, 4000);
-    return () => clearInterval(timer);
-  }, [maxIndex]);
-
   return (
-    <div className="mb-10 rounded-3xl overflow-hidden bg-[#e0f2fe] border-4 border-white shadow-xl relative group">
-      {/* Header with Generated Image Background */}
-      <div className="relative h-[120px] sm:h-[150px] w-full flex items-center px-10 overflow-hidden">
-        <img
-          src="/banners/cat-samsung.png"
-          className="absolute inset-0 w-full h-full object-cover"
-          alt="Featured Background"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-white/40 to-transparent" />
+    <div className="mb-10 rounded-3xl overflow-hidden bg-white border border-gray-100 shadow-2xl relative group">
+      {/* Header with Premium Gradient */}
+      <div className="relative h-[100px] sm:h-[130px] w-full flex items-center px-6 sm:px-12 overflow-hidden bg-gradient-to-r from-[#0066cc] via-[#008d71] to-[#00c2a8]">
+        {/* Abstract decorative circles */}
+        <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+        <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-black/10 rounded-full blur-3xl"></div>
 
-        <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between w-full">
-          <h2 className="text-[28px] sm:text-[40px] font-black text-[#0066cc] uppercase italic tracking-tighter drop-shadow-md">
-            SẢN PHẨM NỔI BẬT
-          </h2>
-          <button className="mt-4 sm:mt-0 px-6 py-2 bg-white text-[#008d71] rounded-full font-bold text-[14px] flex items-center gap-2 shadow-lg hover:scale-105 transition-transform border border-gray-100">
-            Xem thêm <ChevronRight size={18} />
+        <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between w-full gap-4">
+          <div className="flex flex-col">
+            <h2 className="text-[22px] sm:text-[32px] font-black text-white uppercase italic tracking-tighter drop-shadow-lg leading-none">
+              SẢN PHẨM NỔI BẬT
+            </h2>
+            <div className="h-1 w-20 bg-white/50 rounded-full mt-2 hidden sm:block"></div>
+          </div>
+          
+          <button className="px-6 py-2.5 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-full font-bold text-[13px] flex items-center gap-2 hover:bg-white hover:text-[#008d71] transition-all shadow-xl uppercase tracking-wider">
+            Khám phá ngay <ChevronRight size={18} />
           </button>
         </div>
       </div>
@@ -97,13 +99,16 @@ const FeaturedMonitorSlider = ({ products: externalProducts = [] }) => {
                   <span className="text-[12px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded-md">{p.discount}</span>
                 </div>
                 <button 
-                  onClick={() => setSelectedProduct({
-                    id: `p-${idx}`,
-                    name: p.name,
-                    image: p.img,
-                    priceNum: parseInt(p.price.replace(/[^\d]/g, '')),
-                    oldPriceNum: parseInt(p.oldPrice.replace(/[^\d]/g, ''))
-                  })}
+                  onClick={() => {
+                    const priceVal = String(p.price || '0').replace(/[^\d]/g, '');
+                    const oldPriceVal = String(p.oldPrice || '0').replace(/[^\d]/g, '');
+                    setSelectedProduct({
+                      ...p,
+                      id: p.id || `p-${idx}`,
+                      priceNum: parseInt(priceVal) || 0,
+                      oldPriceNum: parseInt(oldPriceVal) || 0
+                    });
+                  }}
                   className="mt-4 w-full bg-[#008d71] text-white py-2 rounded-xl text-[12px] font-bold uppercase transition-all hover:bg-[#007b63] hover:shadow-lg active:scale-95"
                 >
                   MUA NGAY
@@ -251,66 +256,54 @@ const CategoryPage = () => {
   // 4. Logic lọc và sắp xếp
   const filteredProducts = useMemo(() => {
     let result = backendProducts.filter(p => {
+      if (!p) return false;
+
       // 4.1 Filter by Category/Brand Slug
       if (categoryMetadata[slug]) {
-        if (p.category !== slug) return false;
-      } else if (validBrands.includes(slug?.toLowerCase())) {
-        if ((p.brandKey || p.brand.toLowerCase()) !== slug.toLowerCase()) return false;
+        // So sánh không phân biệt hoa thường và khoảng trắng cho chắc chắn
+        const pCat = String(p.category || '').toLowerCase().replace(/\s/g, '-');
+        const targetCat = String(slug).toLowerCase().replace(/\s/g, '-');
+        if (pCat !== targetCat && p.category !== slug) return false;
+      } else if (slug && validBrands.includes(slug.toLowerCase())) {
+        const pBrand = String(p.brandKey || p.brand || '').toLowerCase();
+        if (pBrand !== slug.toLowerCase()) return false;
       } else if (slug !== 'dien-thoai') {
-        // Fallback for unknown slugs or main entry points
         if (p.category !== 'dien-thoai') return false; 
       }
 
       // 4.2 Filter by Sidebar Selections
-      if (filters.brand && (p.brandKey || p.brand.toLowerCase()) !== filters.brand.toLowerCase()) return false;
+      const normalize = (val) => String(val || '').replace(/\s/g, '').toLowerCase();
 
-      // 4.3 Price Range Filtering (Smart Parser)
+      if (filters.brand && normalize(p.brand) !== normalize(filters.brand)) return false;
+
+      // 4.3 Price Range Filtering
       if (filters.priceRange && filters.priceRange !== 'Tất cả') {
-        const price = p.priceNum;
+        const price = p.priceNum || 0;
         const range = filters.priceRange;
 
-        if (range.startsWith('Dưới')) {
-          const limit = parseInt(range.replace(/[^\d]/g, '')) * (range.includes('triệu') ? 1000000 : 1000);
+        if (range.includes('Dưới')) {
+          const limit = parseInt(range.replace(/[^\d]/g, '') || '0') * (range.includes('triệu') ? 1000000 : 1000);
           if (price >= limit) return false;
-        } else if (range.startsWith('Trên')) {
-          const limit = parseInt(range.replace(/[^\d]/g, '')) * (range.includes('triệu') ? 1000000 : 1000);
+        } else if (range.includes('Trên')) {
+          const limit = parseInt(range.replace(/[^\d]/g, '') || '0') * (range.includes('triệu') ? 1000000 : 1000);
           if (price < limit) return false;
         } else if (range.includes('đến')) {
           const parts = range.split('đến');
-          const min = parseInt(parts[0].replace(/[^\d]/g, '')) * (parts[0].includes('triệu') ? 1000000 : 1000);
-          const max = parseInt(parts[1].replace(/[^\d]/g, '')) * (parts[1].includes('triệu') ? 1000000 : 1000);
-          if (price < min || price >= max) return false;
-        } else if (range.includes('-')) { // For ranges like 0-200k
-          const parts = range.split('-');
-          const min = parseInt(parts[0].replace(/[^\d]/g, '')) * (parts[0].includes('k') ? 1000 : 1000000);
-          const max = parseInt(parts[1].replace(/[^\d]/g, '')) * (parts[1].includes('k') ? 1000 : 1000000);
+          const min = parseInt(parts[0].replace(/[^\d]/g, '') || '0') * (parts[0].includes('triệu') ? 1000000 : 1000);
+          const max = parseInt(parts[1].replace(/[^\d]/g, '') || '0') * (parts[1].includes('triệu') ? 1000000 : 1000);
           if (price < min || price > max) return false;
         }
       }
 
       // 4.4 Technical Specs Filtering
-      const normalize = (val) => String(val || '').replace(/\s/g, '').toLowerCase();
-
       if (filters.ram && normalize(p.ram || p.specs?.ram) !== normalize(filters.ram)) return false;
       if (filters.rom && normalize(p.rom || p.specs?.rom) !== normalize(filters.rom)) return false;
-      if (filters.network && normalize(p.network) !== normalize(filters.network)) return false;
-      if (filters.nfc && (p.nfc ? 'Có' : 'Không') !== filters.nfc) return false;
-      if (filters.refreshRate && normalize(p.refreshRate) !== normalize(filters.refreshRate)) return false;
       if (filters.cpu && normalize(p.cpu || p.specs?.chip) !== normalize(filters.cpu)) return false;
+      if (filters.screenSize && normalize(p.screenSize || p.specs?.screen) !== normalize(filters.screenSize)) return false;
+      if (filters.refreshRate && normalize(p.refreshRate || p.specs?.refreshRate) !== normalize(filters.refreshRate)) return false;
+      if (filters.resolution && normalize(p.specs?.resolution) !== normalize(filters.resolution)) return false;
+      if (filters.panelType && normalize(p.specs?.panelType) !== normalize(filters.panelType)) return false;
       
-      if (filters.availability && filters.availability !== 'Tất cả') {
-        if (filters.availability === 'Hàng mới' && p.isOld) return false;
-        if (filters.availability === 'Hàng cũ' && !p.isOld) return false;
-        if (filters.availability === 'Hàng sắp về' && !p.isComingSoon) return false;
-      }
-
-      if (filters.batteryTier && filters.batteryTier !== 'Tất cả') {
-        const b = p.batteryValue || 0;
-        if (filters.batteryTier === 'Dưới 4000mAh' && b >= 4000) return false;
-        if (filters.batteryTier === '4000mAh - 5000mAh' && (b < 4000 || b > 5000)) return false;
-        if (filters.batteryTier === 'Trên 5000mAh' && b <= 5000) return false;
-      }
-
       return true;
     });
 
@@ -637,8 +630,8 @@ const CategoryPage = () => {
               </div>
 
               {/* FEATURED PRODUCTS (SẢN PHẨM NỔI BẬT - Slider Version) */}
-              {slug === 'man-hinh' && (
-                <FeaturedMonitorSlider products={currentProducts.length > 0 ? currentProducts : backendProducts} />
+              {slug === 'man-hinh' && currentProducts.length > 0 && (
+                <FeaturedMonitorSlider products={currentProducts} />
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">

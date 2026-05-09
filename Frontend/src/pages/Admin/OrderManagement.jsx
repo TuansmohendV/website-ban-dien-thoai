@@ -16,6 +16,7 @@ import {
   Package,
   Calendar
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { useOrders } from '../../context/OrdersContext';
 
 const OrderManagement = () => {
@@ -89,6 +90,31 @@ const OrderManagement = () => {
     }
   };
 
+  const exportToExcel = () => {
+    if (orders.length === 0) {
+      alert('Không có dữ liệu để xuất!');
+      return;
+    }
+
+    const exportData = orders.map(o => ({
+      'Mã đơn hàng': o.id,
+      'Ngày đặt': formatDateTime(o),
+      'Tên khách hàng': o.customerInfo?.name || 'Khách vãng lai',
+      'Số điện thoại': o.customerInfo?.phone || '',
+      'Địa chỉ': o.customerInfo?.address || '',
+      'Tổng sản phẩm': o.items?.reduce((acc, item) => acc + item.quantity, 0) || 0,
+      'Tổng tiền': o.total || 0,
+      'Trạng thái': getStatusInfo(o.status).label,
+      'Phương thức thanh toán': o.paymentMethod || 'COD'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Đơn hàng');
+    
+    XLSX.writeFile(workbook, 'Danh_sach_don_hang_PhoneSin.xlsx');
+  };
+
   return (
     <div className="management-container">
       <div className="header-actions">
@@ -97,7 +123,9 @@ const OrderManagement = () => {
           <p className="page-subtitle">Theo dõi trạng thái và xử lý đơn đặt hàng từ khách hàng.</p>
         </div>
         <div className="btn-group">
-          <button className="btn-outline"><Download size={18} /> Xuất báo cáo</button>
+          <button className="btn-outline" onClick={exportToExcel} style={{ backgroundColor: '#10b981', color: 'white', borderColor: '#10b981' }}>
+            <Download size={18} /> Xuất báo cáo
+          </button>
         </div>
       </div>
 

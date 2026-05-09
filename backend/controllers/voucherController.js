@@ -98,14 +98,17 @@ export const updateAdminVoucher = asyncHandler(async (req, res) => {
 });
 
 export const deleteAdminVoucher = asyncHandler(async (req, res) => {
-  const voucher = await Voucher.findByIdAndDelete(req.params.id);
+  const voucher = await Voucher.findById(req.params.id);
 
   if (!voucher) {
     throw new AppError(404, 'Không tìm thấy mã khuyến mãi.');
   }
 
+  voucher.isActive = false;
+  await voucher.save();
+
   res.json({
-    message: 'Xóa mã khuyến mãi thành công.',
+    message: 'Chuyển mã khuyến mãi vào trạng thái đã tắt (xoá mềm) thành công.',
   });
 });
 

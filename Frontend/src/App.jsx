@@ -15,6 +15,7 @@ import ProductDetailPage from './pages/User/ProductDetailPage';
 import CartPage from './pages/User/CartPage';
 import CategoryPage from './pages/User/CategoryPage';
 import CheckoutPage from './pages/User/CheckoutPage';
+import CheckoutResultPage from './pages/User/CheckoutResultPage';
 import AboutPage from './pages/User/AboutPage';
 import ContactPage from './pages/User/ContactPage';
 import ProfilePage from './pages/User/ProfilePage';
@@ -103,6 +104,7 @@ function App() {
               <Route path="category" element={<CategoryPage />} />
               <Route path="category/:id" element={<CategoryPage />} />
               <Route path="checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
+              <Route path="checkout-result" element={<ProtectedRoute><CheckoutResultPage /></ProtectedRoute>} />
               <Route path="store-locator" element={<StoreLocatorPage />} />
               <Route path="about" element={<AboutPage />} />
               <Route path="contact" element={<ContactPage />} />

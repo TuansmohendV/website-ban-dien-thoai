@@ -6,6 +6,7 @@ import {
   getAdminUsers,
   updateAdminUser,
   updateAdminUserRole,
+  sendPromotionalEmail,
 } from '../controllers/userController.js';
 import { protect, requireAdmin } from '../middleware/authMiddleware.js';
 
@@ -19,5 +20,6 @@ router.put('/:id', updateAdminUser);
 router.patch('/:id', updateAdminUser);
 router.patch('/:id/role', updateAdminUserRole);
 router.delete('/:id', deleteAdminUser);
+router.post('/promo-email', sendPromotionalEmail);
 
 export default router;

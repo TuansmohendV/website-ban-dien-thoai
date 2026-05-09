@@ -11,6 +11,8 @@ import { recalculateCart } from '../utils/cart.js';
 import { createTimelineEntry } from '../utils/order.js';
 import { buildOwnerQuery, getRequestOwner } from '../utils/requestOwner.js';
 import { calculateVoucherDiscount, isVoucherActive } from '../utils/voucher.js';
+import { sendOrderConfirmationEmail, sendOrderStatusEmail, sendDeliveredInvoiceEmail } from '../utils/email.js';
+import { createVNPayUrl, verifyVNPayReturn } from '../utils/vnpay.js';
 
 const hydrateOrder = async (query) => {
   return Order.findOne(query)
@@ -143,6 +145,30 @@ const buildDraftCartFromItems = async (items = []) => {
 
   recalculateCart(draftCart);
   return draftCart;
+};
+
+const checkInventory = async (items) => {
+  for (const item of items) {
+    if (item.variant) {
+      const variant = await ProductVariant.findById(item.variant);
+      if (!variant) continue;
+      if (variant.stock < item.quantity) {
+        throw new AppError(
+          400,
+          `Rất tiếc, sản phẩm ${item.name} đã hết hàng hoặc số lượng tồn kho không đủ. Vui lòng chọn sản phẩm khác.`
+        );
+      }
+    } else {
+      const product = await Product.findById(item.product);
+      if (!product) continue;
+      if (product.countInStock < item.quantity) {
+        throw new AppError(
+          400,
+          `Rất tiếc, sản phẩm ${item.name} đã hết hàng hoặc số lượng tồn kho không đủ. Vui lòng chọn sản phẩm khác.`
+        );
+      }
+    }
+  }
 };
 
 const adjustInventory = async (items, direction) => {
@@ -396,6 +422,9 @@ export const createOrder = asyncHandler(async (req, res) => {
     };
   }
 
+  // Real-time stock check before order creation (Stack/Queue mechanism)
+  await checkInventory(sourceCart.items);
+
   const order = await Order.create({
     ...ownerQuery,
     customerInfo,
@@ -419,9 +448,9 @@ export const createOrder = asyncHandler(async (req, res) => {
     voucherCode: sourceCart.voucherCode,
     voucherSnapshot: sourceCart.voucherSnapshot
       ? {
-          ...sourceCart.voucherSnapshot,
-          discountAmount: sourceCart.discountTotal,
-        }
+        ...sourceCart.voucherSnapshot,
+        discountAmount: sourceCart.discountTotal,
+      }
       : undefined,
     paymentMethod,
     paymentStatus: 'pending',
@@ -447,9 +476,21 @@ export const createOrder = asyncHandler(async (req, res) => {
     await cart.save();
   }
 
+  const hydratedOrder = await hydrateOrder({ _id: order._id });
+
+  // Send confirmation email in background
+  if (customerInfo.email) {
+    const websiteUrl = `${req.protocol}://${req.get('host')}`;
+    sendOrderConfirmationEmail({
+      to: customerInfo.email,
+      order: hydratedOrder,
+      websiteUrl
+    }).catch(err => console.error('Failed to send order email:', err));
+  }
+
   res.status(201).json({
     message: 'Tạo đơn hàng thành công.',
-    order: await hydrateOrder({ _id: order._id }),
+    order: hydratedOrder,
   });
 });
 
@@ -473,60 +514,101 @@ export const processPayment = asyncHandler(async (req, res) => {
   }
 
   const method = req.body.method || order.paymentMethod;
-  const simulateSuccess = req.body.simulateSuccess !== false;
+
+  // Real API Integration Mock for Payment Gateways
+  const returnUrl = req.body.returnUrl || `${req.protocol}://${req.get('host')}/checkout-result`;
+  let paymentUrl = '';
+
+  if (method === 'vnpay') {
+    if (process.env.VNP_TMN_CODE) {
+      paymentUrl = createVNPayUrl(req, order.total, order._id, returnUrl);
+    } else {
+      const vnp_TxnRef = `${order._id}_${Date.now()}`;
+      const vnp_Amount = order.total * 100;
+      paymentUrl = `${returnUrl}?orderId=${order._id}&method=vnpay&vnp_ResponseCode=00&vnp_TxnRef=${vnp_TxnRef}&vnp_Amount=${vnp_Amount}`;
+    }
+  } else if (method === 'momo' || method === 'momo_sub' || method === 'zalopay') {
+    // Generate E-Wallet URL
+    const partnerCode = 'MOMO_TEST';
+    const requestId = `${order._id}_${Date.now()}`;
+    paymentUrl = `${returnUrl}?orderId=${order._id}&method=${method}&resultCode=0&requestId=${requestId}`;
+  } else if (method === 'COD') {
+    // COD is instant success (pending payment)
+    paymentUrl = `${returnUrl}?orderId=${order._id}&method=COD&success=true`;
+  } else if (method === 'bank') {
+    paymentUrl = `${returnUrl}?orderId=${order._id}&method=bank&success=true`;
+  } else {
+    paymentUrl = `${returnUrl}?orderId=${order._id}&method=${method}&success=true`;
+  }
+
+  res.json({
+    message: 'Tạo URL thanh toán thành công.',
+    paymentUrl,
+    orderId: order._id
+  });
+});
+
+export const paymentCallback = asyncHandler(async (req, res) => {
+  const { orderId, method, vnp_ResponseCode, resultCode, success, vnp_TxnRef, requestId } = req.body;
+
+  if (!orderId) {
+    throw new AppError(400, 'Mã đơn hàng không hợp lệ.');
+  }
+
+  const order = await Order.findById(orderId);
+  if (!order) {
+    throw new AppError(404, 'Không tìm thấy đơn hàng cần thanh toán.');
+  }
+
+  if (order.status === 'cancelled') {
+    throw new AppError(400, 'Đơn hàng đã bị hủy.');
+  }
+
+  // Verify payment status
+  let isSuccess = false;
+  if (method === 'vnpay') {
+    // Check signature if it comes from real VNPay Gateway
+    if (req.body.vnp_SecureHash && process.env.VNP_HASH_SECRET) {
+      isSuccess = verifyVNPayReturn(req.body) && vnp_ResponseCode === '00';
+    } else {
+      isSuccess = vnp_ResponseCode === '00'; // fallback mock
+    }
+  }
+  else if (method === 'momo' || method === 'momo_sub' || method === 'zalopay') isSuccess = resultCode === '0';
+  else if (method === 'COD' || method === 'bank') isSuccess = success === 'true' || success === true;
+  else isSuccess = true;
 
   const payment = await Payment.create({
     order: order._id,
     user: order.user?._id,
     method,
     amount: order.total,
-    status:
-      method === 'COD' ? 'pending' : simulateSuccess ? 'paid' : 'failed',
-    providerTransactionId: req.body.providerTransactionId || '',
-    providerResponse: req.body.providerResponse || {},
-    paidAt:
-      method !== 'COD' && simulateSuccess ? new Date() : undefined,
+    status: method === 'COD' ? 'pending' : isSuccess ? 'paid' : 'failed',
+    providerTransactionId: req.body.transactionId || vnp_TxnRef || requestId || '',
+    paidAt: method !== 'COD' && isSuccess ? new Date() : undefined,
   });
 
   if (method === 'COD') {
     order.status = 'confirmed';
     order.paymentStatus = 'pending';
-    order.timeline.push(
-      createTimelineEntry(
-        'confirmed',
-        'Đơn chờ giao và thu tiền COD',
-        'Khách hàng thanh toán khi nhận hàng.'
-      )
-    );
-  } else if (simulateSuccess) {
+    order.timeline.push(createTimelineEntry('confirmed', 'Đơn chờ giao và thu tiền COD', 'Khách hàng thanh toán khi nhận hàng.'));
+  } else if (isSuccess) {
     order.status = 'confirmed';
     order.paymentStatus = 'paid';
     order.paidAt = new Date();
-    order.timeline.push(
-      createTimelineEntry(
-        'confirmed',
-        'Thanh toán thành công',
-        `Thanh toán qua ${method} đã được xác nhận.`
-      )
-    );
+    order.timeline.push(createTimelineEntry('confirmed', 'Thanh toán thành công', `Thanh toán qua ${method} đã được xác nhận.`));
   } else {
     order.paymentStatus = 'failed';
-    order.timeline.push(
-      createTimelineEntry(
-        'pending',
-        'Thanh toán thất bại',
-        `Thanh toán qua ${method} chưa thành công.`
-      )
-    );
+    order.timeline.push(createTimelineEntry('pending', 'Thanh toán thất bại', `Thanh toán qua ${method} chưa thành công.`));
   }
 
   order.paymentMethod = method;
   await order.save();
 
   res.json({
-    message: 'Xử lý thanh toán thành công.',
+    message: 'Cập nhật trạng thái thanh toán thành công.',
     payment,
-    order,
+    order: await hydrateOrder({ _id: order._id }),
   });
 });
 
@@ -556,7 +638,12 @@ export const getUserOrders = asyncHandler(async (req, res) => {
 });
 
 export const getAdminOrders = asyncHandler(async (req, res) => {
-  const orders = await Order.find({})
+  const query = {};
+  if (req.query.user) {
+    query.user = req.query.user;
+  }
+
+  const orders = await Order.find(query)
     .sort({ createdAt: -1 })
     .populate('items.product', 'name slug image')
     .populate('items.variant', 'color storage image')
@@ -603,9 +690,31 @@ export const updateAdminOrderStatus = asyncHandler(async (req, res) => {
 
   await order.save();
 
+  const hydratedOrderForClient = await hydrateOrder({ _id: order._id });
+
+  if (order.customerInfo?.email) {
+    const websiteUrl = `${req.protocol}://${req.get('host')}`;
+
+    // Khi đơn COD được giao: gửi email hóa đơn chuyên biệt
+    if (nextStatus === 'delivered' && order.paymentMethod === 'COD') {
+      sendDeliveredInvoiceEmail({
+        to: order.customerInfo.email,
+        order: hydratedOrderForClient,
+        websiteUrl,
+      }).catch(err => console.error('Failed to send invoice email:', err));
+    } else {
+      // Các trạng thái khác: gửi email cập nhật trạng thái thông thường
+      sendOrderStatusEmail({
+        to: order.customerInfo.email,
+        order: hydratedOrderForClient,
+        websiteUrl,
+      }).catch(err => console.error('Failed to send status email:', err));
+    }
+  }
+
   res.json({
     message: 'Cập nhật trạng thái đơn hàng thành công.',
-    order: await hydrateOrder({ _id: order._id }),
+    order: hydratedOrderForClient,
   });
 });
 
@@ -664,9 +773,20 @@ export const updateAdminOrder = asyncHandler(async (req, res) => {
 
   await order.save();
 
+  const hydratedOrderForClient = await hydrateOrder({ _id: order._id });
+
+  if (req.body.status && order.customerInfo?.email) {
+    const websiteUrl = `${req.protocol}://${req.get('host')}`;
+    sendOrderStatusEmail({
+      to: order.customerInfo.email,
+      order: hydratedOrderForClient,
+      websiteUrl
+    }).catch(err => console.error('Failed to send status email:', err));
+  }
+
   res.json({
     message: 'Cập nhật đơn hàng thành công.',
-    order: await hydrateOrder({ _id: order._id }),
+    order: hydratedOrderForClient,
   });
 });
 

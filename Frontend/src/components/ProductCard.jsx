@@ -12,7 +12,8 @@ const ProductCard = ({ product }) => {
   return (
     <div className="bg-white rounded-xl p-3 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col relative group border border-gray-100 hover:border-[#009981]/20 h-full">
       
-      {/* Badge Rẻ Số 1 */}
+
+      {/* Badge Rẻ Số 1 (isHot) */}
       {product.isHot && (
         <div className="absolute top-0 left-0 z-20">
             <div className="bg-gradient-to-br from-[#ee0000] to-[#b30000] text-white text-[9px] font-black uppercase px-2 py-1 rounded-br-xl shadow-md border-r border-b border-[#800000]">
@@ -23,7 +24,7 @@ const ProductCard = ({ product }) => {
 
       {/* Discount Badge */}
       {productDiscount && (
-        <div className="absolute top-2 left-2 z-10 bg-[#ee0000] text-white text-[10px] font-black px-1.5 py-0.5 rounded-full shadow-sm">
+        <div className={`absolute z-10 bg-[#ee0000] text-white text-[10px] font-black px-1.5 py-0.5 rounded-full shadow-sm ${product.isHot ? 'top-8 left-2' : 'top-2 left-2'}`}>
           -{productDiscount}
         </div>
       )}
@@ -80,11 +81,30 @@ const ProductCard = ({ product }) => {
       </Link>
 
       {/* Product Name */}
-      <Link to={`/product/${productId}`} className="min-h-[40px] mb-3">
+      <Link to={`/product/${productId}`} className="min-h-[40px] mb-1">
         <h3 className="text-[13px] font-bold text-gray-800 leading-snug line-clamp-2 hover:text-[#008d71] transition-colors uppercase">
           {product.name}
         </h3>
       </Link>
+
+      {/* Product Status Badges (Now above price) */}
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {product.isFeatured && (
+          <div className="bg-[#ffc107] text-black text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm border border-yellow-400">
+            Nổi bật
+          </div>
+        )}
+        {product.isBestSeller && (
+          <div className="bg-[#ee0000] text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm border border-red-600">
+            Bán chạy
+          </div>
+        )}
+        {product.isRecommended && (
+          <div className="bg-[#008d71] text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm border border-[#006b56]">
+            Đề xuất
+          </div>
+        )}
+      </div>
 
       {/* Price Section */}
       <div className="mb-2">

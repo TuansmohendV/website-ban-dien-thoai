@@ -12,7 +12,7 @@ const broadcastSchema = new mongoose.Schema(
     },
     targetAudience: {
       type: String,
-      enum: ['all', 'new_users', 'active_users', 'admin'],
+      enum: ['all', 'new_users', 'active_users', 'unpurchased_users', 'admin'],
       default: 'all',
     },
     isActive: {

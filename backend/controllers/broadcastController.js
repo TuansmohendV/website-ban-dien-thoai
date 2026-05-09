@@ -1,6 +1,7 @@
 import Broadcast from '../models/Broadcast.js';
 import Notification from '../models/Notification.js';
 import User from '../models/User.js';
+import Order from '../models/Order.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import AppError from '../utils/appError.js';
 
@@ -68,21 +69,39 @@ export const sendBroadcast = asyncHandler(async (req, res, next) => {
   }
 
   // Get target users
-  let userQuery = { isActive: true };
-  if (broadcast.targetAudience === 'new_users') {
-    // Users created in last 7 days
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    userQuery.createdAt = { $gte: sevenDaysAgo };
-  } else if (broadcast.targetAudience === 'active_users') {
-    // Users who made orders in last 30 days
+  let userIds = [];
+
+  if (broadcast.targetAudience === 'all') {
+    const users = await User.find({ isActive: true }).select('_id');
+    userIds = users.map(u => u._id);
+  } else if (broadcast.targetAudience === 'new_users') {
+    // Users created in last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    userQuery.lastOrderDate = { $gte: thirtyDaysAgo };
+    const users = await User.find({ isActive: true, createdAt: { $gte: thirtyDaysAgo } }).select('_id');
+    userIds = users.map(u => u._id);
+  } else if (broadcast.targetAudience === 'active_users') {
+    // VIP Users: Total spent > 20M VND or > 2 successful orders
+    const vipData = await Order.aggregate([
+      { $match: { status: 'delivered', user: { $exists: true } } },
+      { $group: { 
+        _id: '$user', 
+        totalSpent: { $sum: '$total' },
+        orderCount: { $sum: 1 }
+      }},
+      { $match: { $or: [ { totalSpent: { $gte: 20000000 } }, { orderCount: { $gte: 2 } } ] } }
+    ]);
+    userIds = vipData.map(d => d._id);
+  } else if (broadcast.targetAudience === 'unpurchased_users') {
+    // Users who never made a successful purchase
+    const buyers = await Order.distinct('user', { status: 'delivered', user: { $exists: true } });
+    const nonBuyers = await User.find({ 
+      isActive: true, 
+      _id: { $nin: buyers },
+      role: 'customer' 
+    }).select('_id');
+    userIds = nonBuyers.map(u => u._id);
   }
-
-  const users = await User.find(userQuery).select('_id');
-  const userIds = users.map((u) => u._id);
 
   // Create notifications
   const notifications = userIds.map((userId) => ({

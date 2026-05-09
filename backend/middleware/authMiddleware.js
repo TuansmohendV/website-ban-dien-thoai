@@ -34,11 +34,17 @@ const loadUserFromToken = async (req, strict = true) => {
       '-password -resetPasswordToken -resetPasswordExpiresAt'
     );
 
-    if (!user || !user.isActive) {
+    if (!user) {
       if (strict) {
         throw new AppError(401, 'Phiên đăng nhập không còn hợp lệ.');
       }
+      return null;
+    }
 
+    if (!user.isActive) {
+      if (strict) {
+        throw new AppError(403, 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.');
+      }
       return null;
     }
 

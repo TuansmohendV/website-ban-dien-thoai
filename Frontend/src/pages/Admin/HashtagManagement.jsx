@@ -68,7 +68,7 @@ const HashtagManagement = () => {
       <div className="header-actions">
         <div>
           <h1 className="page-title">Quản lý Hashtag</h1>
-          <p className="page-subtitle">Quản lý các thẻ từ khóa giúp phân loại sản phẩm và tối ưu hóa tìm kiếm.</p>
+          <p className="page-subtitle" style={{ color: '#1e3a8a' }}>Quản lý các thẻ từ khóa giúp phân loại sản phẩm và tối ưu hóa tìm kiếm.</p>
         </div>
         <button className="btn-primary" onClick={() => handleOpenModal()} style={{ background: primaryColor }}>
           <Plus size={20} />

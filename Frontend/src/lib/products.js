@@ -331,7 +331,7 @@ export const normalizeProductDetail = (product = {}, recentReviews = []) => {
           stock: Number(variant.stock || 0),
           image: variant.image || normalizedProduct.image,
         }))
-      : storages.map((storage, index) => ({
+      : (storages.length > 0 ? storages : ['Tiêu chuẩn']).map((storage, index) => ({
           id: `variant-${index}`,
           storage,
           price: normalizedProduct.priceNum,

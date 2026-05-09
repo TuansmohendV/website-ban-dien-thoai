@@ -152,13 +152,20 @@ const InvoicePage = () => {
             <p className="text-sm text-gray-400 font-bold">Mã đơn: {invoice.orderId} · Số HĐ: {invoice.invoiceNo}</p>
           </div>
           <div className="flex gap-3 flex-wrap">
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-2.5 bg-slate-950 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-red-600 transition-all shadow-xl active:scale-95 text-sm"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
-              In / Lưu PDF
-            </button>
+            {realOrder.status === 'delivered' ? (
+              <button
+                onClick={handlePrint}
+                className="flex items-center gap-2.5 bg-slate-950 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-red-600 transition-all shadow-xl active:scale-95 text-sm"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+                In / Lưu PDF
+              </button>
+            ) : (
+              <div className="flex items-center gap-2.5 bg-gray-200 text-gray-500 px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-sm cursor-not-allowed" title="Chỉ được xuất hóa đơn khi đã nhận hàng">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+                In / Lưu PDF
+              </div>
+            )}
           </div>
         </div>
 
@@ -353,13 +360,20 @@ const InvoicePage = () => {
         {/* ── End Screen wrapper ── */}
 
         <div className="no-print w-[794px] max-w-full mx-auto mt-6 flex justify-center gap-4">
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-2.5 bg-red-600 text-white px-10 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-950 transition-all shadow-xl active:scale-95"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
-            In hóa đơn / Lưu PDF
-          </button>
+          {realOrder.status === 'delivered' ? (
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-2.5 bg-red-600 text-white px-10 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-950 transition-all shadow-xl active:scale-95"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+              In hóa đơn / Lưu PDF
+            </button>
+          ) : (
+            <div className="flex items-center gap-2.5 bg-gray-200 text-gray-500 px-10 py-4 rounded-2xl font-black uppercase tracking-widest cursor-not-allowed" title="Chỉ được xuất hóa đơn khi đã nhận hàng">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+              In hóa đơn / Lưu PDF
+            </div>
+          )}
           <Link to="/orders" className="flex items-center gap-2.5 bg-white border-2 border-gray-200 text-slate-700 px-10 py-4 rounded-2xl font-black uppercase tracking-widest hover:border-black transition-all shadow-sm active:scale-95">
             ← Quay lại đơn hàng
           </Link>

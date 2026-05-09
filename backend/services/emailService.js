@@ -58,3 +58,32 @@ export const sendEmailOTP = async (email, otp) => {
 
   return true;
 };
+
+export const sendEmail = async ({ to, subject, html }) => {
+  const emailUser = (process.env.EMAIL_USER || '').trim();
+  const emailPass = (process.env.EMAIL_PASS || '').replace(/\s+/g, '');
+
+  if (!emailUser || !emailPass) {
+    console.error('⚠️ Thiếu EMAIL_USER hoặc EMAIL_PASS trong .env!');
+    throw new Error('Email service is not configured.');
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: emailUser,
+      pass: emailPass,
+    },
+  });
+
+  const mailOptions = {
+    from: `"PhoneSin Mobile" <${emailUser}>`,
+    to,
+    subject,
+    html,
+  };
+
+  return transporter.sendMail(mailOptions);
+};

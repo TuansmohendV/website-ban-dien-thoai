@@ -492,7 +492,7 @@ const CartPage = () => {
 
                     <div className="space-y-3">
                         <span className="text-[13px] font-bold text-gray-700 block ml-1">Nơi nhận hàng</span>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className={`grid ${isStorePickup ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
                             <select
                                 value={customerInfo.city}
                                 onChange={(e) =>
@@ -512,7 +512,7 @@ const CartPage = () => {
                                 ))}
                             </select>
 
-                            {isStorePickup ? (
+                            {isStorePickup && (
                                 <select
                                     value={customerInfo.store}
                                     onChange={(e) =>
@@ -531,21 +531,23 @@ const CartPage = () => {
                                         </option>
                                     ))}
                                 </select>
-                            ) : (
-                                <input
-                                    type="text"
-                                    value={customerInfo.homeAddress}
-                                    onChange={(e) =>
-                                        setCustomerInfo({
-                                            ...customerInfo,
-                                            homeAddress: e.target.value,
-                                        })
-                                    }
-                                    placeholder="Địa chỉ nhận hàng tại nhà *"
-                                    className="w-full bg-white border border-gray-200 rounded-xl h-[52px] px-6 text-[14px] font-bold text-gray-800 outline-none focus:border-[#008d71] transition-all placeholder:text-gray-400"
-                                />
                             )}
                         </div>
+
+                        {!isStorePickup && (
+                            <input
+                                type="text"
+                                value={customerInfo.homeAddress}
+                                onChange={(e) =>
+                                    setCustomerInfo({
+                                        ...customerInfo,
+                                        homeAddress: e.target.value,
+                                    })
+                                }
+                                placeholder="Địa chỉ cụ thể (Số nhà, tên đường, Phường/Xã...) *"
+                                className="w-full bg-white border border-gray-200 rounded-xl h-[52px] px-6 text-[14px] font-bold text-gray-800 outline-none focus:border-[#008d71] transition-all placeholder:text-gray-400 animate-in slide-in-from-top-2 duration-300"
+                            />
+                        )}
                     </div>
 
                     <textarea 

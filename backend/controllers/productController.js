@@ -130,14 +130,14 @@ export const getProducts = asyncHandler(async (req, res) => {
     filters.length > 1 ? { $and: filters } : filters[0] || {};
 
   const sortMap = {
-    newest: { createdAt: -1 },
-    priceAsc: { price: 1 },
-    priceDesc: { price: -1 },
-    rating: { rating: -1, numReviews: -1 },
-    popular: { soldCount: -1, rating: -1 },
+    newest: { isFeatured: -1, createdAt: -1 },
+    priceAsc: { isFeatured: -1, price: 1 },
+    priceDesc: { isFeatured: -1, price: -1 },
+    rating: { isFeatured: -1, rating: -1, numReviews: -1 },
+    popular: { isFeatured: -1, soldCount: -1, rating: -1 },
   };
 
-  const sort = sortMap[req.query.sort] || { createdAt: -1 };
+  const sort = sortMap[req.query.sort] || { isFeatured: -1, createdAt: -1 };
 
   const total = await Product.countDocuments(query);
   const products = await Product.find(query)
@@ -356,11 +356,14 @@ export const compareProductSpecs = asyncHandler(async (req, res) => {
 
 // Admin: Create product
 export const createAdminProduct = asyncHandler(async (req, res, next) => {
-  const { name, description, brand, categoryId, price, countInStock, image, images } =
-    req.body;
+  const { 
+    name, description, brand, categoryId, price, countInStock, image, images,
+    tags, features, colors, screen, battery, camera, ram, storage, isHot, specifications,
+    isFeatured, isBestSeller, isRecommended
+  } = req.body;
 
-  if (!name || !brand || !categoryId || !price) {
-    return next(new AppError('Vui lòng nhập đầy đủ thông tin bắt buộc', 400));
+  if (!name || !brand || !categoryId || !price || !description || !image) {
+    return next(new AppError('Vui lòng nhập đầy đủ thông tin bắt buộc (Tên, Thương hiệu, Danh mục, Giá, Mô tả và Ảnh)', 400));
   }
 
   const product = await Product.create({
@@ -372,6 +375,19 @@ export const createAdminProduct = asyncHandler(async (req, res, next) => {
     countInStock: countInStock || 0,
     image,
     images: images || [],
+    tags: tags || [],
+    features: features || [],
+    colors: colors || [],
+    screen,
+    battery,
+    camera,
+    ram,
+    storage,
+    isHot: isHot || false,
+    isFeatured: isFeatured || false,
+    isBestSeller: isBestSeller || false,
+    isRecommended: isRecommended || false,
+    specifications: specifications || {},
     status: 'active',
   });
 
@@ -431,8 +447,11 @@ export const getAdminProductDetail = asyncHandler(async (req, res, next) => {
 
 // Admin: Update product
 export const updateAdminProduct = asyncHandler(async (req, res, next) => {
-  const { name, description, brand, categoryId, price, countInStock, image, images, status } =
-    req.body;
+  const { 
+    name, description, brand, categoryId, price, countInStock, image, images, status,
+    tags, features, colors, screen, battery, camera, ram, storage, isHot, specifications,
+    isFeatured, isBestSeller, isRecommended
+  } = req.body;
 
   let product = await Product.findById(req.params.id);
 
@@ -440,15 +459,28 @@ export const updateAdminProduct = asyncHandler(async (req, res, next) => {
     return next(new AppError('Không tìm thấy sản phẩm', 404));
   }
 
-  if (name) product.name = name;
-  if (description) product.description = description;
-  if (brand) product.brand = brand;
-  if (categoryId) product.category = categoryId;
-  if (price) product.price = price;
+  if (name !== undefined) product.name = name;
+  if (description !== undefined) product.description = description;
+  if (brand !== undefined) product.brand = brand;
+  if (categoryId !== undefined) product.category = categoryId;
+  if (price !== undefined) product.price = price;
   if (countInStock !== undefined) product.countInStock = countInStock;
-  if (image) product.image = image;
-  if (images) product.images = images;
-  if (status) product.status = status;
+  if (image !== undefined) product.image = image;
+  if (images !== undefined) product.images = images;
+  if (status !== undefined) product.status = status;
+  if (tags !== undefined) product.tags = tags;
+  if (features !== undefined) product.features = features;
+  if (colors !== undefined) product.colors = colors;
+  if (screen !== undefined) product.screen = screen;
+  if (battery !== undefined) product.battery = battery;
+  if (camera !== undefined) product.camera = camera;
+  if (ram !== undefined) product.ram = ram;
+  if (storage !== undefined) product.storage = storage;
+  if (isHot !== undefined) product.isHot = isHot;
+  if (isFeatured !== undefined) product.isFeatured = isFeatured;
+  if (isBestSeller !== undefined) product.isBestSeller = isBestSeller;
+  if (isRecommended !== undefined) product.isRecommended = isRecommended;
+  if (specifications !== undefined) product.specifications = specifications;
 
   product = await product.save();
 
@@ -461,17 +493,21 @@ export const updateAdminProduct = asyncHandler(async (req, res, next) => {
 
 // Admin: Delete product
 export const deleteAdminProduct = asyncHandler(async (req, res, next) => {
-  const product = await Product.findByIdAndDelete(req.params.id);
+  const product = await Product.findById(req.params.id);
 
   if (!product) {
     return next(new AppError('Không tìm thấy sản phẩm', 404));
   }
 
-  // Delete related variants
-  await ProductVariant.deleteMany({ product: product._id });
+  // Soft delete: update status to inactive
+  product.status = 'inactive';
+  await product.save();
+
+  // Also soft delete related variants
+  await ProductVariant.updateMany({ product: product._id }, { isActive: false });
 
   res.json({
     status: 'success',
-    message: 'Xóa sản phẩm thành công',
+    message: 'Chuyển sản phẩm vào trạng thái đã xóa (xoá mềm) thành công',
   });
 });

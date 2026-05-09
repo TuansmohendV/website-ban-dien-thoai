@@ -36,6 +36,9 @@ const productSchema = new mongoose.Schema(
       enum: ['active', 'inactive'],
       default: 'active',
     },
+    isFeatured: { type: Boolean, default: false },
+    isBestSeller: { type: Boolean, default: false },
+    isRecommended: { type: Boolean, default: false },
   },
   {
     timestamps: true,

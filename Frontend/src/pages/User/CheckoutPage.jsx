@@ -223,9 +223,14 @@ const CheckoutPage = () => {
                 });
 
                 if (backendPaymentMethod !== 'COD') {
-                    await processPayment(order.backendId || order.id, backendPaymentMethod, {
-                        simulateSuccess: true,
+                    const payResponse = await processPayment(order.backendId || order.id, backendPaymentMethod, {
+                        returnUrl: `${window.location.origin}/checkout-result`
                     });
+
+                    if (payResponse && payResponse.paymentUrl) {
+                        window.location.href = payResponse.paymentUrl;
+                        return; // Prevent showing success immediately
+                    }
                 }
 
                 setSuccessfulOrderId(order.id);
@@ -341,9 +346,11 @@ const CheckoutPage = () => {
                                         className={`h-12 border-2 rounded-xl px-4 font-black text-slate-900 appearance-none transition-all cursor-pointer ${errors.province ? 'border-red-500 bg-red-50' : 'border-gray-50 hover:border-black bg-gray-50/50'}`}
                                     >
                                         <option value="">Chọn Tỉnh/Thành phố</option>
-                                        <option value="HN">Hà Nội</option>
-                                        <option value="HCM">TP. Hồ Chí Minh</option>
-                                        <option value="DN">Đà Nẵng</option>
+                                        {[
+                                            "An Giang", "Bà Rịa - Vũng Tàu", "Bắc Giang", "Bắc Kạn", "Bạc Liêu", "Bắc Ninh", "Bến Tre", "Bình Định", "Bình Dương", "Bình Phước", "Bình Thuận", "Cà Mau", "Cần Thơ", "Cao Bằng", "Đà Nẵng", "Đắk Lắk", "Đắk Nông", "Điện Biên", "Đồng Nai", "Đồng Tháp", "Gia Lai", "Hà Giang", "Hà Nam", "Hà Nội", "Hà Tĩnh", "Hải Dương", "Hải Phòng", "Hậu Giang", "Hòa Bình", "Hưng Yên", "Khánh Hòa", "Kiên Giang", "Kon Tum", "Lai Châu", "Lâm Đồng", "Lạng Sơn", "Lào Cai", "Long An", "Nam Định", "Nghệ An", "Ninh Bình", "Ninh Thuận", "Phú Thọ", "Phú Yên", "Quảng Bình", "Quảng Nam", "Quảng Ngãi", "Quảng Ninh", "Quảng Trị", "Sóc Trăng", "Sơn La", "Tây Ninh", "Thái Bình", "Thái Nguyên", "Thanh Hóa", "Thừa Thiên Huế", "Tiền Giang", "TP Hồ Chí Minh", "Trà Vinh", "Tuyên Quang", "Vĩnh Long", "Vĩnh Phúc", "Yên Bái"
+                                        ].map(province => (
+                                            <option key={province} value={province}>{province}</option>
+                                        ))}
                                     </select>
                                     <select
                                         name="district"

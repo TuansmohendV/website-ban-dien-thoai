@@ -5,6 +5,8 @@ import Review from '../models/Review.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import AppError from '../utils/appError.js';
 import { normalizePhone } from '../utils/phone.js';
+import { sendEmail } from '../services/emailService.js';
+import Voucher from '../models/Voucher.js';
 
 export const getUserProfile = asyncHandler(async (req, res) => {
   res.json({
@@ -61,6 +63,7 @@ export const getAdminUsers = asyncHandler(async (req, res) => {
       ...user,
       totalOrders: statsByUser.get(String(user._id))?.totalOrders || 0,
       spent: statsByUser.get(String(user._id))?.spent || 0,
+      isVIP: (statsByUser.get(String(user._id))?.spent || 0) >= 20000000 || (statsByUser.get(String(user._id))?.totalOrders || 0) >= 2,
     })),
   });
 });
@@ -184,6 +187,7 @@ export const getAdminUserDetail = asyncHandler(async (req, res) => {
       ...user,
       totalOrders: stats?.totalOrders || 0,
       spent: stats?.spent || 0,
+      isVIP: (stats?.spent || 0) >= 20000000 || (stats?.totalOrders || 0) >= 2,
     },
   });
 });
@@ -302,14 +306,17 @@ export const deleteAdminUser = asyncHandler(async (req, res) => {
     throw new AppError(400, 'Không thể xóa tài khoản đang đăng nhập.');
   }
 
-  const user = await User.findByIdAndDelete(req.params.id);
+  const user = await User.findById(req.params.id);
 
   if (!user) {
     throw new AppError(404, 'Không tìm thấy người dùng.');
   }
 
+  user.isActive = false;
+  await user.save();
+
   res.json({
-    message: 'Xóa người dùng thành công.',
+    message: 'Chuyển người dùng vào trạng thái đã khóa (xoá mềm) thành công.',
   });
 });
 
@@ -359,5 +366,46 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
   res.json({
     message: 'Cập nhật hồ sơ thành công.',
     user,
+  });
+});
+
+export const sendPromotionalEmail = asyncHandler(async (req, res) => {
+  const { userId, subject, content } = req.body;
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new AppError(404, 'Không tìm thấy người dùng.');
+  }
+
+  if (!user.email) {
+    throw new AppError(400, 'Người dùng này chưa cập nhật email.');
+  }
+
+  const defaultHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 30px; border: 1px solid #e0e0e0; border-radius: 12px;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <h2 style="color: #2563eb; margin: 0; font-size: 28px;">PhoneSin Mobile</h2>
+        <p style="color: #666; margin: 8px 0 0 0;">Ưu đãi đặc biệt dành cho bạn</p>
+      </div>
+      <p>Chào <b>${user.fullName}</b>,</p>
+      <div style="color: #333; line-height: 1.6;">
+        ${content || 'Chúng tôi có một ưu đãi đặc biệt dành cho bạn. Hãy ghé thăm cửa hàng ngay hôm nay để nhận những phần quà hấp dẫn!'}
+      </div>
+      <div style="text-align: center; margin-top: 30px;">
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}" style="background: #2563eb; color: white; padding: 12px 25px; text-decoration: none; border-radius: 8px; font-weight: bold;">Ghé thăm cửa hàng</a>
+      </div>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
+      <p style="font-size: 12px; color: #aaa; text-align: center;">© PhoneSin Mobile - Email gửi tới ${user.email}</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: user.email,
+    subject: subject || 'Ưu đãi đặc biệt từ PhoneSin Mobile',
+    html: defaultHtml,
+  });
+
+  res.json({
+    message: `Đã gửi email ưu đãi tới ${user.email} thành công.`,
   });
 });

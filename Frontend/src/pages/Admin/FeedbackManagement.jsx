@@ -13,7 +13,9 @@ import {
   ExternalLink,
   Flag,
   X,
-  History
+  History,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../lib/api';
 
@@ -31,6 +33,7 @@ const mapReviewForAdmin = (review = {}) => ({
   product: review.product?.name || 'Sản phẩm',
   date: review.createdAt ? new Date(review.createdAt).toLocaleDateString('vi-VN') : '',
   status: moderationLabelMap[review.moderationStatus] || 'Chờ duyệt',
+  isVIP: review.user?.isVIP || false,
 });
 
 const FeedbackManagement = () => {
@@ -39,13 +42,15 @@ const FeedbackManagement = () => {
   const [comments, setComments] = useState([]);
   const [isLoadingComments, setIsLoadingComments] = useState(true);
   const [commentsError, setCommentsError] = useState('');
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: 'Khuyến mãi cuối tuần rực rỡ!', content: 'Giảm giá 50% cho tất cả phụ kiện iPhone...', target: 'Tất cả người dùng', date: '22/04/2026', status: 'Thành công' },
-    { id: 2, title: 'Thông báo bảo trì hệ thống', content: 'Hệ thống sẽ bảo trì từ 12h đêm nay...', target: 'Tất cả người dùng', date: '21/04/2026', status: 'Thành công' },
-  ]);
+  const [notifications, setNotifications] = useState([]);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [ratingFilter, setRatingFilter] = useState('Tất cả đánh giá');
   const [statusFilter, setStatusFilter] = useState('Trạng thái: Tất cả');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 8;
 
   const loadComments = useCallback(async () => {
     setIsLoadingComments(true);
@@ -64,9 +69,33 @@ const FeedbackManagement = () => {
     }
   }, []);
 
+  const loadNotifications = useCallback(async () => {
+    setIsLoadingNotifications(true);
+    try {
+      const response = await api.get('/api/admin/broadcasts');
+      const list = (response.data?.data || []).map(b => ({
+        id: b._id,
+        title: b.title,
+        content: b.message,
+        target: b.targetAudience === 'all' ? 'Tất cả người dùng' : 
+                b.targetAudience === 'new_users' ? 'Người dùng mới' : 
+                b.targetAudience === 'active_users' ? 'Người dùng tích cực' : 'Khác',
+        date: new Date(b.createdAt).toLocaleDateString('vi-VN'),
+        status: b.isSent ? 'Đã gửi' : 'Chưa gửi',
+        isSent: b.isSent
+      }));
+      setNotifications(list);
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    } finally {
+      setIsLoadingNotifications(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadComments();
-  }, [loadComments]);
+    loadNotifications();
+  }, [loadComments, loadNotifications]);
 
   // Handle Actions
   const handleApprove = async (id) => {
@@ -87,6 +116,15 @@ const FeedbackManagement = () => {
     }
   };
 
+  const handleReset = async (id) => {
+    try {
+      await api.patch(`/api/admin/reviews/${id}`, { moderationStatus: 'pending' });
+      await loadComments();
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Không thể đặt lại trạng thái.'));
+    }
+  };
+
   const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa vĩnh viễn bình luận này?')) {
       try {
@@ -98,25 +136,56 @@ const FeedbackManagement = () => {
     }
   };
 
-  const handleSendNotify = (e) => {
+  const handleDeleteNotification = async (id) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa thông báo này?')) {
+      try {
+        await api.delete(`/api/admin/broadcasts/${id}`);
+        await loadNotifications();
+      } catch (error) {
+        alert(getApiErrorMessage(error, 'Không thể xóa thông báo.'));
+      }
+    }
+  };
+
+  const handleSendNotify = async (e) => {
     e.preventDefault();
-    const newNotify = {
-      id: Date.now(),
-      title: e.target.title.value,
-      content: e.target.content.value,
-      target: e.target.target.value,
-      date: new Date().toLocaleDateString('vi-VN'),
-      status: 'Thành công'
+    const title = e.target.title.value;
+    const message = e.target.content.value;
+    const targetLabel = e.target.target.value;
+
+    const targetMap = {
+      'Tất cả người dùng': 'all',
+      'Khách hàng VIP': 'active_users',
+      'Người dùng mới (trong 30 ngày)': 'new_users',
+      'Người dùng chưa mua hàng': 'unpurchased_users'
     };
 
-    if (!newNotify.title || !newNotify.content) {
+    const targetAudience = targetMap[targetLabel] || 'all';
+
+    if (!title || !message) {
       alert('Vui lòng nhập đầy đủ tiêu đề và nội dung!');
       return;
     }
 
-    setNotifications([newNotify, ...notifications]);
-    alert('Thông báo hệ thống đã được gửi thành công!');
-    setShowNotifyModal(false);
+    try {
+      // 1. Create broadcast
+      const createRes = await api.post('/api/admin/broadcasts', {
+        title,
+        message,
+        targetAudience
+      });
+
+      const broadcastId = createRes.data.data.broadcast._id;
+
+      // 2. Send broadcast
+      await api.post(`/api/admin/broadcasts/${broadcastId}/send`);
+
+      alert('Thông báo hệ thống đã được gửi thành công!');
+      setShowNotifyModal(false);
+      await loadNotifications();
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Không thể gửi thông báo.'));
+    }
   };
 
   // Filter Logic
@@ -141,6 +210,17 @@ const FeedbackManagement = () => {
       return matchesSearch && matchesRating && matchesStatus;
     });
   }, [comments, searchTerm, ratingFilter, statusFilter, activeTab]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil((activeTab === 'history' ? notifications.length : filteredComments.length) / itemsPerPage);
+  const currentItems = (activeTab === 'history' ? notifications : filteredComments).slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchTerm, ratingFilter, statusFilter]);
 
   return (
     <div className="management-container">
@@ -232,37 +312,52 @@ const FeedbackManagement = () => {
                   <th>Hành động</th>
                 </tr>
               </thead>
-              <tbody>
-                {notifications.map(n => (
-                  <tr key={n.id}>
-                    <td>
-                      <div style={{ maxWidth: '300px' }}>
-                        <div style={{ fontWeight: '700', color: '#1e293b', marginBottom: '4px' }}>{n.title}</div>
-                        <div style={{ fontSize: '0.85rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.content}</div>
-                      </div>
-                    </td>
-                    <td><span className="role-badge khách">{n.target}</span></td>
-                    <td><span className="comment-date">{n.date}</span></td>
-                    <td><span className="status-tag đã-duyệt">{n.status}</span></td>
-                    <td>
-                      <button className="action-btn delete" onClick={() => setNotifications(notifications.filter(item => item.id !== n.id))}>
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+               <tbody>
+                 {activeTab === 'history' ? (
+                   currentItems.map(n => (
+                     <tr key={n.id}>
+                       <td>
+                         <div style={{ maxWidth: '300px' }}>
+                           <div style={{ fontWeight: '700', color: '#1e293b', marginBottom: '4px' }}>{n.title}</div>
+                           <div style={{ fontSize: '0.85rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.content}</div>
+                         </div>
+                       </td>
+                       <td><span className="role-badge khách">{n.target}</span></td>
+                       <td><span className="comment-date">{n.date}</span></td>
+                       <td><span className={`status-tag ${n.isSent ? 'đã-duyệt' : 'chờ-duyệt'}`}>{n.status}</span></td>
+                       <td>
+                         <button className="action-btn delete" onClick={() => handleDeleteNotification(n.id)}>
+                           <Trash2 size={16} />
+                         </button>
+                       </td>
+                     </tr>
+                   ))
+                 ) : null}
+               </tbody>
             </table>
           </div>
         ) : (
           <div className="comments-grid">
-            {filteredComments.length > 0 ? (
-              filteredComments.map((comment) => (
+            {currentItems.length > 0 ? (
+              currentItems.map((comment) => (
                 <div key={comment.id} className={`comment-card ${comment.status === 'Vi phạm' ? 'flagged' : ''}`}>
                   <div className="comment-header">
                     <div className="user-info">
                       <div className="user-avatar-small"><User size={14} /></div>
-                      <span className="user-name">{comment.user}</span>
+                      <span className="user-name">
+                        {comment.user}
+                        {comment.isVIP && (
+                          <span style={{ 
+                            marginLeft: '8px', padding: '2px 8px', borderRadius: '4px', 
+                            background: 'linear-gradient(135deg, #f59e0b, #d97706)', 
+                            color: 'white', fontSize: '0.65rem', fontWeight: '900',
+                            textTransform: 'uppercase', letterSpacing: '0.5px',
+                            boxShadow: '0 2px 4px rgba(217, 119, 6, 0.3)'
+                          }}>
+                            VIP
+                          </span>
+                        )}
+                      </span>
                       <span className="dot">•</span>
                       <span className="comment-date">{comment.date}</span>
                     </div>
@@ -289,16 +384,33 @@ const FeedbackManagement = () => {
                   <div className="comment-actions">
                     {comment.status === 'Chờ duyệt' && (
                       <button className="btn-approve" onClick={() => handleApprove(comment.id)}>
-                        <CheckCircle2 size={16} /> Duyệt
+                        <CheckCircle2 size={16} /> Duyệt đánh giá
                       </button>
                     )}
-                    {comment.status !== 'Vi phạm' && (
+                    {comment.status === 'Đã duyệt' && (
+                      <button className="btn-reset" onClick={() => handleReset(comment.id)} style={{
+                        display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px',
+                        background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px',
+                        fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem'
+                      }}>
+                        Hoàn tác duyệt
+                      </button>
+                    )}
+                    {comment.status !== 'Vi phạm' ? (
                       <button className="btn-reject" onClick={() => handleFlag(comment.id)}>
                         <XCircle size={16} /> Đánh dấu vi phạm
                       </button>
+                    ) : (
+                      <button className="btn-reset" onClick={() => handleReset(comment.id)} style={{
+                        display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px',
+                        background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px',
+                        fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem'
+                      }}>
+                        Bỏ đánh dấu vi phạm
+                      </button>
                     )}
                     <button className="btn-delete" onClick={() => handleDelete(comment.id)}>
-                      <Trash2 size={16} /> Xóa vĩnh viễn
+                      <Trash2 size={16} /> Xóa
                     </button>
                   </div>
                 </div>
@@ -308,6 +420,44 @@ const FeedbackManagement = () => {
                 Không tìm thấy bình luận nào phù hợp với bộ lọc.
               </div>
             )}
+          </div>
+        )}
+
+        {/* Pagination Bar */}
+        {totalPages > 1 && (
+          <div style={{ 
+            display: 'flex', justifyContent: 'center', alignItems: 'center', 
+            padding: '25px', gap: '15px', borderTop: '1px solid #f1f5f9' 
+          }}>
+            <button 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className={`p-btn ${currentPage === 1 ? 'disabled' : ''}`}
+              style={{
+                width: '36px', height: '36px', borderRadius: '10px', border: '1px solid #e2e8f0',
+                background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1
+              }}
+            >
+              <ChevronLeft size={18} />
+            </button>
+            
+            <span style={{ fontWeight: '700', color: '#1e293b', fontSize: '0.9rem' }}>
+              Trang {currentPage} / {totalPages}
+            </span>
+
+            <button 
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className={`p-btn ${currentPage === totalPages ? 'disabled' : ''}`}
+              style={{
+                width: '36px', height: '36px', borderRadius: '10px', border: '1px solid #e2e8f0',
+                background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1
+              }}
+            >
+              <ChevronRight size={18} />
+            </button>
           </div>
         )}
       </div>

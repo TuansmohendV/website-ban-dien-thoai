@@ -97,6 +97,11 @@ export const OrdersProvider = ({ children }) => {
                 method,
                 ...options,
             });
+            
+            if (response.data?.paymentUrl) {
+                return response.data;
+            }
+
             const nextOrder = normalizeOrder(response.data?.order || {});
             replaceOrder(nextOrder);
             return nextOrder;

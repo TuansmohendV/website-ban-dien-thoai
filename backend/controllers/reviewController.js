@@ -115,13 +115,58 @@ export const getAdminReviews = asyncHandler(async (req, res) => {
 
   const [total, reviews] = await Promise.all([
     Review.countDocuments({}),
-    Review.find({})
-      .populate('user', 'fullName avatar email')
-      .populate('product', 'name slug image')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
+    Review.aggregate([
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+      // Join with product
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'product',
+          foreignField: '_id',
+          as: 'product'
+        }
+      },
+      { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+      // Join with user
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'user',
+          foreignField: '_id',
+          as: 'user'
+        }
+      },
+      { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
+      // Join with orders to check VIP status
+      {
+        $lookup: {
+          from: 'orders',
+          let: { userId: '$user._id' },
+          pipeline: [
+            { $match: { $expr: { $eq: ['$user', '$$userId'] }, status: 'delivered' } },
+            { $group: { _id: null, totalSpent: { $sum: '$total' }, count: { $sum: 1 } } }
+          ],
+          as: 'userStats'
+        }
+      },
+      { $unwind: { path: '$userStats', preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          'user.isVIP': {
+            $or: [
+              { $gte: ['$userStats.totalSpent', 20000000] },
+              { $gte: ['$userStats.count', 2] }
+            ]
+          },
+          'user.totalSpent': { $ifNull: ['$userStats.totalSpent', 0] },
+          'user.orderCount': { $ifNull: ['$userStats.count', 0] }
+        }
+      },
+      // Cleanup sensitive data
+      { $project: { 'user.password': 0, 'user.resetPasswordToken': 0, 'user.resetPasswordExpiresAt': 0 } }
+    ])
   ]);
 
   res.json({

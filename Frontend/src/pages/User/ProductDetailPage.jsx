@@ -1,6 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, Star, Heart, Share2, ShieldCheck, Truck, RefreshCw, MapPin, Video, Image as ImageIcon, Info, Plus, ShoppingCart, Settings, FileText, Wallet, Check } from 'lucide-react';
+import { 
+    ChevronRight, ChevronLeft, Star, Heart, Share2, ShieldCheck, Truck, RefreshCw, 
+    MapPin, Video, Image as ImageIcon, Info, Plus, ShoppingCart, Settings, 
+    FileText, Wallet, Check, Cpu, Monitor, Zap, HardDrive, Smartphone, X, Box
+} from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
@@ -54,6 +58,7 @@ const ProductDetailPage = () => {
     const [editingReviewRating, setEditingReviewRating] = useState(0);
     const [reviewActionLoadingId, setReviewActionLoadingId] = useState('');
     const [reviewNotice, setReviewNotice] = useState({ type: '', message: '' });
+    const [showSpecsModal, setShowSpecsModal] = useState(false);
 
     const loadProductReviews = async (productId) => {
         try {
@@ -227,17 +232,43 @@ const ProductDetailPage = () => {
         }
     }, [product]);
 
-    const handleAddToCart = () => {
-        addToCart(product, selectedStorage, selectedColor);
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
+    const currentStock = useMemo(() => {
+        if (!product || !selectedStorage || !selectedColor) return 0;
+        
+        const exactVariant = product.variants.find(
+            v => v.storage === selectedStorage.storage && v.color === selectedColor.name
+        );
+        if (exactVariant) return exactVariant.stock;
+
+        return selectedStorage.stock || product.countInStock || 0;
+    }, [product, selectedStorage, selectedColor]);
+
+    const handleAddToCart = async () => {
+        try {
+            await addToCart(product, selectedStorage, selectedColor);
+            setShowToast(true);
+            setTimeout(() => setShowToast(false), 3000);
+        } catch (error) {
+            if (error.message === 'AUTH_REQUIRED') {
+                navigate('/login', { state: { from: { pathname: `/product/${id}` } } });
+                return;
+            }
+            // Optional: show error message for other errors
+        }
     };
 
-    const handleAddCrossSellToCart = (p) => {
-        // For cross-sell products, we use default variants/colors if not specified
-        addToCart(p, { id: 'default', storage: '', price: p.priceNum }, { name: 'Mặc định', image: p.image });
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
+    const handleAddCrossSellToCart = async (p) => {
+        try {
+            // For cross-sell products, we use default variants/colors if not specified
+            await addToCart(p, { id: 'default', storage: '', price: p.priceNum }, { name: 'Mặc định', image: p.image });
+            setShowToast(true);
+            setTimeout(() => setShowToast(false), 3000);
+        } catch (error) {
+            if (error.message === 'AUTH_REQUIRED') {
+                navigate('/login', { state: { from: { pathname: `/product/${id}` } } });
+                return;
+            }
+        }
     };
 
     const handleAddWishlist = async () => {
@@ -442,8 +473,23 @@ const ProductDetailPage = () => {
             <div className="max-w-[1600px] mx-auto px-4 pt-4">
                 
                 {/* Product Title Banner */}
-                <div className="mb-6">
-                    <h1 className="text-[26px] font-bold text-[#333] tracking-tight">{product.name}</h1>
+                <div className="mb-4">
+                    <h1 className="text-[26px] font-bold text-[#333] tracking-tight mb-2">{product.name}</h1>
+                    
+                    {/* Product Tags (Hashtags) */}
+                    {product.tags && product.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            {product.tags.map((tag, idx) => (
+                                <Link 
+                                    key={idx} 
+                                    to={`/search?keyword=${encodeURIComponent(tag)}`}
+                                    className="text-[13px] font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                                >
+                                    #{tag}
+                                </Link>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex flex-col lg:flex-row gap-6">
@@ -742,6 +788,22 @@ const ProductDetailPage = () => {
                                         </button>
                                     ))}
                                 </div>
+                                
+                                {/* DYNAMIC STOCK INDICATOR */}
+                                <div className="mt-4 p-3 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-between">
+                                    <span className="text-[13px] font-bold text-gray-600">Tình trạng kho:</span>
+                                    {currentStock > 0 ? (
+                                        <div className="flex items-center gap-1.5 text-[#00917a] bg-emerald-50 px-3 py-1 rounded-full font-black text-[13px]">
+                                            <ShieldCheck size={14} />
+                                            <span>Còn {currentStock} sản phẩm</span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-1.5 text-[#cc0000] bg-red-50 px-3 py-1 rounded-full font-black text-[13px]">
+                                            <Info size={14} />
+                                            <span>Tạm hết hàng</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             {/* PRICE BOXES (Member & Trade-in) */}
@@ -772,13 +834,18 @@ const ProductDetailPage = () => {
                             <div className="flex gap-3">
                                 <button 
                                     onClick={handleAddToCart}
-                                    className="flex-1 bg-white border-2 border-[#cc0000] text-[#cc0000] p-4 rounded-xl flex items-center justify-center transition-all hover:bg-red-50"
+                                    disabled={currentStock <= 0}
+                                    className={`flex-1 bg-white border-2 p-4 rounded-xl flex items-center justify-center transition-all ${currentStock > 0 ? 'border-[#cc0000] text-[#cc0000] hover:bg-red-50' : 'border-gray-300 text-gray-400 cursor-not-allowed opacity-50'}`}
                                 >
                                     <ShoppingCart size={24} />
                                 </button>
-                                <button onClick={() => setShowBuyModal(true)} className="flex-[4] bg-[#cc0000] text-white p-4 rounded-xl font-black text-[18px] uppercase shadow-lg shadow-red-200 active:scale-95 transition-all">
-                                    Mua ngay
-                                    <span className="block text-[11px] font-medium normal-case opacity-80">(Giao tận nhà hoặc nhận tại cửa hàng)</span>
+                                <button 
+                                    onClick={() => currentStock > 0 && setShowBuyModal(true)} 
+                                    disabled={currentStock <= 0}
+                                    className={`flex-[4] p-4 rounded-xl font-black text-[18px] uppercase transition-all ${currentStock > 0 ? 'bg-[#cc0000] text-white shadow-lg shadow-red-200 active:scale-95' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+                                >
+                                    {currentStock > 0 ? 'Mua ngay' : 'Hết hàng'}
+                                    {currentStock > 0 && <span className="block text-[11px] font-medium normal-case opacity-80">(Giao tận nhà hoặc nhận tại cửa hàng)</span>}
                                 </button>
                             </div>
 
@@ -928,30 +995,97 @@ const ProductDetailPage = () => {
                              </div>
                         </div>
 
-                        {/* TECHNICAL SPECS TABLE - HIGH FIDELITY DESIGN */}
-                        <div ref={specsRef} className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-                            <div className="bg-[#f2f2f2] px-6 py-3 flex items-center gap-3 border-b border-gray-200">
-                                <Settings size={20} className="text-[#333]" />
-                                <h4 className="font-extrabold text-[15px] uppercase text-[#333] tracking-wide">Thông số kỹ thuật</h4>
+                        {/* TECHNICAL SPECS SECTION - REDESIGNED */}
+                        <div ref={specsRef} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100 flex flex-col">
+                            <div className="bg-[#f8fafc] px-6 py-4 flex items-center justify-between border-b border-gray-100">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-[#00917a] p-2 rounded-lg text-white shadow-sm">
+                                        <Settings size={18} />
+                                    </div>
+                                    <h4 className="font-black text-[16px] uppercase text-[#333] tracking-tight">Thông số kỹ thuật</h4>
+                                </div>
                             </div>
-                            <div className="p-4">
-                                <div className="border border-gray-100 rounded-xl overflow-hidden shadow-sm">
-                                    {product.specs_detailed.map((spec, i) => (
-                                        <div key={i} className={`flex items-start px-6 py-3.5 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} border-b border-gray-50 last:border-0`}>
-                                            <span className="text-[13px] font-bold text-[#333] w-[180px] shrink-0 text-left">{spec.label}</span>
-                                            <span className="text-[13px] font-medium text-gray-700 whitespace-pre-line leading-relaxed text-left flex-1">
-                                                {spec.value}
-                                            </span>
+                            
+                            <div className="p-6">
+                                {/* Main Specs Grid - Modern Cards */}
+                                <div className="grid grid-cols-2 gap-4 mb-6">
+                                    {[
+                                        { label: 'Màn hình', value: product.specs?.screen || '6.7"', icon: <Monitor size={20} />, color: 'bg-blue-50 text-blue-600' },
+                                        { label: 'CPU', value: product.specs?.chip || 'Apple A17', icon: <Cpu size={20} />, color: 'bg-purple-50 text-purple-600' },
+                                        { label: 'RAM', value: product.specs?.ram || '8GB', icon: <Box size={20} />, color: 'bg-amber-50 text-amber-600' },
+                                        { label: 'Bộ nhớ', value: product.rom || product.storage || '256GB', icon: <HardDrive size={20} />, color: 'bg-emerald-50 text-emerald-600' }
+                                    ].map((s, idx) => (
+                                        <div key={idx} className="flex flex-col items-center justify-center p-4 rounded-2xl border border-gray-100 bg-white hover:border-[#00917a] hover:shadow-md transition-all group">
+                                            <div className={`w-12 h-12 ${s.color} rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+                                                {s.icon}
+                                            </div>
+                                            <span className="text-[11px] font-bold text-gray-400 uppercase mb-1">{s.label}</span>
+                                            <span className="text-[14px] font-black text-[#333] text-center line-clamp-1">{s.value}</span>
                                         </div>
                                     ))}
                                 </div>
-                            </div>
-                            <div className="px-4 pb-6 flex justify-center">
-                                <button className="bg-white border border-gray-300 text-[#333] px-10 py-2.5 rounded-lg text-[13px] font-bold uppercase flex items-center gap-4 hover:bg-gray-100 transition-all shadow-sm active:scale-95 group">
-                                    Xem cấu hình chi tiết <ChevronRight className="rotate-90 group-hover:translate-x-1 transition-transform" size={16} />
+
+                                {/* Preview Specs List */}
+                                <div className="space-y-3 mb-6">
+                                    {product.specs_detailed.slice(0, 5).map((spec, i) => (
+                                        <div key={i} className="flex items-center justify-between py-2 border-b border-dashed border-gray-100 last:border-0">
+                                            <span className="text-[13px] font-bold text-gray-500">{spec.label}</span>
+                                            <span className="text-[13px] font-black text-[#333]">{spec.value}</span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <button 
+                                    onClick={() => setShowSpecsModal(true)}
+                                    className="w-full bg-white border-2 border-gray-200 text-[#333] hover:border-[#00917a] hover:text-[#00917a] py-3 rounded-xl text-[14px] font-black uppercase flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95"
+                                >
+                                    Cấu hình chi tiết <ChevronRight size={18} />
                                 </button>
                             </div>
                         </div>
+
+                        {/* Technical Specs Modal */}
+                        {showSpecsModal && (
+                            <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+                                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowSpecsModal(false)}></div>
+                                <div className="relative bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-300">
+                                    <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-[#00917a] p-2 rounded-lg text-white">
+                                                <Settings size={20} />
+                                            </div>
+                                            <h3 className="text-[18px] font-black text-[#333] uppercase">Thông số kỹ thuật chi tiết</h3>
+                                        </div>
+                                        <button 
+                                            onClick={() => setShowSpecsModal(false)}
+                                            className="w-10 h-10 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
+                                        >
+                                            <X size={24} />
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="p-6 max-h-[70vh] overflow-y-auto hh-scrollbar">
+                                        <div className="border border-gray-100 rounded-2xl overflow-hidden">
+                                            {product.specs_detailed.map((spec, i) => (
+                                                <div key={i} className={`flex items-start px-6 py-4 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} border-b border-gray-100 last:border-0`}>
+                                                    <span className="text-[14px] font-bold text-gray-500 w-1/3 shrink-0">{spec.label}</span>
+                                                    <span className="text-[14px] font-black text-[#333] flex-1">{spec.value}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="p-6 bg-gray-50/50 border-t border-gray-100">
+                                        <button 
+                                            onClick={() => setShowSpecsModal(false)}
+                                            className="w-full bg-[#333] text-white py-3.5 rounded-xl font-black uppercase text-[14px] shadow-lg hover:bg-black transition-all active:scale-95"
+                                        >
+                                            Đóng lại
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                     </div>
                 </div>

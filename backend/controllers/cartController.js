@@ -76,7 +76,7 @@ const resolveCartItem = async (productId, variantId) => {
 };
 
 export const addToCart = asyncHandler(async (req, res) => {
-  const owner = getRequestOwner(req, { allowGuest: true });
+  const owner = getRequestOwner(req, { allowGuest: false });
   const quantity = Number(req.body.quantity) || 1;
 
   if (!req.body.productId || quantity < 1) {
@@ -141,7 +141,7 @@ export const addToCart = asyncHandler(async (req, res) => {
 
 export const getCart = asyncHandler(async (req, res) => {
   const owner = getRequestOwner(req, {
-    allowGuest: true,
+    allowGuest: false,
     throwIfMissing: false,
   });
 
@@ -161,7 +161,7 @@ export const getCart = asyncHandler(async (req, res) => {
 });
 
 export const updateCart = asyncHandler(async (req, res) => {
-  const owner = getRequestOwner(req, { allowGuest: true });
+  const owner = getRequestOwner(req, { allowGuest: false });
   const quantity = Number(req.body.quantity);
 
   if (Number.isNaN(quantity) || quantity < 0) {
@@ -222,7 +222,7 @@ export const updateCart = asyncHandler(async (req, res) => {
 });
 
 export const removeCartItem = asyncHandler(async (req, res) => {
-  const owner = getRequestOwner(req, { allowGuest: true });
+  const owner = getRequestOwner(req, { allowGuest: false });
   const cart = await Cart.findOne(buildOwnerQuery(owner));
 
   if (!cart) {
@@ -267,7 +267,7 @@ export const removeCartItem = asyncHandler(async (req, res) => {
 
 export const getCartCount = asyncHandler(async (req, res) => {
   const owner = getRequestOwner(req, {
-    allowGuest: true,
+    allowGuest: false,
     throwIfMissing: false,
   });
 

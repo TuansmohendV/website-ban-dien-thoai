@@ -11,7 +11,9 @@ import {
   Zap,
   Tag,
   Percent,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../lib/api';
 
@@ -57,6 +59,10 @@ const PromotionManagement = () => {
   const [editingPromo, setEditingPromo] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const promosPerPage = 10;
+  
   const [formData, setFormData] = useState({
     code: '', type: 'Giảm tiền', value: '', minSpend: '', total: '', expiry: '', isActive: true
   });
@@ -95,6 +101,17 @@ const PromotionManagement = () => {
     p.code.toLowerCase().includes(searchTerm.toLowerCase()) || 
     p.type.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredPromos.length / promosPerPage);
+  const currentPromos = filteredPromos.slice(
+    (currentPage - 1) * promosPerPage,
+    currentPage * promosPerPage
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
 
   const handleOpenModal = (promo = null) => {
     if (promo) {
@@ -235,7 +252,7 @@ const PromotionManagement = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredPromos.length > 0 ? filteredPromos.map((promo) => (
+              {currentPromos.length > 0 ? currentPromos.map((promo) => (
                 <tr key={promo.id}>
                   <td>
                     <div className="promo-code-container">
@@ -294,6 +311,51 @@ const PromotionManagement = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination Footer */}
+        {filteredPromos.length > 0 && (
+          <div className="table-footer" style={{
+            padding: '15px 25px',
+            borderTop: '1px solid #f1f5f9',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: '#fcfcfd'
+          }}>
+            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
+              Hiển thị {(currentPage - 1) * promosPerPage + 1}-{Math.min(currentPage * promosPerPage, filteredPromos.length)} trên {filteredPromos.length} mã
+            </span>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                style={{
+                  width: '32px', height: '32px', borderRadius: '8px', border: '1px solid #e2e8f0',
+                  background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1
+                }}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              
+              <span style={{ display: 'flex', alignItems: 'center', padding: '0 10px', fontSize: '0.85rem', fontWeight: '700' }}>
+                Trang {currentPage} / {totalPages}
+              </span>
+
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                style={{
+                  width: '32px', height: '32px', borderRadius: '8px', border: '1px solid #e2e8f0',
+                  background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1
+                }}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Promotion Modal */}

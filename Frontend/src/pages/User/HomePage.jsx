@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ChevronRight, ChevronLeft, Zap, Smartphone, Laptop, Tablet, Monitor, MousePointer2, Tv, Watch, Headphones, Home, Settings, Wrench, ClipboardList, Info, Flame, History, RefreshCcw } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { ChevronRight, ChevronLeft, Zap, Smartphone, Laptop, Tablet, Monitor, MousePointer2, Tv, Watch, Headphones, Home, Settings, Wrench, ClipboardList, Info, Flame, History, RefreshCcw, Box } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import HeroCarousel from '../../components/HeroCarousel';
 import ProductCard from '../../components/ProductCard';
@@ -12,6 +12,10 @@ import { inflateProducts, normalizeProduct } from '../../lib/products';
 const HomePage = () => {
     const [timeLeft, setTimeLeft] = useState({ h: 8, m: 0, s: 51 });
     const [backendProducts, setBackendProducts] = useState([]);
+    const [inactiveCategorySlugs, setInactiveCategorySlugs] = useState([]);
+    const [featuredCategorySlugs, setFeaturedCategorySlugs] = useState([]);
+    const [dbCategories, setDbCategories] = useState([]);
+    const [iconLibrary, setIconLibrary] = useState([]);
 
     useEffect(() => {
         const timer = setInterval(() => {
@@ -25,7 +29,7 @@ const HomePage = () => {
         return () => clearInterval(timer);
     }, []);
 
-    const categories = [
+    const staticCategories = [
         { name: 'Điện thoại', icon: <img src="/categories/phone.png" alt="Điện thoại" className="w-[26px] h-[26px] object-contain" /> },
         { name: 'Laptop', icon: <img src="/categories/laptop.png" alt="Laptop" className="w-[26px] h-[26px] object-contain" /> },
         { name: 'Tablet', icon: <img src="/categories/tablet.png" alt="Tablet" className="w-[26px] h-[26px] object-contain" /> },
@@ -39,6 +43,48 @@ const HomePage = () => {
         { name: 'Sửa chữa', icon: <img src="/categories/repair.png" alt="Sửa chữa" className="w-[26px] h-[26px] object-contain" /> },
         { name: 'Dịch vụ', icon: <img src="/categories/service.png" alt="Dịch vụ" className="w-[26px] h-[26px] object-contain" /> },
     ];
+
+    // Helper to generate slug consistently
+    const toSlug = (text) => text.toLowerCase()
+        .replace(/ /g, '-')
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d")
+        .replace(/[^a-z0-z-]/g, '');
+
+    // Merged categories: Static ones + Dynamic ones from DB that aren't in static list
+    const categories = useMemo(() => {
+        const activeDbCats = dbCategories.filter(c => !inactiveCategorySlugs.includes(c.slug));
+        
+        // Start with static ones that are active
+        const result = staticCategories.filter(sc => {
+            const slug = toSlug(sc.name);
+            return !inactiveCategorySlugs.includes(slug) && !inactiveCategorySlugs.includes(`derived-${slug}`);
+        });
+
+        // Add dynamic ones from DB that don't match any static name
+        activeDbCats.forEach(dc => {
+            const slug = dc.slug;
+            const alreadyExists = result.some(r => toSlug(r.name) === slug);
+            if (!alreadyExists && !dc.isDerived) {
+                // Find icon in library
+                const foundIcon = iconLibrary.find(i => i.id === dc.icon);
+                const iconUrl = foundIcon ? foundIcon.url : dc.icon;
+
+                result.push({
+                    name: dc.name,
+                    icon: iconUrl ? (
+                        <img src={iconUrl} alt={dc.name} className="w-[26px] h-[26px] object-contain" />
+                    ) : (
+                        <Box size={22} className="text-gray-400" />
+                    ),
+                    slug: dc.slug
+                });
+            }
+        });
+
+        return result;
+    }, [dbCategories, inactiveCategorySlugs, iconLibrary]);
 
     const oldMarket = [
         { name: 'Hàng cũ', icon: <img src="/categories/old-store.png" alt="Hàng cũ" className="w-[26px] h-[26px] object-contain" /> },
@@ -73,6 +119,36 @@ const HomePage = () => {
         };
 
         loadProducts();
+
+        const loadCategoryData = async () => {
+            try {
+                // 1. Load Categories
+                const catResponse = await api.get('/api/categories');
+                const inactiveSlugs = catResponse.data?.inactiveSlugs || [];
+                const allCats = catResponse.data?.data || [];
+                const featuredSlugs = allCats
+                    .filter(c => c.isFeatured)
+                    .map(c => c.slug);
+                
+                setInactiveCategorySlugs(inactiveSlugs);
+                setFeaturedCategorySlugs(featuredSlugs);
+                setDbCategories(allCats);
+
+                // 2. Load Icons to map codes
+                const iconResponse = await api.get('/api/icons/public').catch(() => null);
+                if (iconResponse) {
+                    const icons = (iconResponse.data?.data || iconResponse.data?.icons || []).map(icon => ({
+                        id: icon._id || icon.id || '',
+                        url: icon.url || '',
+                        name: icon.name || '',
+                    }));
+                    setIconLibrary(icons);
+                }
+            } catch (error) {
+                console.error('Failed to load category data');
+            }
+        };
+        loadCategoryData();
 
         return () => {
             ignore = true;
@@ -142,19 +218,55 @@ const HomePage = () => {
                     <div>
                         <h3 className="px-3 py-2 text-[13px] font-black uppercase text-gray-400 tracking-wider">Danh mục</h3>
                         <div className="flex flex-col gap-1">
-                            {categories.map((cat, i) => (
-                                <Link 
-                                    key={i} 
-                                    to={`/category/${cat.name.toLowerCase().replace(/ /g, '-').normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d")}`}
-                                    className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl cursor-pointer transition-colors group"
-                                >
-                                    <div className="flex items-center gap-3.5">
-                                        <span className="text-gray-500 group-hover:text-[#007b63] transition-colors">{cat.icon}</span>
-                                        <span className="text-[16px] font-bold text-gray-700">{cat.name}</span>
-                                    </div>
-                                    <ChevronRight size={16} className="text-gray-300 group-hover:text-[#007b63] transition-colors" />
-                                </Link>
-                            ))}
+                            {categories.filter(cat => {
+                                // Standardize slug generation
+                                const slug = cat.name.toLowerCase()
+                                    .replace(/ /g, '-')
+                                    .normalize("NFD")
+                                    .replace(/[\u0300-\u036f]/g, "")
+                                    .replace(/đ/g, "d")
+                                    .replace(/[^a-z0-z-]/g, '');
+
+                                // Hide only if explicitly in inactive list
+                                return !inactiveCategorySlugs.includes(slug) && 
+                                       !inactiveCategorySlugs.includes(`derived-${slug}`);
+                            }).map((cat, i) => {
+                                const slug = cat.name.toLowerCase()
+                                    .replace(/ /g, '-')
+                                    .normalize("NFD")
+                                    .replace(/[\u0300-\u036f]/g, "")
+                                    .replace(/đ/g, "d")
+                                    .replace(/[^a-z0-z-]/g, '');
+                                
+                                const isFeatured = featuredCategorySlugs.includes(slug) || 
+                                                 featuredCategorySlugs.includes(`derived-${slug}`);
+
+                                return (
+                                    <Link 
+                                        key={i} 
+                                        to={`/category/${cat.name.toLowerCase().replace(/ /g, '-').normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d")}`}
+                                        className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all group ${
+                                            isFeatured 
+                                            ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 scale-[1.03] shadow-md -translate-y-0.5' 
+                                            : 'hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <div className="flex items-center gap-3.5">
+                                            <span className={`transition-colors ${isFeatured ? 'brightness-110' : 'text-gray-500 group-hover:text-[#007b63]'}`}>
+                                                {cat.icon}
+                                            </span>
+                                            <span className={`text-[16px] font-bold transition-colors ${
+                                                isFeatured ? 'text-yellow-300 drop-shadow-sm' : 'text-gray-700'
+                                            }`}>
+                                                {cat.name}
+                                            </span>
+                                        </div>
+                                        <ChevronRight size={16} className={`transition-colors ${
+                                            isFeatured ? 'text-yellow-300' : 'text-gray-300 group-hover:text-[#007b63]'
+                                        }`} />
+                                    </Link>
+                                );
+                            })}
                         </div>
                     </div>
                     <div className="border-t border-gray-50 pt-3">

@@ -101,6 +101,10 @@ export const loginUser = asyncHandler(async (req, res) => {
     throw new AppError(401, 'Tài khoản hoặc mật khẩu không đúng.');
   }
 
+  if (user.isActive === false) {
+    throw new AppError(403, 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.');
+  }
+
   user.lastLoginAt = new Date();
   await user.save({ validateBeforeSave: false });
 
@@ -242,6 +246,10 @@ export const socialLogin = asyncHandler(async (req, res) => {
     });
   }
 
+  if (user.isActive === false) {
+    throw new AppError(403, 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.');
+  }
+
   user.lastLoginAt = new Date();
   await user.save({ validateBeforeSave: false });
 
@@ -281,6 +289,11 @@ export const firebaseLogin = asyncHandler(async (req, res) => {
       user.firebaseUid = firebaseUid;
       user.authProvider = 'firebase';
     }
+
+    if (user.isActive === false) {
+      throw new AppError(403, 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.');
+    }
+
     user.lastLoginAt = new Date();
     await user.save({ validateBeforeSave: false });
   }
@@ -309,10 +322,14 @@ export const otpEmailLogin = asyncHandler(async (req, res) => {
       password: crypto.randomBytes(16).toString('hex'), // Dummy password
       authProvider: 'email_otp',
     });
-  } else {
-    user.lastLoginAt = new Date();
-    await user.save({ validateBeforeSave: false });
   }
+
+  if (user.isActive === false) {
+    throw new AppError(403, 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.');
+  }
+
+  user.lastLoginAt = new Date();
+  await user.save({ validateBeforeSave: false });
 
   res.json({
     ...buildAuthResponse(user),

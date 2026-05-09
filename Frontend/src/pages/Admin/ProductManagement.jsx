@@ -19,10 +19,15 @@ import {
   Dna,
   Smartphone,
   X,
-  Hash
+  Hash,
+  Flame,
+  ThumbsUp,
+  TrendingUp,
+  Download
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import HashtagManagement from './HashtagManagement';
-import api from '../../lib/api';
+import api, { getApiErrorMessage } from '../../lib/api';
 import { normalizeProduct } from '../../lib/products';
 
 const mapProductForAdmin = (product) => {
@@ -35,7 +40,9 @@ const mapProductForAdmin = (product) => {
     stock: normalized.countInStock,
     category: normalized.backendCategory || normalized.category,
     isHidden: normalized.status !== 'active',
-    isFeatured: Boolean(normalized.isHot),
+    isFeatured: Boolean(product.isFeatured),
+    isBestSeller: Boolean(product.isBestSeller),
+    isRecommended: Boolean(product.isRecommended),
   };
 };
 
@@ -108,30 +115,84 @@ const ProductManagement = () => {
     }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa sản phẩm này? Thao tác này không thể hoàn tác.')) {
-      setLocalProducts(localProducts.filter(p => p.id !== id));
-      setSelectedIds(selectedIds.filter(item => item !== id));
+      try {
+        await api.delete(`/api/admin/products/${id}`);
+        setLocalProducts(localProducts.filter(p => p.id !== id));
+        setSelectedIds(selectedIds.filter(item => item !== id));
+      } catch (error) {
+        alert('Không thể xóa sản phẩm: ' + getApiErrorMessage(error));
+      }
     }
   };
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     if (window.confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.length} sản phẩm đã chọn? Thao tác này không thể hoàn tác.`)) {
-      setLocalProducts(localProducts.filter(p => !selectedIds.includes(p.id)));
-      setSelectedIds([]);
+      try {
+        await Promise.all(selectedIds.map(id => api.delete(`/api/admin/products/${id}`)));
+        setLocalProducts(localProducts.filter(p => !selectedIds.includes(p.id)));
+        setSelectedIds([]);
+      } catch (error) {
+        alert('Có lỗi khi xóa hàng loạt: ' + getApiErrorMessage(error));
+      }
     }
   };
 
-  const toggleStatus = (id) => {
-    setLocalProducts(localProducts.map(p => 
-      p.id === id ? { ...p, isHidden: !p.isHidden } : p
-    ));
+  const toggleStatus = async (id) => {
+    const product = localProducts.find(p => p.id === id);
+    if (!product) return;
+    
+    try {
+      const newStatus = product.isHidden ? 'active' : 'inactive';
+      const response = await api.put(`/api/admin/products/${id}`, { status: newStatus });
+      const updated = mapProductForAdmin(response.data?.data?.product);
+      setLocalProducts(localProducts.map(p => p.id === id ? updated : p));
+    } catch (error) {
+      alert('Không thể cập nhật trạng thái: ' + getApiErrorMessage(error));
+    }
   };
 
-  const toggleFeatured = (id) => {
-    setLocalProducts(localProducts.map(p => 
-      p.id === id ? { ...p, isFeatured: !p.isFeatured } : p
-    ));
+  const toggleFeatured = async (id) => {
+    const product = localProducts.find(p => p.id === id);
+    if (!product) return;
+    
+    try {
+      const newVal = !product.isFeatured;
+      const response = await api.put(`/api/admin/products/${id}`, { isFeatured: newVal });
+      const updated = mapProductForAdmin(response.data?.data?.product);
+      setLocalProducts(localProducts.map(p => p.id === id ? updated : p));
+    } catch (error) {
+      alert('Không thể cập nhật trạng thái nổi bật: ' + getApiErrorMessage(error));
+    }
+  };
+
+  const toggleBestSeller = async (id) => {
+    const product = localProducts.find(p => p.id === id);
+    if (!product) return;
+    
+    try {
+      const newVal = !product.isBestSeller;
+      const response = await api.put(`/api/admin/products/${id}`, { isBestSeller: newVal });
+      const updated = mapProductForAdmin(response.data?.data?.product);
+      setLocalProducts(localProducts.map(p => p.id === id ? updated : p));
+    } catch (error) {
+      alert('Không thể cập nhật trạng thái bán chạy: ' + getApiErrorMessage(error));
+    }
+  };
+
+  const toggleRecommended = async (id) => {
+    const product = localProducts.find(p => p.id === id);
+    if (!product) return;
+    
+    try {
+      const newVal = !product.isRecommended;
+      const response = await api.put(`/api/admin/products/${id}`, { isRecommended: newVal });
+      const updated = mapProductForAdmin(response.data?.data?.product);
+      setLocalProducts(localProducts.map(p => p.id === id ? updated : p));
+    } catch (error) {
+      alert('Không thể cập nhật trạng thái đề xuất: ' + getApiErrorMessage(error));
+    }
   };
 
   const getStatusInfo = (product) => {
@@ -150,12 +211,24 @@ const ProductManagement = () => {
     screen: '',
     cpu: '',
     ram: '8GB',
-    rom: '256GB',
+    storage: '256GB',
     isHidden: false,
     isFeatured: false,
-    image: null
+    isBestSeller: false,
+    isRecommended: false,
+    image: '',
+    images: [],
+    tags: [],
+    specifications: {},
+    description: ''
   });
+  const [showTagModal, setShowTagModal] = useState(false);
+  const [taggingProduct, setTaggingProduct] = useState(null);
+  const [newTag, setNewTag] = useState('');
+  const [newSpecKey, setNewSpecKey] = useState('');
+  const [newSpecValue, setNewSpecValue] = useState('');
   const [imagePreview, setImagePreview] = useState(null);
+  const [galleryPreviews, setGalleryPreviews] = useState([]);
 
   const toggleForm = (product = null) => {
     if (product) {
@@ -169,19 +242,43 @@ const ProductManagement = () => {
          screen: '6.7 inch, OLED',
          cpu: 'A17 Pro',
          ram: '8GB',
-         rom: '256GB',
+         storage: '256GB',
          isHidden: product.isHidden || false,
          isFeatured: product.isFeatured || false,
-         image: product.image || null
-       });
-       setImagePreview(product.image || null);
+         isBestSeller: product.isBestSeller || false,
+         isRecommended: product.isRecommended || false,
+          image: product.image || '',
+          images: product.images || [],
+          tags: product.tags || [],
+          specifications: product.specifications || {},
+          description: product.description || ''
+        });
+        setImagePreview(product.image || null);
+        setGalleryPreviews(product.images || []);
     } else {
-       setEditingProduct(null);
-       setFormData({
-         name: '', category: 'dien-thoai', price: '', stock: '0', brand: '', 
-         screen: '', cpu: '', ram: '8GB', rom: '256GB', isHidden: false, isFeatured: false, image: null
-       });
-       setImagePreview(null);
+        setEditingProduct(null);
+        setFormData({
+          name: '',
+          category: 'dien-thoai',
+          price: '',
+          stock: '0',
+          brand: '',
+          screen: '', 
+          cpu: '', 
+          ram: '8GB', 
+          storage: '256GB', 
+          isHidden: false, 
+          isFeatured: false, 
+          isBestSeller: false, 
+          isRecommended: false, 
+          image: '', 
+          images: [], 
+          tags: [], 
+          specifications: {}, 
+          description: ''
+        });
+        setImagePreview(null);
+        setGalleryPreviews([]);
     }
     setShowForm(!showForm);
   };
@@ -206,9 +303,19 @@ const ProductManagement = () => {
     }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.name) {
       alert('Vui lòng nhập tên sản phẩm');
+      return;
+    }
+
+    if (!formData.description) {
+      alert('Vui lòng nhập mô tả sản phẩm');
+      return;
+    }
+
+    if (!formData.image && !editingProduct) {
+      alert('Vui lòng chọn ảnh đại diện cho sản phẩm');
       return;
     }
 
@@ -217,22 +324,133 @@ const ProductManagement = () => {
       return;
     }
 
-    const priceFormatted = Number(formData.price).toLocaleString() + ' ₫';
-    
-    if (editingProduct) {
-      setLocalProducts(localProducts.map(p => 
-        p.id === editingProduct.id ? { ...p, ...formData, price: priceFormatted, image: imagePreview } : p
-      ));
-    } else {
-      const newProduct = {
-        id: `p${localProducts.length + 1}`,
+    setIsLoading(true);
+    try {
+      const payload = {
         ...formData,
-        price: priceFormatted,
-        image: imagePreview || 'https://cdn.tgdd.vn/Products/Images/42/305658/iphone-15-pro-max-blue-thumb-600x600.jpg'
+        price: Number(formData.price),
+        countInStock: Number(formData.stock),
+        categoryId: formData.category, 
+        specifications: {
+          ...formData.specifications,
+          cpu: formData.cpu
+        }
       };
-      setLocalProducts([newProduct, ...localProducts]);
+
+      if (editingProduct) {
+        const response = await api.put(`/api/admin/products/${editingProduct.id}`, payload);
+        const updated = mapProductForAdmin(response.data?.data?.product);
+        setLocalProducts(localProducts.map(p => p.id === editingProduct.id ? updated : p));
+      } else {
+        const response = await api.post('/api/admin/products', payload);
+        const newlyCreated = mapProductForAdmin(response.data?.data?.product);
+        setLocalProducts([newlyCreated, ...localProducts]);
+      }
+      setShowForm(false);
+    } catch (error) {
+      const backendMessage = error?.response?.data?.message;
+      const backendDetails = error?.response?.data?.details;
+      const detailText = Array.isArray(backendDetails) ? `\n- ${backendDetails.join('\n- ')}` : '';
+      
+      alert(backendMessage ? `${backendMessage}${detailText}` : 'Không thể lưu sản phẩm.');
+    } finally {
+      setIsLoading(false);
     }
-    setShowForm(false);
+  };
+
+  const addSpecification = () => {
+    if (!newSpecKey || !newSpecValue) return;
+    setFormData(prev => ({
+      ...prev,
+      specifications: {
+        ...prev.specifications,
+        [newSpecKey]: newSpecValue
+      }
+    }));
+    setNewSpecKey('');
+    setNewSpecValue('');
+  };
+
+  const removeSpecification = (key) => {
+    setFormData(prev => {
+      const newSpecs = { ...prev.specifications };
+      delete newSpecs[key];
+      return { ...prev, specifications: newSpecs };
+    });
+  };
+
+  const handleGalleryChange = (e) => {
+    const files = Array.from(e.target.files);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setGalleryPreviews(prev => [...prev, reader.result]);
+        setFormData(prev => ({ ...prev, images: [...prev.images, reader.result] }));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleQuickTag = (product) => {
+    setTaggingProduct(product);
+    setShowTagModal(true);
+  };
+
+  const addTag = async (tagName) => {
+    if (!tagName || !taggingProduct) return;
+    const cleanTag = tagName.replace(/\s+/g, '').replace('#', '');
+    if (taggingProduct.tags?.includes(cleanTag)) return;
+    
+    const updatedTags = [...(taggingProduct.tags || []), cleanTag];
+    
+    try {
+      const response = await api.put(`/api/admin/products/${taggingProduct.id}`, { tags: updatedTags });
+      const updated = mapProductForAdmin(response.data?.data?.product);
+      setLocalProducts(localProducts.map(p => p.id === taggingProduct.id ? updated : p));
+      setTaggingProduct(updated);
+      setNewTag('');
+    } catch (error) {
+      alert('Không thể cập nhật tag: ' + getApiErrorMessage(error));
+    }
+  };
+
+  const removeTag = async (tagToRemove) => {
+    if (!taggingProduct) return;
+    const updatedTags = (taggingProduct.tags || []).filter(t => t !== tagToRemove);
+    
+    try {
+      const response = await api.put(`/api/admin/products/${taggingProduct.id}`, { tags: updatedTags });
+      const updated = mapProductForAdmin(response.data?.data?.product);
+      setLocalProducts(localProducts.map(p => p.id === taggingProduct.id ? updated : p));
+      setTaggingProduct(updated);
+    } catch (error) {
+      alert('Không thể xóa tag: ' + getApiErrorMessage(error));
+    }
+  };
+
+  const exportToExcel = () => {
+    if (localProducts.length === 0) {
+      alert('Không có dữ liệu để xuất!');
+      return;
+    }
+
+    const exportData = localProducts.map(p => ({
+      'ID Sản phẩm': p.id,
+      'Tên sản phẩm': p.name,
+      'Danh mục': p.category,
+      'Giá bán': p.price,
+      'Tồn kho': p.stock || 0,
+      'Trạng thái': p.isHidden ? 'Đang ẩn' : ((p.stock || 24) <= 0 ? 'Hết hàng' : 'Đang hiển thị'),
+      'Nổi bật': p.isFeatured ? 'Có' : 'Không',
+      'Bán chạy': p.isBestSeller ? 'Có' : 'Không',
+      'Đề xuất': p.isRecommended ? 'Có' : 'Không',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sản phẩm');
+    
+    XLSX.writeFile(workbook, 'Danh_sach_san_pham_PhoneSin.xlsx');
   };
 
   return (
@@ -249,6 +467,10 @@ const ProductManagement = () => {
               Xóa {selectedIds.length} mục đã chọn
             </button>
           )}
+          <button className="btn-outline" onClick={exportToExcel} style={{ backgroundColor: '#10b981', color: 'white', borderColor: '#10b981' }}>
+            <Download size={18} />
+            Xuất Excel
+          </button>
           <button className="btn-outline" onClick={() => setShowHashtagManager(true)}>
             <Hash size={18} />
             Quản lý Hashtag
@@ -353,12 +575,30 @@ const ProductManagement = () => {
                         </button>
                         <button 
                           className={`qa-btn ${product.isFeatured ? 'active' : ''}`} 
-                          title="Nổi bật"
+                          title="Nổi bật (Trang chủ)"
                           onClick={() => toggleFeatured(product.id)}
                         >
-                          <Star size={16} fill={product.isFeatured ? "#2563eb" : "none"} />
+                          <Star size={16} fill={product.isFeatured ? "#f59e0b" : "none"} color={product.isFeatured ? "#f59e0b" : "#94a3b8"} />
                         </button>
-                        <button className="qa-btn" title="Gắn hashtag">
+                        <button 
+                          className={`qa-btn ${product.isBestSeller ? 'active' : ''}`} 
+                          title="Bán chạy"
+                          onClick={() => toggleBestSeller(product.id)}
+                        >
+                          <Flame size={16} fill={product.isBestSeller ? "#ef4444" : "none"} color={product.isBestSeller ? "#ef4444" : "#94a3b8"} />
+                        </button>
+                        <button 
+                          className={`qa-btn ${product.isRecommended ? 'active' : ''}`} 
+                          title="Đề xuất"
+                          onClick={() => toggleRecommended(product.id)}
+                        >
+                          <ThumbsUp size={16} fill={product.isRecommended ? "#2563eb" : "none"} color={product.isRecommended ? "#2563eb" : "#94a3b8"} />
+                        </button>
+                        <button 
+                          className={`qa-btn ${(product.tags || []).length > 0 ? 'active' : ''}`} 
+                          title="Gắn hashtag"
+                          onClick={() => handleQuickTag(product)}
+                        >
                           <Tag size={16} />
                         </button>
                       </div>
@@ -443,6 +683,19 @@ const ProductManagement = () => {
                     <label>Tên sản phẩm *</label>
                     <input name="name" type="text" value={formData.name} onChange={handleInputChange} placeholder="Nhập tên sản phẩm" />
                   </div>
+                  <div className="input-group">
+                    <label>Mô tả sản phẩm *</label>
+                    <textarea 
+                      name="description" 
+                      value={formData.description} 
+                      onChange={handleInputChange} 
+                      placeholder="Mô tả chi tiết về sản phẩm..."
+                      style={{ 
+                        padding: '10px 15px', border: '1px solid #e2e8f0', borderRadius: '10px', 
+                        outline: 'none', fontSize: '0.9rem', minHeight: '100px', resize: 'vertical' 
+                      }}
+                    />
+                  </div>
                   <div className="input-row">
                     <div className="input-group">
                       <label>Danh mục *</label>
@@ -491,7 +744,7 @@ const ProductManagement = () => {
                     </div>
                     <div className="input-group">
                       <label><HardDrive size={14} /> ROM</label>
-                      <select name="rom" value={formData.rom} onChange={handleInputChange}>
+                      <select name="storage" value={formData.storage} onChange={handleInputChange}>
                         <option value="128GB">128GB</option>
                         <option value="256GB">256GB</option>
                         <option value="512GB">512GB</option>
@@ -499,42 +752,90 @@ const ProductManagement = () => {
                       </select>
                     </div>
                   </div>
+
+                  {/* Dynamic Additional Specs */}
+                  <div style={{ marginTop: '20px', borderTop: '1px solid #e2e8f0', paddingTop: '15px' }}>
+                    <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569', marginBottom: '10px', display: 'block' }}>Thông số bổ sung (Pin, Camera, Trọng lượng...)</label>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                       <input 
+                         placeholder="Tên (VD: Pin)" value={newSpecKey} 
+                         onChange={e => setNewSpecKey(e.target.value)} 
+                         style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                       />
+                       <input 
+                         placeholder="Giá trị (VD: 5000mAh)" value={newSpecValue} 
+                         onChange={e => setNewSpecValue(e.target.value)}
+                         style={{ flex: 2, padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                       />
+                       <button className="btn-primary" onClick={addSpecification} style={{ padding: '0 12px' }}><Plus size={14} /></button>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                       {Object.entries(formData.specifications || {}).map(([key, value]) => (
+                         <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #f1f5f9', fontSize: '13px' }}>
+                           <span><strong>{key}:</strong> {value}</span>
+                           <X size={14} style={{ cursor: 'pointer', color: '#ef4444' }} onClick={() => removeSpecification(key)} />
+                         </div>
+                       ))}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="form-section">
                    <h3><ImageIcon size={18} /> Hình ảnh sản phẩm</h3>
-                  <div className="image-upload-wrapper">
-                    <label className="upload-zone" style={{ 
-                        border: '2px dashed #e2e8f0', 
-                        borderRadius: '16px', 
-                        padding: '30px', 
-                        display: 'flex', 
-                        flexDirection: 'column', 
-                        alignItems: 'center', 
-                        cursor: 'pointer',
-                        background: '#f8fafc',
-                        transition: 'all 0.2s',
-                        position: 'relative',
-                        overflow: 'hidden',
-                        height: '200px',
-                        justifyContent: 'center'
-                      }}>
-                      <input type="file" accept="image/*" onChange={handleImageChange} style={{ display: 'none' }} />
-                      
-                      {imagePreview ? (
-                        <div style={{ position: 'absolute', inset: 0, padding: '10px', background: 'white' }}>
-                          <img src={imagePreview} alt="Preview" style={{ width: '100%', height: '100%', objectContain: 'contain' }} />
-                          <div style={{ position: 'absolute', top: '10px', right: '10px', background: 'rgba(0,0,0,0.5)', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '10px' }}>Thay đổi</div>
+                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                      {/* Main Image */}
+                      <div>
+                        <label style={{ fontSize: '12px', fontWeight: '700', marginBottom: '5px', display: 'block' }}>Ảnh đại diện</label>
+                        <div className="image-upload-wrapper">
+                          <label className="upload-zone" style={{ 
+                              border: '2px dashed #e2e8f0', borderRadius: '16px', padding: '20px', 
+                              display: 'flex', flexDirection: 'column', alignItems: 'center', 
+                              cursor: 'pointer', background: '#f8fafc', height: '150px', justifyContent: 'center', position: 'relative'
+                            }}>
+                            <input type="file" accept="image/*" onChange={handleImageChange} style={{ display: 'none' }} />
+                            {imagePreview ? (
+                              <img src={imagePreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                            ) : (
+                              <><Plus size={24} color="#94a3b8" /><small>Chọn ảnh chính</small></>
+                            )}
+                          </label>
                         </div>
-                      ) : (
-                        <>
-                          <Plus size={32} color="#94a3b8" />
-                          <span style={{ marginTop: '10px', fontWeight: '600', color: '#64748b' }}>Nhấp để chọn ảnh</span>
-                          <small style={{ color: '#94a3b8' }}>JPG, PNG, WEBP</small>
-                        </>
-                      )}
-                    </label>
-                  </div>
+                      </div>
+                      
+                      {/* Gallery */}
+                      <div>
+                        <label style={{ fontSize: '12px', fontWeight: '700', marginBottom: '5px', display: 'block' }}>Ảnh bộ sưu tập (Gallery)</label>
+                        <label className="upload-zone" style={{ 
+                            border: '2px dashed #e2e8f0', borderRadius: '16px', padding: '20px', 
+                            display: 'flex', flexDirection: 'column', alignItems: 'center', 
+                            cursor: 'pointer', background: '#f8fafc', height: '150px', justifyContent: 'center'
+                          }}>
+                          <input type="file" accept="image/*" multiple onChange={handleGalleryChange} style={{ display: 'none' }} />
+                          <Plus size={24} color="#94a3b8" />
+                          <small>{galleryPreviews.length} ảnh đã chọn</small>
+                        </label>
+                      </div>
+                   </div>
+                   
+                   {/* Gallery Preview List */}
+                   {galleryPreviews.length > 0 && (
+                     <div style={{ display: 'flex', gap: '10px', marginTop: '15px', overflowX: 'auto', paddingBottom: '10px' }}>
+                        {galleryPreviews.map((url, idx) => (
+                          <div key={idx} style={{ position: 'relative', flexShrink: 0, width: '60px', height: '60px', borderRadius: '8px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                            <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <button 
+                              onClick={() => {
+                                setGalleryPreviews(prev => prev.filter((_, i) => i !== idx));
+                                setFormData(prev => ({ ...prev, images: prev.images.filter((_, i) => i !== idx) }));
+                              }}
+                              style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(0,0,0,0.5)', border: 'none', borderRadius: '50%', padding: '2px', color: 'white', cursor: 'pointer' }}
+                            >
+                              <X size={10} />
+                            </button>
+                          </div>
+                        ))}
+                     </div>
+                   )}
                 </div>
 
                 <div className="form-section">
@@ -548,7 +849,48 @@ const ProductManagement = () => {
                       <input name="isFeatured" type="checkbox" checked={formData.isFeatured} onChange={handleInputChange} />
                       <span>Sản phẩm nổi bật</span>
                     </label>
+                    <label className="switch-label">
+                      <input name="isBestSeller" type="checkbox" checked={formData.isBestSeller} onChange={handleInputChange} />
+                      <span>Bán chạy</span>
+                    </label>
+                    <label className="switch-label">
+                      <input name="isRecommended" type="checkbox" checked={formData.isRecommended} onChange={handleInputChange} />
+                      <span>Đề xuất</span>
+                    </label>
                   </div>
+                </div>
+
+                {/* Hashtags Section */}
+                <div className="form-section">
+                   <h3><Hash size={18} /> Hashtags</h3>
+                   <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                      <input 
+                        type="text" 
+                        placeholder="Thêm tag mới (VD: iPhone15)" 
+                        value={newTag}
+                        onChange={(e) => setNewTag(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag(newTag))}
+                        style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0' }}
+                      />
+                      <button 
+                        className="btn-primary" 
+                        onClick={() => addTag(newTag)}
+                        style={{ padding: '0 15px' }}
+                      >Thêm</button>
+                   </div>
+                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      {(formData.tags || []).map(tag => (
+                        <span key={tag} style={{ 
+                          padding: '5px 12px', background: '#eff6ff', color: '#2563eb', 
+                          borderRadius: '20px', fontSize: '13px', fontWeight: '600',
+                          display: 'flex', alignItems: 'center', gap: '5px'
+                        }}>
+                          #{tag}
+                          <X size={14} style={{ cursor: 'pointer' }} onClick={() => setFormData(prev => ({ ...prev, tags: prev.tags.filter(t => t !== tag) }))} />
+                        </span>
+                      ))}
+                      {(formData.tags || []).length === 0 && <span style={{ color: '#94a3b8', fontSize: '13px italic' }}>Chưa có tag nào</span>}
+                   </div>
                 </div>
               </div>
             </div>
@@ -939,6 +1281,51 @@ const ProductManagement = () => {
           .form-grid { grid-template-columns: 1fr; }
         }
       `}</style>
+      {/* Quick Tag Modal */}
+      {showTagModal && taggingProduct && (
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content" style={{ maxWidth: '450px' }}>
+            <div className="modal-header">
+              <h2>Gắn Hashtag: {taggingProduct.name}</h2>
+              <button className="close-btn" onClick={() => setShowTagModal(false)}><X size={24} /></button>
+            </div>
+            <div className="modal-body">
+               <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+                  <input 
+                    type="text" 
+                    placeholder="Nhập hashtag mới..." 
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag(newTag))}
+                    style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', fontSize: '14px' }}
+                  />
+                  <button className="btn-primary" onClick={() => addTag(newTag)}>Thêm</button>
+               </div>
+               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  {(taggingProduct.tags || []).map(tag => (
+                    <span key={tag} style={{ 
+                      padding: '8px 15px', background: '#eff6ff', color: '#2563eb', 
+                      borderRadius: '20px', fontSize: '13px', fontWeight: '700',
+                      display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #bfdbfe'
+                    }}>
+                      #{tag}
+                      <X size={14} style={{ cursor: 'pointer' }} onClick={() => removeTag(tag)} />
+                    </span>
+                  ))}
+                  {(taggingProduct.tags || []).length === 0 && (
+                    <div style={{ textAlign: 'center', width: '100%', padding: '20px', color: '#94a3b8' }}>
+                       Sản phẩm này chưa có hashtag nào.
+                    </div>
+                  )}
+               </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-primary" onClick={() => setShowTagModal(false)}>Hoàn tất</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hashtag Manager Modal */}
       {showHashtagManager && (
         <div className="modal-overlay" style={{ zIndex: 1100 }}>

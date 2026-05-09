@@ -242,17 +242,15 @@ const OrdersPage = () => {
                                             </button>
                                         )}
                                         {order.status === 'delivered' && (
-                                            <>
-                                                <Link to={`/return-request/${order.id}`}
-                                                    className="px-4 py-2 text-xs font-semibold bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-all flex items-center gap-1.5">
-                                                    <Refresh className="w-3.5 h-3.5" /> Đổi trả
-                                                </Link>
-                                                <Link to={`/invoice/${order.id}`}
-                                                    className="px-4 py-2 text-xs font-semibold bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-all flex items-center gap-1.5">
-                                                    <Print className="w-3.5 h-3.5" /> Hóa đơn
-                                                </Link>
-                                            </>
+                                            <Link to={`/return-request/${order.id}`}
+                                                className="px-4 py-2 text-xs font-semibold bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-all flex items-center gap-1.5">
+                                                <Refresh className="w-3.5 h-3.5" /> Đổi trả
+                                            </Link>
                                         )}
+                                        <Link to={`/invoice/${order.id}`}
+                                            className="px-4 py-2 text-xs font-semibold bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-all flex items-center gap-1.5">
+                                            <Print className="w-3.5 h-3.5" /> Hóa đơn
+                                        </Link>
                                         <button
                                             onClick={() => setDrawer(order)}
                                             className="px-5 py-2 text-xs font-bold text-white rounded-xl hover:opacity-90 transition-all flex items-center gap-1.5 shadow-sm"
@@ -422,12 +420,10 @@ const OrdersPage = () => {
 
                         {/* Drawer Footer */}
                         <div className="shrink-0 px-6 py-4 bg-white border-t border-gray-100 flex gap-3">
-                            {drawer.status === 'delivered' && (
-                                <Link to={`/invoice/${drawer.id}`}
-                                    className="flex-1 h-11 flex items-center justify-center gap-2 border border-gray-200 text-gray-600 rounded-xl font-semibold text-sm hover:bg-gray-50 transition-all">
-                                    <Print className="w-4 h-4" /> Hóa đơn PDF
-                                </Link>
-                            )}
+                            <Link to={`/invoice/${drawer.id}`}
+                                className="flex-1 h-11 flex items-center justify-center gap-2 border border-gray-200 text-gray-600 rounded-xl font-semibold text-sm hover:bg-gray-50 transition-all">
+                                <Print className="w-4 h-4" /> Hóa đơn PDF
+                            </Link>
                             <button onClick={() => setDrawer(null)}
                                 className="flex-1 h-11 text-white rounded-xl font-bold text-sm hover:opacity-90 transition-all"
                                 style={{ background: BRAND }}>

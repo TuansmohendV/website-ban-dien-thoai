@@ -21,6 +21,9 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
   const [email, setEmail] = useState('');
   const [deliveryMethod, setDeliveryMethod] = useState('store'); // 'store' | 'home'
   const [selectedCity, setSelectedCity] = useState('');
+  const [district, setDistrict] = useState('');
+  const [ward, setWard] = useState('');
+  const [street, setStreet] = useState('');
   const [selectedStore, setSelectedStore] = useState('');
   const [note, setNote] = useState('');
   const [couponCode, setCouponCode] = useState('');
@@ -43,8 +46,7 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
   ];
 
   const cities = [
-    'Hồ Chí Minh', 'Hà Nội', 'Đà Nẵng', 'Cần Thơ', 'Hải Phòng',
-    'Bình Dương', 'Đồng Nai', 'Khánh Hòa', 'Lâm Đồng', 'Thừa Thiên Huế'
+    "An Giang", "Bà Rịa - Vũng Tàu", "Bắc Giang", "Bắc Kạn", "Bạc Liêu", "Bắc Ninh", "Bến Tre", "Bình Định", "Bình Dương", "Bình Phước", "Bình Thuận", "Cà Mau", "Cần Thơ", "Cao Bằng", "Đà Nẵng", "Đắk Lắk", "Đắk Nông", "Điện Biên", "Đồng Nai", "Đồng Tháp", "Gia Lai", "Hà Giang", "Hà Nam", "Hà Nội", "Hà Tĩnh", "Hải Dương", "Hải Phòng", "Hậu Giang", "Hòa Bình", "Hưng Yên", "Khánh Hòa", "Kiên Giang", "Kon Tum", "Lai Châu", "Lâm Đồng", "Lạng Sơn", "Lào Cai", "Long An", "Nam Định", "Nghệ An", "Ninh Bình", "Ninh Thuận", "Phú Thọ", "Phú Yên", "Quảng Bình", "Quảng Nam", "Quảng Ngãi", "Quảng Ninh", "Quảng Trị", "Sóc Trăng", "Sơn La", "Tây Ninh", "Thái Bình", "Thái Nguyên", "Thanh Hóa", "Thừa Thiên Huế", "Tiền Giang", "TP Hồ Chí Minh", "Trà Vinh", "Tuyên Quang", "Vĩnh Long", "Vĩnh Phúc", "Yên Bái"
   ];
 
   const stores = {
@@ -74,6 +76,10 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
       setAppliedCoupon(null);
       setCouponStatus(null);
       setDiscountAmount(0);
+      setDistrict('');
+      setWard('');
+      setStreet('');
+      setSelectedStore('');
       document.body.style.overflow = 'hidden';
     }
     return () => {
@@ -109,7 +115,13 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
     if (!phone.trim()) newErrors.phone = 'Vui lòng nhập số điện thoại';
     else if (!/^0\d{9}$/.test(phone)) newErrors.phone = 'Số điện thoại không hợp lệ';
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) newErrors.email = 'Email không hợp lệ';
-    if (deliveryMethod === 'store' && !selectedCity) newErrors.city = 'Vui lòng chọn thành phố';
+    if (!selectedCity) newErrors.city = 'Vui lòng chọn tỉnh/thành phố';
+    if (deliveryMethod === 'store' && !selectedStore) newErrors.store = 'Vui lòng chọn cửa hàng';
+    if (deliveryMethod === 'home') {
+      if (!district.trim()) newErrors.district = 'Vui lòng nhập quận/huyện';
+      if (!ward.trim()) newErrors.ward = 'Vui lòng nhập phường/xã';
+      if (!street.trim()) newErrors.street = 'Vui lòng nhập địa chỉ cụ thể';
+    }
     if (isVAT) {
       if (!companyName.trim()) newErrors.companyName = 'Vui lòng nhập tên công ty';
       if (!taxCode.trim()) newErrors.taxCode = 'Vui lòng nhập mã số thuế';
@@ -157,9 +169,9 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
           recipientName: fullName,
           phone,
           province: selectedCity || 'Hồ Chí Minh',
-          district: deliveryMethod === 'store' ? 'Nhận tại cửa hàng' : 'Nhân viên sẽ gọi xác nhận',
-          ward: deliveryMethod === 'store' ? 'Nhận tại cửa hàng' : 'Nhân viên sẽ gọi xác nhận',
-          street: deliveryMethod === 'store' ? (selectedStore || selectedCity || 'Cửa hàng PhoneSin') : 'Khách hàng nhận tại nhà',
+          district: deliveryMethod === 'store' ? 'Nhận tại cửa hàng' : district,
+          ward: deliveryMethod === 'store' ? 'Nhận tại cửa hàng' : ward,
+          street: deliveryMethod === 'store' ? (selectedStore || 'Cửa hàng PhoneSin') : street,
           note,
         },
         paymentMethod: 'COD',
@@ -480,27 +492,74 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
               </div>
 
               {/* City & Store Selection */}
-              <div className="mb-5">
-                <label className="text-[12px] font-bold text-gray-500 mb-2 block uppercase">Nơi nhận hàng</label>
-                <div className="grid grid-cols-2 gap-3">
+              <div className="mb-5 space-y-3">
+                <label className="text-[12px] font-bold text-gray-500 mb-2 block uppercase">Địa chỉ nhận hàng</label>
+                
+                {/* Always show City */}
+                <div>
                   <select
                     value={selectedCity}
                     onChange={(e) => { setSelectedCity(e.target.value); setSelectedStore(''); if(errors.city) setErrors({...errors, city: null}); }}
-                    className={`h-10 px-3 rounded-lg border text-[13px] font-medium outline-none appearance-none cursor-pointer transition-all ${errors.city ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-[#009981]'}`}
+                    className={`w-full h-10 px-3 rounded-lg border text-[13px] font-medium outline-none appearance-none cursor-pointer transition-all ${errors.city ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-[#009981]'}`}
                   >
-                    <option value="">Chọn thành phố</option>
+                    <option value="">Chọn tỉnh/thành phố *</option>
                     {cities.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
-                  <select
-                    value={selectedStore}
-                    onChange={(e) => setSelectedStore(e.target.value)}
-                    className="h-10 px-3 rounded-lg border border-gray-300 text-[13px] font-medium outline-none appearance-none cursor-pointer focus:border-[#009981] transition-all"
-                  >
-                    <option value="">Cửa hàng *</option>
-                    {(stores[selectedCity] || []).map((s, i) => <option key={i} value={s}>{s}</option>)}
-                  </select>
+                  {errors.city && <p className="text-[10px] text-red-500 font-bold mt-0.5">{errors.city}</p>}
                 </div>
-                {errors.city && <p className="text-[10px] text-red-500 font-bold mt-0.5">{errors.city}</p>}
+
+                {/* Show Store Selection if method is store */}
+                {deliveryMethod === 'store' && (
+                  <div>
+                    <select
+                      value={selectedStore}
+                      onChange={(e) => { setSelectedStore(e.target.value); if(errors.store) setErrors({...errors, store: null}); }}
+                      className={`w-full h-10 px-3 rounded-lg border text-[13px] font-medium outline-none appearance-none cursor-pointer transition-all ${errors.store ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-[#009981]'}`}
+                    >
+                      <option value="">Chọn cửa hàng *</option>
+                      {(stores[selectedCity] || []).map((s, i) => <option key={i} value={s}>{s}</option>)}
+                    </select>
+                    {errors.store && <p className="text-[10px] text-red-500 font-bold mt-0.5">{errors.store}</p>}
+                  </div>
+                )}
+
+                {/* Show Detailed Address if method is home */}
+                {deliveryMethod === 'home' && (
+                  <div className="space-y-3 animate-fadeIn">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <input
+                          type="text"
+                          value={district}
+                          onChange={(e) => { setDistrict(e.target.value); if(errors.district) setErrors({...errors, district: null}); }}
+                          placeholder="Quận/Huyện *"
+                          className={`w-full h-10 px-3 rounded-lg border text-[13px] font-medium outline-none transition-all ${errors.district ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-[#009981]'}`}
+                        />
+                        {errors.district && <p className="text-[10px] text-red-500 font-bold mt-0.5">{errors.district}</p>}
+                      </div>
+                      <div>
+                        <input
+                          type="text"
+                          value={ward}
+                          onChange={(e) => { setWard(e.target.value); if(errors.ward) setErrors({...errors, ward: null}); }}
+                          placeholder="Phường/Xã *"
+                          className={`w-full h-10 px-3 rounded-lg border text-[13px] font-medium outline-none transition-all ${errors.ward ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-[#009981]'}`}
+                        />
+                        {errors.ward && <p className="text-[10px] text-red-500 font-bold mt-0.5">{errors.ward}</p>}
+                      </div>
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        value={street}
+                        onChange={(e) => { setStreet(e.target.value); if(errors.street) setErrors({...errors, street: null}); }}
+                        placeholder="Số nhà, tên đường *"
+                        className={`w-full h-10 px-3 rounded-lg border text-[13px] font-medium outline-none transition-all ${errors.street ? 'border-red-400 bg-red-50' : 'border-gray-300 focus:border-[#009981]'}`}
+                      />
+                      {errors.street && <p className="text-[10px] text-red-500 font-bold mt-0.5">{errors.street}</p>}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Note */}

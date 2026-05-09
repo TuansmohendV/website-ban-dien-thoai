@@ -31,6 +31,8 @@ const AdminLayout = () => {
   const [logo, setLogo] = useState(localStorage.getItem('adminLogo') || null);
   const [primaryColor, setPrimaryColor] = useState(localStorage.getItem('primaryColor') || '#2563eb');
   const [sidebarTheme, setSidebarTheme] = useState(localStorage.getItem('sidebarTheme') || 'dark');
+  const [adminSearchTerm, setAdminSearchTerm] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
 
@@ -53,6 +55,17 @@ const AdminLayout = () => {
     };
   }, [logo, primaryColor, sidebarTheme]);
 
+  // Handle click outside search
+  React.useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.header-search')) {
+        setIsSearchFocused(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const menuItems = [
     { path: '/admin', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
     { path: '/admin/products', icon: <Package size={20} />, label: 'Sản phẩm' },
@@ -65,8 +78,13 @@ const AdminLayout = () => {
     { path: '/admin/feedback', icon: <MessageSquare size={20} />, label: 'Phản hồi' },
     { path: '/admin/media', icon: <ImageIcon size={20} />, label: 'Thư viện Media' },
     { path: '/admin/icons', icon: <Dna size={20} />, label: 'Thư viện Icon' },
+    { path: '/admin/hashtags', icon: <Hash size={20} />, label: 'Hashtags' },
     { path: '/admin/settings', icon: <Settings size={20} />, label: 'Cài đặt hệ thống' },
   ];
+
+  const filteredMenuItems = menuItems.filter(item => 
+    item.label.toLowerCase().includes(adminSearchTerm.toLowerCase())
+  );
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
@@ -87,7 +105,7 @@ const AdminLayout = () => {
         </div>
 
         <nav className="sidebar-nav">
-          {menuItems.map((item) => (
+          {filteredMenuItems.map((item) => (
             <Link 
               key={item.path} 
               to={item.path} 
@@ -98,6 +116,11 @@ const AdminLayout = () => {
               {isSidebarOpen && location.pathname === item.path && <ChevronRight size={16} className="active-indicator" />}
             </Link>
           ))}
+          {filteredMenuItems.length === 0 && (
+            <div style={{ padding: '20px', color: '#94a3b8', fontSize: '13px', textAlign: 'center' }}>
+              Không tìm thấy mục nào
+            </div>
+          )}
         </nav>
 
         <div className="sidebar-footer">
@@ -129,9 +152,67 @@ const AdminLayout = () => {
             <button className="desktop-toggle" onClick={toggleSidebar}>
               <Menu size={24} />
             </button>
-            <div className="header-search">
+            <div className="header-search" style={{ position: 'relative' }}>
               <Search size={18} className="search-icon" />
-              <input type="text" placeholder="Tìm kiếm nhanh..." />
+              <input 
+                type="text" 
+                placeholder="Tìm kiếm nhanh..." 
+                value={adminSearchTerm}
+                onChange={(e) => setAdminSearchTerm(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+              />
+              {adminSearchTerm && (
+                <button 
+                  onClick={() => setAdminSearchTerm('')}
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', alignItems: 'center' }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+
+              {/* Search Results Dropdown */}
+              {isSearchFocused && adminSearchTerm && (
+                <div className="admin-search-dropdown" style={{
+                  position: 'absolute', top: 'calc(100% + 10px)', left: 0, width: '100%',
+                  background: 'white', borderRadius: '12px', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+                  border: '1px solid #e2e8f0', zIndex: 1002, overflow: 'hidden'
+                }}>
+                  <div style={{ padding: '10px 15px', borderBottom: '1px solid #f1f5f9', fontSize: '12px', fontWeight: '700', color: '#64748b', background: '#f8fafc' }}>
+                    KẾT QUẢ TÌM KIẾM
+                  </div>
+                  <div style={{ maxHieght: '300px', overflowY: 'auto' }}>
+                    {filteredMenuItems.map(item => (
+                      <Link 
+                        key={item.path} 
+                        to={item.path} 
+                        onClick={() => {
+                          setAdminSearchTerm('');
+                          setIsSearchFocused(false);
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 15px', textDecoration: 'none', color: '#1e293b', borderBottom: '1px solid #f8fafc' }}
+                      >
+                        <div style={{ color: primaryColor }}>{item.icon}</div>
+                        <span style={{ fontSize: '14px', fontWeight: '500' }}>{item.label}</span>
+                      </Link>
+                    ))}
+                    {filteredMenuItems.length === 0 && (
+                      <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+                        Không tìm thấy trang nào khớp
+                      </div>
+                    )}
+                  </div>
+                  <Link 
+                    to={`/admin/categories?q=${adminSearchTerm}`}
+                    onClick={() => {
+                      setAdminSearchTerm('');
+                      setIsSearchFocused(false);
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px', background: '#eff6ff', color: primaryColor, textDecoration: 'none', fontSize: '13px', fontWeight: '700' }}
+                  >
+                    Tìm "{adminSearchTerm}" trong Danh mục &rarr;
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
 

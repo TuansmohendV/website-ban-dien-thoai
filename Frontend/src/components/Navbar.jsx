@@ -15,6 +15,7 @@ const Navbar = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
+    const [trendingCategories, setTrendingCategories] = useState([]);
     const [logo, setLogo] = useState(localStorage.getItem('adminLogo') || null);
     const navigate = useNavigate();
     const suggestionRef = useRef(null);
@@ -88,6 +89,21 @@ const Navbar = () => {
 
         loadUnreadCount();
     }, [user?.id]);
+
+    useEffect(() => {
+        const loadCategories = async () => {
+            try {
+                const response = await api.get('/api/categories');
+                // Only take first 6 active categories for trending section
+                const activeCats = (response.data?.data || []).slice(0, 6);
+                setTrendingCategories(activeCats);
+            } catch (error) {
+                // Fallback to minimal if API fails
+                setTrendingCategories([]);
+            }
+        };
+        loadCategories();
+    }, []);
 
     const handleSearch = (e) => {
         if (e) e.preventDefault();
@@ -276,16 +292,26 @@ const Navbar = () => {
                 <div className="flex items-center gap-2 sm:gap-3 mt-2 lg:ml-[200px] overflow-x-auto no-scrollbar pb-1">
                     <span className="text-[12px] sm:text-[14px] font-black text-[#008d71] uppercase whitespace-nowrap">Từ khóa xu hướng</span>
                     <div className="flex gap-3 sm:gap-4 flex-nowrap">
-                        {[
-                            { name: 'iPhone', link: '/category/iphone' },
-                            { name: 'Samsung', link: '/category/samsung' },
-                            { name: 'Xiaomi', link: '/category/xiaomi' },
-                            { name: 'Laptop', link: '/category/laptop' },
-                            { name: 'Màn hình', link: '/category/man-hinh' },
-                            { name: 'Đồng hồ', link: '/category/dong-ho' }
-                        ].map(kw => (
-                            <Link key={kw.name} to={kw.link} className="text-[13px] sm:text-[14px] font-bold text-gray-500/80 hover:text-[#008d71] transition-colors whitespace-nowrap">{kw.name}</Link>
-                        ))}
+                        {trendingCategories.length > 0 ? (
+                            trendingCategories.map(kw => (
+                                <Link 
+                                    key={kw.id || kw._id} 
+                                    to={`/category/${kw.slug}`} 
+                                    className={`text-[13px] sm:text-[14px] font-bold transition-colors whitespace-nowrap ${
+                                        kw.isFeatured 
+                                        ? 'text-yellow-500 hover:text-yellow-400' 
+                                        : 'text-gray-500/80 hover:text-[#008d71]'
+                                    }`}
+                                >
+                                    {kw.name}
+                                </Link>
+                            ))
+                        ) : (
+                            // Fallback if no categories yet
+                            ['iPhone', 'Xiaomi', 'Laptop', 'Phụ kiện'].map(kw => (
+                                <span key={kw} className="text-[13px] sm:text-[14px] font-bold text-gray-500/80 whitespace-nowrap">{kw}</span>
+                            ))
+                        )}
                     </div>
                 </div>
 
