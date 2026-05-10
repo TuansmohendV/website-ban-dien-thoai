@@ -12,6 +12,7 @@ import Breadcrumbs from '../../components/Breadcrumbs';
 import ProductCard from '../../components/ProductCard';
 import BuyNowModal from '../../components/BuyNowModal';
 import api, { getApiErrorMessage } from '../../lib/api';
+import socket from '../../lib/socket';
 import {
     inflateProducts,
     normalizeProduct,
@@ -151,8 +152,32 @@ const ProductDetailPage = () => {
 
         loadProduct();
 
+        // Socket.io Real-time Stock Update
+        socket.emit('join_product', id);
+        
+        const handleStockUpdate = (data) => {
+            if (data.productId === id) {
+                setProduct(prev => {
+                    if (!prev) return prev;
+                    
+                    const next = { ...prev };
+                    if (data.variantId) {
+                        next.variants = next.variants.map(v => 
+                            v.id === data.variantId ? { ...v, stock: data.newStock } : v
+                        );
+                    } else {
+                        next.countInStock = data.newStock;
+                    }
+                    return next;
+                });
+            }
+        };
+
+        socket.on('stock_update', handleStockUpdate);
+
         return () => {
             ignore = true;
+            socket.off('stock_update', handleStockUpdate);
         };
     }, [id]);
 
@@ -817,7 +842,13 @@ const ProductDetailPage = () => {
                                             <span className="text-[12px] font-bold text-gray-700">+26,000 Điểm thưởng</span>
                                         </div>
                                      </div>
-                                     <Link to="/login" className="absolute top-2 right-4 text-[12px] text-blue-600 font-bold hover:underline">Đăng nhập ngay</Link>
+                                     {!user ? (
+                                        <Link to="/login" className="absolute top-2 right-4 text-[12px] text-blue-600 font-bold hover:underline">Đăng nhập ngay</Link>
+                                     ) : (
+                                        <div className="absolute top-2 right-4 flex items-center gap-1.5 text-[11px] text-[#008d71] font-black uppercase bg-emerald-100/50 px-2 py-0.5 rounded-full">
+                                            <ShieldCheck size={14} /> Member
+                                        </div>
+                                     )}
                                 </div>
 
                                 <div className="bg-gray-50 border border-gray-100 rounded-xl p-5 flex justify-between items-center">

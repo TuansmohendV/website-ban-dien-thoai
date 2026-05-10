@@ -15,8 +15,16 @@ const createTransporter = () => {
   // If using Gmail specifically (common for dev/small projects)
   if (!host && user && user.includes('gmail.com')) {
     return nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
       auth: { user, pass },
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 30000,
+      tls: {
+        rejectUnauthorized: false
+      }
     });
   }
 
@@ -26,39 +34,47 @@ const createTransporter = () => {
       port,
       secure: parseBoolean(process.env.SMTP_SECURE) || port === 465,
       auth: { user, pass },
+      connectionTimeout: 30000,
+      greetingTimeout: 30000,
+      socketTimeout: 30000,
     });
   }
 
   // Dev fallback: mail payload is generated and logged only.
-  return nodemailer.createTransport({ jsonTransport: true });
+  return nodemailer.createTransport({ 
+    jsonTransport: true,
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 30000,
+  });
 };
 
 export const sendResetOtpEmail = async ({ to, otpCode, expiresAt }) => {
   const from = process.env.MAIL_FROM || process.env.SMTP_USER || 'no-reply@phonesin.vn';
-  const expiresText = new Date(expiresAt).toLocaleString('vi-VN');
-
-  const subject = 'PhoneSin - Ma xac thuc doi mat khau';
-  const text = `Ma OTP cua ban la: ${otpCode}. Ma co hieu luc den ${expiresText}.`;
+  const subject = 'PhoneSin - Mã OTP khôi phục mật khẩu';
+  
   const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
-      <h2>Khoi phuc mat khau PhoneSin</h2>
-      <p>Ban vua yeu cau doi mat khau. Su dung ma OTP ben duoi:</p>
-      <div style="font-size: 28px; font-weight: 700; letter-spacing: 6px; margin: 20px 0;">${otpCode}</div>
-      <p>Ma co hieu luc den <strong>${expiresText}</strong>.</p>
-      <p style="color: #666;">Neu ban khong yeu cau, vui long bo qua email nay.</p>
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 30px; border: 1px solid #e0e0e0; border-radius: 12px;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <h2 style="color: #008d71; margin: 0; font-size: 28px;">PhoneSin Mobile</h2>
+        <p style="color: #666; margin: 8px 0 0 0;">Khôi phục mật khẩu</p>
+      </div>
+      <p style="color: #333;">Chào bạn,</p>
+      <p style="color: #333;">Mã xác thực (OTP) để khôi phục mật khẩu của bạn là:</p>
+      <div style="background: linear-gradient(135deg, #008d71, #00b894); padding: 20px; text-align: center; font-size: 36px; font-weight: bold; color: white; letter-spacing: 10px; border-radius: 8px; margin: 20px 0;">
+        ${otpCode}
+      </div>
+      <p style="color: #666; font-size: 14px;">Mã này có hiệu lực đến <b>${new Date(expiresAt).toLocaleString('vi-VN')}</b>. Vui lòng không chia sẻ mã này cho bất kỳ ai.</p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
+      <p style="font-size: 12px; color: #aaa; text-align: center;">© PhoneSin Mobile - Email tự động, vui lòng không phản hồi.</p>
     </div>
   `;
 
+  const text = `Mã OTP khôi phục mật khẩu của bạn là: ${otpCode}. Có hiệu lực đến ${new Date(expiresAt).toLocaleString('vi-VN')}.`;
+
   if (process.env.SENDGRID_API_KEY) {
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    await sgMail.send({
-      to,
-      from,
-      subject,
-      text,
-      html,
-    });
-
+    await sgMail.send({ to, from, subject, text, html });
     return { provider: 'sendgrid' };
   }
 
@@ -71,13 +87,15 @@ export const sendResetOtpEmail = async ({ to, otpCode, expiresAt }) => {
 
   return info;
 };
+
 export const sendOrderConfirmationEmail = async ({ to, order, websiteUrl = 'http://localhost:5173' }) => {
+  console.log(`[EMAIL] Preparing confirmation email for: ${to}, Order: ${order?._id}`);
   const from = process.env.MAIL_FROM || process.env.SMTP_USER || 'no-reply@phonesin.vn';
   const subject = `PhoneSin - Xác nhận đơn hàng #${order._id.toString().slice(-6).toUpperCase()}`;
 
   const formatPrice = (price) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
 
-  const itemsHtml = order.items.map(item => `
+  const itemsHtml = (order.items || []).map(item => `
     <tr>
       <td style="padding: 10px; border-bottom: 1px solid #eee;">
         <strong>${item.name}</strong><br/>
@@ -96,7 +114,7 @@ export const sendOrderConfirmationEmail = async ({ to, order, websiteUrl = 'http
         <h1 style="margin: 0; font-size: 24px;">PhoneSin</h1>
       </div>
       <div style="padding: 30px;">
-        <h2 style="color: #333; margin-top: 0;">Chào ${order.customerInfo.fullName},</h2>
+        <h2 style="color: #333; margin-top: 0;">Chào ${order.customerInfo?.fullName || 'khách hàng'},</h2>
         <p style="font-size: 16px; color: #555; line-height: 1.6;">
           Cảm ơn bạn đã mua hàng và tin tưởng <strong>PhoneSin</strong>. Đơn hàng của bạn đã được tiếp nhận và đang được xử lý.
         </p>
@@ -132,11 +150,20 @@ export const sendOrderConfirmationEmail = async ({ to, order, websiteUrl = 'http
           </tfoot>
         </table>
 
-        <div style="text-align: center; margin-top: 30px;">
-          <a href="${statusUrl}" style="background-color: #009981; color: white; padding: 12px 25px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
-            Xem trạng thái đơn hàng
-          </a>
-        </div>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 30px; table-layout: fixed;">
+          <tr>
+            <td style="padding-right: 8px;">
+              <a href="${statusUrl}" style="background-color: #009981; color: white; padding: 12px 5px; text-decoration: none; border-radius: 8px; font-weight: bold; display: block; text-align: center; font-size: 14px;">
+                Xem trạng thái
+              </a>
+            </td>
+            <td style="padding-left: 8px;">
+              <a href="${websiteUrl}/invoice/${order._id}" style="background-color: #ee0000; color: white; padding: 12px 5px; text-decoration: none; border-radius: 8px; font-weight: bold; display: block; text-align: center; font-size: 14px;">
+                Xem hóa đơn
+              </a>
+            </td>
+          </tr>
+        </table>
 
         <p style="margin-top: 40px; font-size: 12px; color: #999; border-top: 1px solid #eee; padding-top: 20px;">
           Nếu bạn có bất kỳ thắc mắc nào, vui lòng liên hệ hotline <strong>1900.2091</strong> hoặc phản hồi email này.<br/>
@@ -150,13 +177,16 @@ export const sendOrderConfirmationEmail = async ({ to, order, websiteUrl = 'http
   const text = `Cảm ơn bạn đã mua hàng tại PhoneSin. Đơn hàng #${order._id} của bạn có tổng giá trị ${formatPrice(order.total)}. Xem trạng thái tại: ${statusUrl}`;
 
   if (process.env.SENDGRID_API_KEY) {
+    console.log(`[EMAIL] Sending via SendGrid...`);
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
     await sgMail.send({ to, from, subject, text, html });
     return { provider: 'sendgrid' };
   }
 
+  console.log(`[EMAIL] Sending via SMTP (Transporter)...`);
   const transporter = createTransporter();
   const info = await transporter.sendMail({ from, to, subject, text, html });
+  console.log(`[EMAIL] Success: ${info.messageId}`);
   return info;
 };
 
@@ -183,17 +213,11 @@ export const sendOrderStatusEmail = async ({ to, order, websiteUrl = 'http://loc
         <h1 style="margin: 0; font-size: 24px;">Cập Nhật Đơn Hàng</h1>
       </div>
       <div style="padding: 30px;">
-        <h2 style="color: #333; margin-top: 0;">Chào ${order.customerInfo.fullName},</h2>
+        <h2 style="color: #333; margin-top: 0;">Chào ${order.customerInfo?.fullName || 'khách hàng'},</h2>
         <p style="font-size: 16px; color: #555; line-height: 1.6;">
-          Trạng thái đơn hàng <strong>#${order._id.toString().slice(-6).toUpperCase()}</strong> của bạn vừa được cập nhật thành:
+          Trạng thái đơn hàng <strong>#${order._id}</strong> của bạn đã được cập nhật thành: <span style="color: #008d71; font-weight: bold;">${currentStatus}</span>.
         </p>
-        <div style="background-color: #f8fafc; border-left: 4px solid #008d71; padding: 15px; margin: 20px 0;">
-          <h3 style="margin: 0; color: #008d71; font-size: 20px;">${currentStatus}</h3>
-        </div>
-        <p style="font-size: 15px; color: #666;">
-          Bạn có thể theo dõi chi tiết hành trình đơn hàng bằng cách nhấp vào nút bên dưới:
-        </p>
-        <div style="text-align: center; margin: 30px 0;">
+        <div style="text-align: center; margin-top: 30px;">
           <a href="${statusUrl}" style="background-color: #008d71; color: white; padding: 12px 25px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px;">Xem Trạng Thái Đơn Hàng</a>
         </div>
         <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0;" />
@@ -219,7 +243,9 @@ export const sendOrderStatusEmail = async ({ to, order, websiteUrl = 'http://loc
 
   return info;
 };
+
 export const sendDeliveredInvoiceEmail = async ({ to, order, websiteUrl = 'http://localhost:5173' }) => {
+  console.log(`[EMAIL] Preparing invoice email for: ${to}, Order: ${order?._id}`);
   const from = process.env.MAIL_FROM || process.env.SMTP_USER || 'no-reply@phonesin.vn';
   const orderId = order._id.toString();
   const shortId = orderId.slice(-6).toUpperCase();
@@ -237,78 +263,58 @@ export const sendDeliveredInvoiceEmail = async ({ to, order, websiteUrl = 'http:
         <strong>${item.name}</strong><br/>
         <small style="color:#888;">${item.selectedColor || ''} ${item.selectedStorage || ''}</small>
       </td>
-      <td style="padding:10px 12px; border-bottom:1px solid #f0f0f0; text-align:center; font-size:14px; color:#555;">x${item.quantity}</td>
-      <td style="padding:10px 12px; border-bottom:1px solid #f0f0f0; text-align:right; font-size:14px; font-weight:bold; color:#222;">${formatPrice(item.lineTotal)}</td>
+      <td style="padding:10px 12px; border-bottom:1px solid #f0f0f0; font-size:14px; text-align:center; color:#555;">x${item.quantity}</td>
+      <td style="padding:10px 12px; border-bottom:1px solid #f0f0f0; font-size:14px; text-align:right; font-weight:bold; color:#333;">${formatPrice(item.lineTotal)}</td>
     </tr>
   `).join('');
 
   const html = `
-    <div style="font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; max-width:620px; margin:0 auto; background:#ffffff; border:1px solid #e5e7eb; border-radius:12px; overflow:hidden;">
-
-      <!-- Header -->
-      <div style="background:linear-gradient(135deg,#ee0000,#cc0000); padding:32px 24px; text-align:center;">
-        <h1 style="margin:0; color:#fff; font-size:26px; font-weight:900; letter-spacing:-0.5px;">PhoneSin</h1>
-        <p style="margin:8px 0 0; color:rgba(255,255,255,0.85); font-size:14px;">Cửa hàng điện thoại uy tín hàng đầu</p>
+    <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
+      <div style="background-color: #ee0000; padding: 25px; text-align: center;">
+        <h1 style="color: #ffffff; margin: 0; font-size: 24px; letter-spacing: 2px;">PHONESIN</h1>
       </div>
+      
+      <div style="padding: 30px;">
+        <h2 style="color: #1a1a1a; margin-top: 0; font-size: 20px;">Chào ${order.customerInfo?.fullName || 'bạn'},</h2>
+        <p style="color: #555; line-height: 1.6; font-size: 15px;">
+          Đơn hàng <strong>#${shortId}</strong> của bạn đã được giao thành công. Chúng tôi xin gửi bạn hóa đơn điện tử cho các sản phẩm đã mua.
+        </p>
 
-      <!-- Body -->
-      <div style="padding:36px 32px;">
-
-        <!-- Thank you -->
-        <div style="text-align:center; margin-bottom:28px;">
-          <div style="font-size:48px; margin-bottom:12px;">🎉</div>
-          <h2 style="margin:0 0 8px; color:#111; font-size:22px; font-weight:900;">Cảm ơn bạn đã đặt hàng tại PhoneSin!</h2>
-          <p style="margin:0; font-size:15px; color:#555; line-height:1.7;">
-            Đơn hàng <strong style="color:#ee0000;">#${shortId}</strong> của bạn đã được giao thành công và thanh toán hoàn tất.<br/>
-            Đây là hóa đơn của bạn — bạn có thể <strong>xem và xuất hóa đơn</strong> bất cứ lúc nào.
-          </p>
+        <div style="margin: 25px 0; background-color: #fcfcfc; border: 1px solid #f0f0f0; border-radius: 8px; padding: 20px;">
+           <table style="width: 100%; border-collapse: collapse;">
+             <thead>
+               <tr>
+                 <th style="text-align:left; font-size:12px; color:#999; text-transform:uppercase; padding-bottom:10px;">Sản phẩm</th>
+                 <th style="text-align:center; font-size:12px; color:#999; text-transform:uppercase; padding-bottom:10px;">SL</th>
+                 <th style="text-align:right; font-size:12px; color:#999; text-transform:uppercase; padding-bottom:10px;">Giá</th>
+               </tr>
+             </thead>
+             <tbody>
+               ${itemsHtml}
+             </tbody>
+           </table>
+           
+           <div style="margin-top: 15px; text-align: right;">
+              <p style="margin: 5px 0; font-size: 14px; color: #666;">Tổng tiền sản phẩm: ${formatPrice(order.subtotal || order.total)}</p>
+              ${order.discountTotal > 0 ? `<p style="margin: 5px 0; font-size: 14px; color: #ee0000;">Giảm giá: -${formatPrice(order.discountTotal)}</p>` : ''}
+              <p style="margin: 10px 0 0 0; font-size: 18px; font-weight: 900; color: #ee0000;">TỔNG CỘNG: ${formatPrice(order.total)}</p>
+           </div>
         </div>
 
-        <!-- Invoice CTA -->
-        <div style="background:#fff7f7; border:2px solid #fee2e2; border-radius:12px; padding:24px; text-align:center; margin-bottom:28px;">
-          <p style="margin:0 0 4px; font-size:12px; font-weight:700; color:#ee0000; text-transform:uppercase; letter-spacing:1px;">Hóa Đơn Điện Tử</p>
-          <p style="margin:0 0 16px; font-size:14px; color:#666;">Nhấn nút bên dưới để xem hóa đơn chi tiết và in/lưu PDF của bạn</p>
-          <a href="${invoiceUrl}" style="display:inline-block; background:#ee0000; color:#fff; font-size:15px; font-weight:900; padding:14px 32px; border-radius:10px; text-decoration:none; letter-spacing:0.5px;">
-            🧾 Xem &amp; Xuất Hóa Đơn
-          </a>
+        <div style="text-align: center; margin-top: 35px;">
+          <p style="margin-bottom: 20px; font-size: 14px; color: #666;">Bạn có thể tải hóa đơn PDF hoặc xem chi tiết tại đây:</p>
+          <a href="${invoiceUrl}" style="background-color: #ee0000; color: white; padding: 15px 35px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 6px rgba(238,0,0,0.2);">XEM HÓA ĐƠN ĐIỆN TỬ</a>
         </div>
 
-        <!-- Order summary -->
-        <div style="background:#f9fafb; border-radius:10px; padding:20px; margin-bottom:24px;">
-          <p style="margin:0 0 12px; font-size:11px; font-weight:700; color:#999; text-transform:uppercase; letter-spacing:1px;">Tóm tắt đơn hàng</p>
-          <table style="width:100%; border-collapse:collapse;">
-            <thead>
-              <tr style="background:#f0f0f0;">
-                <th style="padding:10px 12px; text-align:left; font-size:12px; color:#666; font-weight:700;">Sản phẩm</th>
-                <th style="padding:10px 12px; text-align:center; font-size:12px; color:#666; font-weight:700;">SL</th>
-                <th style="padding:10px 12px; text-align:right; font-size:12px; color:#666; font-weight:700;">Thành tiền</th>
-              </tr>
-            </thead>
-            <tbody>${itemsHtml}</tbody>
-            <tfoot>
-              <tr>
-                <td colspan="2" style="padding:12px 12px 4px; text-align:right; font-size:15px; font-weight:900; color:#111;">Tổng thanh toán:</td>
-                <td style="padding:12px 12px 4px; text-align:right; font-size:18px; font-weight:900; color:#ee0000;">${formatPrice(order.total)}</td>
-              </tr>
-            </tfoot>
-          </table>
+        <div style="text-align: center; margin-top: 15px;">
+          <a href="${ordersUrl}" style="color: #666; text-decoration: underline; font-size: 13px;">Xem lịch sử đơn hàng của tôi</a>
         </div>
 
-        <!-- Track order -->
-        <div style="text-align:center; margin-bottom:24px;">
-          <a href="${ordersUrl}" style="display:inline-block; background:#f3f4f6; color:#333; font-size:13px; font-weight:700; padding:12px 24px; border-radius:8px; text-decoration:none;">
-            📦 Xem lịch sử đơn hàng
-          </a>
-        </div>
-
-        <!-- Footer note -->
-        <div style="border-top:1px solid #f0f0f0; padding-top:20px; text-align:center;">
-          <p style="margin:0; font-size:12px; color:#aaa; line-height:1.8;">
-            Nếu có bất kỳ thắc mắc nào, vui lòng liên hệ hotline <strong style="color:#555;">1900.2091</strong><br/>
-            hoặc trả lời trực tiếp email này.<br/>
-            Trân trọng, <strong style="color:#ee0000;">Đội ngũ PhoneSin</strong>
-          </p>
-        </div>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 30px 0;" />
+        <p style="font-size: 12px; color: #999; text-align: center; line-height: 1.6;">
+          Cảm ơn bạn đã tin tưởng và chọn <strong>PhoneSin Store</strong>.<br/>
+          Đây là email tự động, vui lòng không phản hồi email này.
+        </p>
       </div>
     </div>
   `;
@@ -316,6 +322,7 @@ export const sendDeliveredInvoiceEmail = async ({ to, order, websiteUrl = 'http:
   const text = `Cảm ơn bạn đã đặt hàng tại PhoneSin! Đơn hàng #${shortId} đã giao thành công. Xem hóa đơn tại: ${invoiceUrl}`;
 
   if (process.env.SENDGRID_API_KEY) {
+    console.log(`[EMAIL] Sending invoice via SendGrid...`);
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
     await sgMail.send({ to, from, subject, text, html });
     return { provider: 'sendgrid' };
@@ -323,10 +330,6 @@ export const sendDeliveredInvoiceEmail = async ({ to, order, websiteUrl = 'http:
 
   const transporter = createTransporter();
   const info = await transporter.sendMail({ from, to, subject, text, html });
-
-  if (!process.env.SMTP_HOST && !process.env.SENDGRID_API_KEY) {
-    console.log(`[DEV_MAIL] Invoice email sent to ${to} for order ${orderId}`);
-  }
-
+  console.log(`[EMAIL] Invoice Success: ${info.messageId}`);
   return info;
 };

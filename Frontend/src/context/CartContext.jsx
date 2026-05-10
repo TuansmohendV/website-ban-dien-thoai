@@ -1,6 +1,7 @@
 import React, { createContext, startTransition, useContext, useEffect, useState } from 'react';
 import api, { getApiErrorMessage } from '../lib/api';
 import { useAuth } from './AuthContext';
+import socket from '../lib/socket';
 
 const CartContext = createContext();
 
@@ -102,6 +103,32 @@ export const CartProvider = ({ children }) => {
     useEffect(() => {
         refreshCart();
     }, [user?.id]);
+
+    useEffect(() => {
+        const handleStockUpdate = (data) => {
+            setCartState(prev => {
+                const updatedItems = prev.cartItems.map(item => {
+                    const isTargetProduct = String(item.backendProductId) === String(data.productId);
+                    const isTargetVariant = data.variantId ? String(item.variantId) === String(data.variantId) : !item.variantId;
+
+                    if (isTargetProduct && isTargetVariant) {
+                        return {
+                            ...item,
+                            maxStock: data.newStock,
+                            // If stock is lower than quantity, we keep the quantity but the UI will show warning
+                            // or we could force-adjust it. For now, let's just update maxStock.
+                        };
+                    }
+                    return item;
+                });
+
+                return { ...prev, cartItems: updatedItems };
+            });
+        };
+
+        socket.on('stock_update', handleStockUpdate);
+        return () => socket.off('stock_update', handleStockUpdate);
+    }, []);
 
     const findCartItem = (itemId, variantId, colorName) =>
         cartState.cartItems.find(

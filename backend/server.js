@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 dotenv.config();
 import cors from 'cors';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import addressRoutes from './routes/addressRoutes.js';
@@ -34,10 +36,35 @@ import adminReviewRoutes from './routes/adminReviewRoutes.js';
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
 
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: '*', // Adjust this in production
+    methods: ['GET', 'POST']
+  }
+});
 
 app.use(cors());
 app.use(express.json({ limit: process.env.REQUEST_BODY_LIMIT || '10mb' }));
 app.use(express.urlencoded({ limit: process.env.REQUEST_BODY_LIMIT || '10mb', extended: true }));
+
+// Attach io to req
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+  
+  socket.on('join_product', (productId) => {
+    socket.join(`product_${productId}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
+});
 
 app.get('/api/health', (req, res) => {
   res.json({
@@ -65,6 +92,7 @@ app.get('/api/health', (req, res) => {
       'broadcasts',
       'icons',
       'upload',
+      'socket-io'
     ],
   });
 });
@@ -192,7 +220,7 @@ const startServer = async () => {
 
   console.log('MongoDB connected.');
 
-  app.listen(PORT, () => {
+  httpServer.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
 };
@@ -202,4 +230,6 @@ startServer().catch((error) => {
   process.exit(1);
 });
 
+export { io };
 export default app;
+

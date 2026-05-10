@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Address from '../models/Address.js';
 import Cart from '../models/Cart.js';
 import Order from '../models/Order.js';
@@ -155,7 +156,7 @@ const checkInventory = async (items) => {
       if (variant.stock < item.quantity) {
         throw new AppError(
           400,
-          `Rất tiếc, sản phẩm ${item.name} đã hết hàng hoặc số lượng tồn kho không đủ. Vui lòng chọn sản phẩm khác.`
+          `Rất tiếc, biến thể ${item.selectedColor} ${item.selectedStorage} của sản phẩm ${item.name} đã hết hàng hoặc không đủ số lượng.`
         );
       }
     } else {
@@ -171,44 +172,61 @@ const checkInventory = async (items) => {
   }
 };
 
-const adjustInventory = async (items, direction) => {
+const adjustInventoryAtomic = async (items, direction, session, io) => {
   for (const item of items) {
+    let updated;
+    const quantityChange = direction * item.quantity;
+
     if (item.variant) {
-      const variant = await ProductVariant.findById(item.variant);
+      // Atomic decrement with condition to prevent negative stock
+      updated = await ProductVariant.findOneAndUpdate(
+        {
+          _id: item.variant,
+          stock: { $gte: direction === -1 ? item.quantity : 0 }
+        },
+        { $inc: { stock: quantityChange } },
+        { session, new: true }
+      );
 
-      if (!variant) {
-        continue;
-      }
-
-      const nextStock = variant.stock + direction * item.quantity;
-
-      if (nextStock < 0) {
+      if (!updated && direction === -1) {
         throw new AppError(
           400,
-          `Tồn kho biến thể ${item.name} không đủ để tạo đơn hàng.`
+          `Rất tiếc, sản phẩm ${item.name} (màu ${item.selectedColor}) vừa mới hết hàng. Vui lòng cập nhật lại giỏ hàng.`
         );
       }
-
-      variant.stock = nextStock;
-      await variant.save();
+      
+      // Emit real-time stock update
+      if (io && updated) {
+        io.emit('stock_update', {
+          productId: item.product,
+          variantId: item.variant,
+          newStock: updated.stock
+        });
+      }
     } else {
-      const product = await Product.findById(item.product);
+      updated = await Product.findOneAndUpdate(
+        {
+          _id: item.product,
+          countInStock: { $gte: direction === -1 ? item.quantity : 0 }
+        },
+        { $inc: { countInStock: quantityChange } },
+        { session, new: true }
+      );
 
-      if (!product) {
-        continue;
-      }
-
-      const nextStock = product.countInStock + direction * item.quantity;
-
-      if (nextStock < 0) {
+      if (!updated && direction === -1) {
         throw new AppError(
           400,
-          `Tồn kho sản phẩm ${item.name} không đủ để tạo đơn hàng.`
+          `Rất tiếc, sản phẩm ${item.name} vừa mới hết hàng. Vui lòng chọn sản phẩm khác.`
         );
       }
 
-      product.countInStock = nextStock;
-      await product.save();
+      // Emit real-time stock update
+      if (io && updated) {
+        io.emit('stock_update', {
+          productId: item.product,
+          newStock: updated.countInStock
+        });
+      }
     }
   }
 };
@@ -348,150 +366,176 @@ const attachVoucherToCart = async (cart, code, userId) => {
 };
 
 export const createOrder = asyncHandler(async (req, res) => {
-  const owner = getRequestOwner(req, { allowGuest: true });
-  const ownerQuery = buildOwnerQuery(owner);
-  const hasDirectItems =
-    Array.isArray(req.body.items) && req.body.items.length > 0;
-  const cart = hasDirectItems ? null : await Cart.findOne(ownerQuery);
-  const sourceCart = hasDirectItems
-    ? await buildDraftCartFromItems(req.body.items)
-    : cart;
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  if (!sourceCart || sourceCart.items.length === 0) {
-    throw new AppError(400, 'Giỏ hàng đang trống, chưa thể tạo đơn.');
-  }
+  try {
+    const owner = getRequestOwner(req, { allowGuest: true });
+    const ownerQuery = buildOwnerQuery(owner);
+    const hasDirectItems =
+      Array.isArray(req.body.items) && req.body.items.length > 0;
+    const cart = hasDirectItems ? null : await Cart.findOne(ownerQuery).session(session);
+    const sourceCart = hasDirectItems
+      ? await buildDraftCartFromItems(req.body.items)
+      : cart;
 
-  if (!hasDirectItems) {
-    await syncCartItemsWithInventory(sourceCart);
-  }
-
-  if (sourceCart.voucherCode) {
-    await attachVoucherToCart(sourceCart, sourceCart.voucherCode, req.user?._id);
-  }
-
-  if (
-    req.body.voucherCode &&
-    req.body.voucherCode.toUpperCase() !== (sourceCart.voucherCode || '')
-  ) {
-    await attachVoucherToCart(sourceCart, req.body.voucherCode, req.user?._id);
-  }
-
-  const shippingAddress = await resolveShippingAddress(req);
-  const shippingFee = Math.max(Number(req.body.shippingFee) || 0, 0);
-  const paymentMethod = req.body.paymentMethod || 'COD';
-
-  const customerInfo = {
-    fullName:
-      req.body.customerInfo?.fullName ||
-      req.user?.fullName ||
-      shippingAddress.recipientName,
-    email: req.body.customerInfo?.email || req.user?.email || '',
-    phone:
-      req.body.customerInfo?.phone ||
-      req.user?.phone ||
-      shippingAddress.phone,
-  };
-  const invoiceInput = req.body.invoiceInfo || {};
-  const hasInvoiceRequest = Boolean(invoiceInput.enabled);
-  let invoiceInfo = undefined;
-
-  if (hasInvoiceRequest) {
-    const invoiceEmail = invoiceInput.email || customerInfo.email || '';
-    const missingInvoiceFields = [
-      ['email', invoiceEmail],
-      ['companyName', invoiceInput.companyName],
-      ['taxCode', invoiceInput.taxCode],
-      ['companyAddress', invoiceInput.companyAddress],
-    ]
-      .filter(([, value]) => !String(value || '').trim())
-      .map(([field]) => field);
-
-    if (missingInvoiceFields.length > 0) {
-      throw new AppError(
-        400,
-        `Thiếu thông tin xuất hóa đơn: ${missingInvoiceFields.join(', ')}.`
-      );
+    if (!sourceCart || sourceCart.items.length === 0) {
+      throw new AppError(400, 'Giỏ hàng đang trống, chưa thể tạo đơn.');
     }
 
-    invoiceInfo = {
-      enabled: true,
-      email: String(invoiceEmail).trim(),
-      companyName: String(invoiceInput.companyName).trim(),
-      taxCode: String(invoiceInput.taxCode).trim(),
-      companyAddress: String(invoiceInput.companyAddress).trim(),
+    if (!hasDirectItems) {
+      await syncCartItemsWithInventory(sourceCart);
+    }
+
+    if (sourceCart.voucherCode) {
+      await attachVoucherToCart(sourceCart, sourceCart.voucherCode, req.user?._id);
+    }
+
+    if (
+      req.body.voucherCode &&
+      req.body.voucherCode.toUpperCase() !== (sourceCart.voucherCode || '')
+    ) {
+      await attachVoucherToCart(sourceCart, req.body.voucherCode, req.user?._id);
+    }
+
+    const shippingAddress = await resolveShippingAddress(req);
+    const shippingFee = Math.max(Number(req.body.shippingFee) || 0, 0);
+    const paymentMethod = req.body.paymentMethod || 'COD';
+
+    const customerInfo = {
+      fullName:
+        req.body.customerInfo?.fullName ||
+        req.user?.fullName ||
+        shippingAddress.recipientName,
+      email: req.body.customerInfo?.email || req.user?.email || '',
+      phone:
+        req.body.customerInfo?.phone ||
+        req.user?.phone ||
+        shippingAddress.phone,
     };
-  }
+    const invoiceInput = req.body.invoiceInfo || {};
+    const hasInvoiceRequest = Boolean(invoiceInput.enabled);
+    let invoiceInfo = undefined;
 
-  // Real-time stock check before order creation (Stack/Queue mechanism)
-  await checkInventory(sourceCart.items);
+    if (hasInvoiceRequest) {
+      const invoiceEmail = invoiceInput.email || customerInfo.email || '';
+      const missingInvoiceFields = [
+        ['email', invoiceEmail],
+        ['companyName', invoiceInput.companyName],
+        ['taxCode', invoiceInput.taxCode],
+        ['companyAddress', invoiceInput.companyAddress],
+      ]
+        .filter(([, value]) => !String(value || '').trim())
+        .map(([field]) => field);
 
-  const order = await Order.create({
-    ...ownerQuery,
-    customerInfo,
-    invoiceInfo,
-    shippingAddress,
-    items: sourceCart.items.map((item) => ({
-      product: item.product,
-      variant: item.variant || null,
-      name: item.name,
-      image: item.image,
-      selectedColor: item.selectedColor,
-      selectedStorage: item.selectedStorage,
-      unitPrice: item.unitPrice,
-      quantity: item.quantity,
-      lineTotal: item.lineTotal,
-    })),
-    subtotal: sourceCart.subtotal,
-    discountTotal: sourceCart.discountTotal,
-    shippingFee,
-    total: sourceCart.total + shippingFee,
-    voucherCode: sourceCart.voucherCode,
-    voucherSnapshot: sourceCart.voucherSnapshot
-      ? {
-        ...sourceCart.voucherSnapshot,
-        discountAmount: sourceCart.discountTotal,
+      if (missingInvoiceFields.length > 0) {
+        throw new AppError(
+          400,
+          `Thiếu thông tin xuất hóa đơn: ${missingInvoiceFields.join(', ')}.`
+        );
       }
-      : undefined,
-    paymentMethod,
-    paymentStatus: 'pending',
-    status: 'pending',
-    timeline: [
-      createTimelineEntry(
-        'pending',
-        'Đơn hàng đã được tạo',
-        'Hệ thống đã ghi nhận đơn hàng và đang chờ thanh toán/xác nhận.'
-      ),
-    ],
-    notes: req.body.notes || '',
-  });
 
-  await adjustInventory(order.items, -1);
-  await incrementVoucherUsage(order.voucherCode, req.user?._id);
+      invoiceInfo = {
+        enabled: true,
+        email: String(invoiceEmail).trim(),
+        companyName: String(invoiceInput.companyName).trim(),
+        taxCode: String(invoiceInput.taxCode).trim(),
+        companyAddress: String(invoiceInput.companyAddress).trim(),
+      };
+    }
 
-  if (!hasDirectItems && cart) {
-    cart.items = [];
-    cart.voucherCode = '';
-    cart.voucherSnapshot = undefined;
-    recalculateCart(cart);
-    await cart.save();
-  }
+    // Real-time stock check before order creation
+    await checkInventory(sourceCart.items);
 
-  const hydratedOrder = await hydrateOrder({ _id: order._id });
+    const [order] = await Order.create([{
+      ...ownerQuery,
+      customerInfo,
+      invoiceInfo,
+      shippingAddress,
+      items: sourceCart.items.map((item) => ({
+        product: item.product,
+        variant: item.variant || null,
+        name: item.name,
+        image: item.image,
+        selectedColor: item.selectedColor,
+        selectedStorage: item.selectedStorage,
+        unitPrice: item.unitPrice,
+        quantity: item.quantity,
+        lineTotal: item.lineTotal,
+      })),
+      subtotal: sourceCart.subtotal,
+      discountTotal: sourceCart.discountTotal,
+      shippingFee,
+      total: sourceCart.total + shippingFee,
+      voucherCode: sourceCart.voucherCode,
+      voucherSnapshot: sourceCart.voucherSnapshot
+        ? {
+          ...sourceCart.voucherSnapshot,
+          discountAmount: sourceCart.discountTotal,
+        }
+        : undefined,
+      paymentMethod,
+      paymentStatus: 'pending',
+      status: 'pending',
+      timeline: [
+        createTimelineEntry(
+          'pending',
+          'Đơn hàng đã được tạo',
+          'Hệ thống đã ghi nhận đơn hàng và đang chờ thanh toán/xác nhận.'
+        ),
+      ],
+      notes: req.body.notes || '',
+    }], { session });
 
-  // Send confirmation email in background
-  if (customerInfo.email) {
-    const websiteUrl = `${req.protocol}://${req.get('host')}`;
-    sendOrderConfirmationEmail({
-      to: customerInfo.email,
+    // Atomic inventory reduction (This is the "Queue" logic - whoever updates successfully first gets it)
+    await adjustInventoryAtomic(order.items, -1, session, req.io);
+    
+    // Process voucher usage
+    if (order.voucherCode) {
+      const voucher = await Voucher.findOne({ code: order.voucherCode }).session(session);
+      if (voucher) {
+        voucher.usedCount += 1;
+        if (req.user?._id) {
+          const userUsage = voucher.usageByUser.find(u => String(u.user) === String(req.user._id));
+          if (userUsage) userUsage.count += 1;
+          else voucher.usageByUser.push({ user: req.user._id, count: 1 });
+        }
+        await voucher.save({ session });
+      }
+    }
+
+    if (!hasDirectItems && cart) {
+      cart.items = [];
+      cart.voucherCode = '';
+      cart.voucherSnapshot = undefined;
+      recalculateCart(cart);
+      await cart.save({ session });
+    }
+
+    await session.commitTransaction();
+
+    const hydratedOrder = await hydrateOrder({ _id: order._id });
+
+    // Send confirmation email in background
+    if (customerInfo.email) {
+      const websiteUrl = `${req.protocol}://${req.get('host')}`;
+      sendOrderConfirmationEmail({
+        to: customerInfo.email,
+        order: hydratedOrder,
+        websiteUrl
+      }).catch(err => console.error('Failed to send order email:', err));
+    }
+
+    res.status(201).json({
+      message: 'Tạo đơn hàng thành công.',
       order: hydratedOrder,
-      websiteUrl
-    }).catch(err => console.error('Failed to send order email:', err));
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
   }
-
-  res.status(201).json({
-    message: 'Tạo đơn hàng thành công.',
-    order: hydratedOrder,
-  });
 });
 
 export const processPayment = asyncHandler(async (req, res) => {
@@ -517,6 +561,7 @@ export const processPayment = asyncHandler(async (req, res) => {
 
   // Real API Integration Mock for Payment Gateways
   const returnUrl = req.body.returnUrl || `${req.protocol}://${req.get('host')}/checkout-result`;
+  const mockUrl = `${req.body.origin || `${req.protocol}://${req.get('host')}`}/mock-payment`;
   let paymentUrl = '';
 
   if (method === 'vnpay') {
@@ -527,16 +572,12 @@ export const processPayment = asyncHandler(async (req, res) => {
       const vnp_Amount = order.total * 100;
       paymentUrl = `${returnUrl}?orderId=${order._id}&method=vnpay&vnp_ResponseCode=00&vnp_TxnRef=${vnp_TxnRef}&vnp_Amount=${vnp_Amount}`;
     }
-  } else if (method === 'momo' || method === 'momo_sub' || method === 'zalopay') {
-    // Generate E-Wallet URL
-    const partnerCode = 'MOMO_TEST';
+  } else if (method === 'MOMO' || method === 'momo_sub' || method === 'zalopay' || method === 'BANK_TRANSFER' || method === 'bank') {
+    // Redirect to Mock Payment Gateway for better interaction
     const requestId = `${order._id}_${Date.now()}`;
-    paymentUrl = `${returnUrl}?orderId=${order._id}&method=${method}&resultCode=0&requestId=${requestId}`;
+    paymentUrl = `${mockUrl}?orderId=${order._id}&method=${method}&amount=${order.total}&returnUrl=${encodeURIComponent(returnUrl)}&requestId=${requestId}`;
   } else if (method === 'COD') {
-    // COD is instant success (pending payment)
     paymentUrl = `${returnUrl}?orderId=${order._id}&method=COD&success=true`;
-  } else if (method === 'bank') {
-    paymentUrl = `${returnUrl}?orderId=${order._id}&method=bank&success=true`;
   } else {
     paymentUrl = `${returnUrl}?orderId=${order._id}&method=${method}&success=true`;
   }
@@ -597,6 +638,16 @@ export const paymentCallback = asyncHandler(async (req, res) => {
     order.paymentStatus = 'paid';
     order.paidAt = new Date();
     order.timeline.push(createTimelineEntry('confirmed', 'Thanh toán thành công', `Thanh toán qua ${method} đã được xác nhận.`));
+
+    // Send invoice email immediately for successful online payment
+    if (order.customerInfo?.email) {
+        const websiteUrl = `${req.protocol}://${req.get('host')}`;
+        sendDeliveredInvoiceEmail({
+            to: order.customerInfo.email,
+            order: await hydrateOrder({ _id: order._id }),
+            websiteUrl
+        }).catch(err => console.error('Failed to send invoice email after payment:', err));
+    }
   } else {
     order.paymentStatus = 'failed';
     order.timeline.push(createTimelineEntry('pending', 'Thanh toán thất bại', `Thanh toán qua ${method} chưa thành công.`));
@@ -678,6 +729,9 @@ export const updateAdminOrderStatus = asyncHandler(async (req, res) => {
   if (nextStatus === 'cancelled') {
     order.paymentStatus =
       order.paymentStatus === 'paid' ? 'refunded' : order.paymentStatus;
+    // Return inventory
+    await adjustInventoryAtomic(order.items, 1, null, req.io);
+    await rollbackVoucherUsage(order.voucherCode, order.user);
   }
 
   order.timeline.push(
@@ -718,6 +772,26 @@ export const updateAdminOrderStatus = asyncHandler(async (req, res) => {
   });
 });
 
+export const resendInvoiceEmail = asyncHandler(async (req, res) => {
+  const order = await hydrateOrder({ _id: req.params.id });
+  if (!order) {
+    throw new AppError(404, 'Không tìm thấy đơn hàng.');
+  }
+
+  if (!order.customerInfo?.email) {
+    throw new AppError(400, 'Đơn hàng này không có email khách hàng.');
+  }
+
+  const websiteUrl = `${req.protocol}://${req.get('host')}`;
+  await sendDeliveredInvoiceEmail({
+    to: order.customerInfo.email,
+    order,
+    websiteUrl
+  });
+
+  res.json({ message: 'Đã gửi lại email hóa đơn thành công.' });
+});
+
 export const getAdminOrderDetail = asyncHandler(async (req, res) => {
   const order = await hydrateOrder({ _id: req.params.id });
 
@@ -748,6 +822,9 @@ export const updateAdminOrder = asyncHandler(async (req, res) => {
     if (req.body.status === 'cancelled') {
       order.paymentStatus =
         order.paymentStatus === 'paid' ? 'refunded' : order.paymentStatus;
+      // Return inventory
+      await adjustInventoryAtomic(order.items, 1, null, req.io);
+      await rollbackVoucherUsage(order.voucherCode, order.user);
     }
   }
 
@@ -821,7 +898,7 @@ export const cancelOrder = asyncHandler(async (req, res) => {
   );
 
   await order.save();
-  await adjustInventory(order.items, 1);
+  await adjustInventoryAtomic(order.items, 1, null, req.io);
   await rollbackVoucherUsage(order.voucherCode, order.user);
 
   res.json({

@@ -264,6 +264,16 @@ const OrderManagement = () => {
                              Hoàn tất
                           </button>
                         )}
+                        <a 
+                           href={`/invoice/${order.id}`}
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           style={{ padding: '8px 12px', background: '#fff', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '5px' }}
+                           onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1e293b'; e.currentTarget.style.color = '#1e293b'; }}
+                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#64748b'; }}
+                        >
+                           <Download size={14} /> HĐ
+                        </a>
                         <button 
                            onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); }}
                            style={{ padding: '8px 12px', background: '#f8fafc', color: '#2563eb', border: '1px solid #e2e8f0', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem', transition: 'all 0.2s' }}
@@ -359,6 +369,22 @@ const OrderManagement = () => {
                   {(selectedOrder.status === 'pending' || selectedOrder.status === 'processing') && (
                     <button className="btn-cancel" onClick={() => { cancelOrder(selectedOrder.id); setSelectedOrder(null); }} style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fee2e2' }}>
                       <XCircle size={18} style={{ marginRight: '5px' }} /> Hủy đơn hàng này
+                    </button>
+                  )}
+                  {selectedOrder.customerInfo?.email && (
+                    <button 
+                      className="btn-deliver" 
+                      onClick={async () => {
+                        try {
+                          await api.post(`/api/orders/admin/${selectedOrder.id}/resend-invoice`);
+                          alert('Đã gửi lại email hóa đơn thành công!');
+                        } catch (err) {
+                          alert('Gửi email thất bại: ' + (err.response?.data?.message || err.message));
+                        }
+                      }} 
+                      style={{ background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0' }}
+                    >
+                      <Download size={18} style={{ marginRight: '5px' }} /> Gửi lại Email HĐ
                     </button>
                   )}
                 </div>

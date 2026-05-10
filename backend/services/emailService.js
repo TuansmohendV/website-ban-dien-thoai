@@ -18,15 +18,18 @@ export const sendEmailOTP = async (email, otp) => {
 
   const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 587,
-    secure: false, // STARTTLS
+    port: 465,
+    secure: true, // SSL/TLS
     auth: {
       user: emailUser,
       pass: emailPass,
     },
-    connectionTimeout: 8000,
-    greetingTimeout: 8000,
-    socketTimeout: 8000,
+    connectionTimeout: 30000, // Tăng lên 30s
+    greetingTimeout: 30000,
+    socketTimeout: 30000,
+    tls: {
+      rejectUnauthorized: false
+    }
   });
 
   const mailOptions = {
@@ -70,12 +73,18 @@ export const sendEmail = async ({ to, subject, html }) => {
 
   const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
-    port: 587,
-    secure: false,
+    port: 465,
+    secure: true,
     auth: {
       user: emailUser,
       pass: emailPass,
     },
+    connectionTimeout: 30000,
+    greetingTimeout: 30000,
+    socketTimeout: 30000,
+    tls: {
+      rejectUnauthorized: false
+    }
   });
 
   const mailOptions = {

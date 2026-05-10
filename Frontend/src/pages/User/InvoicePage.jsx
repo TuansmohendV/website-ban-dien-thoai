@@ -16,8 +16,17 @@ const Barcode = () => (
 const InvoicePage = () => {
   const { orderId } = useParams();
   const { formatPrice } = useLanguage();
-  const { orders } = useOrders();
+  const { orders, loading } = useOrders();
   const printRef = useRef(null);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+        <div className="w-12 h-12 border-4 border-slate-900 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-sm font-black text-slate-900 uppercase tracking-widest">Đang tải hóa đơn...</p>
+      </div>
+    );
+  }
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
@@ -137,11 +146,43 @@ const InvoicePage = () => {
             print-color-adjust: exact !important;
           }
           .no-print { display: none !important; }
+          .security-watermark { display: none !important; }
           @page { size: A4; margin: 12mm; }
+        }
+        
+        .security-overlay {
+          position: fixed;
+          top: 0; left: 0; right: 0; bottom: 0;
+          pointer-events: none;
+          z-index: 9999;
+          overflow: hidden;
+          opacity: 0.03;
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: space-around;
+          align-content: space-around;
+        }
+        .watermark-item {
+          transform: rotate(-30deg);
+          font-size: 24px;
+          font-weight: 900;
+          white-space: nowrap;
+          color: black;
+          user-select: none;
         }
       `}</style>
 
-      <div className="min-h-screen bg-gray-100 py-10 px-4 font-sans" style={{ fontFamily: "'Inter', sans-serif" }}>
+      <div 
+        className="min-h-screen bg-gray-100 py-10 px-4 font-sans select-none relative" 
+        style={{ fontFamily: "'Inter', sans-serif" }}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {/* Security Watermark for Screen (Invisible in Print) */}
+        <div className="security-overlay no-print">
+          {Array.from({ length: 50 }).map((_, i) => (
+            <div key={i} className="watermark-item">PHONESIN - {invoice.invoiceNo}</div>
+          ))}
+        </div>
 
         <div className="no-print w-[794px] max-w-full mx-auto mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>

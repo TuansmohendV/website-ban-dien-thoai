@@ -8,6 +8,7 @@ import {
   getUserOrders,
   updateAdminOrder,
   updateAdminOrderStatus,
+  resendInvoiceEmail,
 } from '../controllers/orderController.js';
 import { protect, requireAdmin } from '../middleware/authMiddleware.js';
 
@@ -17,6 +18,7 @@ router.post('/', protect, createOrder);
 router.get('/admin', protect, requireAdmin, getAdminOrders);
 router.get('/admin/:id', protect, requireAdmin, getAdminOrderDetail);
 router.put('/admin/:id/status', protect, requireAdmin, updateAdminOrderStatus);
+router.post('/admin/:id/resend-invoice', protect, requireAdmin, resendInvoiceEmail);
 router.patch('/admin/:id', protect, requireAdmin, updateAdminOrder);
 router.get('/user', protect, getUserOrders);
 router.put('/cancel/:id', protect, cancelOrder);

@@ -379,6 +379,12 @@ const CartPage = () => {
                                             <button onClick={() => updateQuantity(item.id, item.selectedVariant?.id, item.selectedColor?.name, 1)} className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors border-l border-gray-200">+</button>
                                         </div>
                                     </div>
+                                    {item.qty > item.maxStock && (
+                                        <div className="mt-2 p-2 bg-red-50 text-red-600 rounded-lg text-[12px] font-bold flex items-center gap-2 animate-pulse">
+                                            <Zap size={14} fill="currentColor" />
+                                            {item.maxStock === 0 ? 'Sản phẩm vừa hết hàng!' : `Chỉ còn ${item.maxStock} sản phẩm!`}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

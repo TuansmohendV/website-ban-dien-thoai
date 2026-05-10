@@ -224,7 +224,8 @@ const CheckoutPage = () => {
 
                 if (backendPaymentMethod !== 'COD') {
                     const payResponse = await processPayment(order.backendId || order.id, backendPaymentMethod, {
-                        returnUrl: `${window.location.origin}/checkout-result`
+                        returnUrl: `${window.location.origin}/checkout-result`,
+                        origin: window.location.origin
                     });
 
                     if (payResponse && payResponse.paymentUrl) {

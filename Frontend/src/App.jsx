@@ -29,6 +29,7 @@ import ReturnRequestPage from './pages/User/ReturnRequestPage';
 import ReferralPage from './pages/User/ReferralPage';
 import FlashVoucherPage from './pages/User/FlashVoucherPage';
 import InvoicePage from './pages/User/InvoicePage';
+import MockPaymentPage from './pages/User/MockPaymentPage';
 import StoreLocatorPage from './pages/User/StoreLocatorPage';
 import CustomerSupportPage from './pages/User/CustomerSupportPage';
 import ChangePasswordPage from './pages/User/ChangePasswordPage';
@@ -105,6 +106,7 @@ function App() {
               <Route path="category/:id" element={<CategoryPage />} />
               <Route path="checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
               <Route path="checkout-result" element={<ProtectedRoute><CheckoutResultPage /></ProtectedRoute>} />
+              <Route path="mock-payment" element={<ProtectedRoute><MockPaymentPage /></ProtectedRoute>} />
               <Route path="store-locator" element={<StoreLocatorPage />} />
               <Route path="about" element={<AboutPage />} />
               <Route path="contact" element={<ContactPage />} />
