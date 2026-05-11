@@ -65,6 +65,24 @@ const userSchema = new mongoose.Schema(
       type: Date,
       select: false,
     },
+    linkedAccounts: {
+      banks: [{
+        bankId: String,
+        accountNumber: String,
+        accountName: String,
+        idNumber: String,
+        phone: String,
+        issueDate: String,
+        branch: String,
+        createdAt: { type: Date, default: Date.now }
+      }],
+      wallets: [{
+        walletId: String,
+        phone: String,
+        accountName: String,
+        createdAt: { type: Date, default: Date.now }
+      }]
+    }
   },
   {
     timestamps: true,

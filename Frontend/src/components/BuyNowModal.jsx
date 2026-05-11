@@ -39,6 +39,11 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
   const [isSuccess, setIsSuccess] = useState(false);
   const [deliveryEstimate, setDeliveryEstimate] = useState('');
   const [errors, setErrors] = useState({});
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [tempData, setTempData] = useState(null);
+  const [isLinking, setIsLinking] = useState(false);
 
   // Bank states
   const [selectedBank, setSelectedBank] = useState(null);
@@ -76,10 +81,49 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
       setFullName(user?.fullName || '');
       setPhone(user?.phone || '');
       setEmail(user?.email || '');
+      
+      // Auto-fill linked info
+      if (user?.linkedAccounts) {
+        if (user.linkedAccounts.banks?.length > 0) {
+          const defaultBank = user.linkedAccounts.banks[0];
+          setSelectedBank(defaultBank.bankId);
+          setBankAccountNumber(defaultBank.accountNumber);
+          setBankAccountName(defaultBank.accountName);
+          setBankIDNumber(defaultBank.idNumber);
+          setBankPhone(defaultBank.phone);
+          setBankIDIssueDate(defaultBank.issueDate);
+          setBankBranch(defaultBank.branch);
+        }
+      }
+      
       document.body.style.overflow = 'hidden';
     }
     return () => { document.body.style.overflow = ''; };
   }, [isOpen, product, user]);
+
+  // Bank Lookup Logic
+  useEffect(() => {
+    const lookup = async () => {
+      if (selectedBank && bankAccountNumber.length >= 8) {
+        setIsLookingUp(true);
+        try {
+          const response = await api.post('/user/lookup-bank-account', {
+            bin: selectedBank,
+            accountNumber: bankAccountNumber
+          });
+          if (response.data?.success) {
+            setBankAccountName(response.data.data.accountName);
+          }
+        } catch (error) {
+          console.error('Bank lookup failed', error);
+        } finally {
+          setIsLookingUp(false);
+        }
+      }
+    };
+    const timer = setTimeout(lookup, 1000);
+    return () => clearTimeout(timer);
+  }, [selectedBank, bankAccountNumber]);
 
   const validate = () => {
     const newErrors = {};
@@ -89,6 +133,69 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
     if (deliveryMethod === 'store' && !selectedStore) newErrors.store = 'Vui lòng chọn cửa hàng';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const validateBankInfo = () => {
+    const newErrors = {};
+    if (!selectedBank) newErrors.bank = 'Vui lòng chọn ngân hàng';
+    if (!/^[0-9]{8,15}$/.test(bankAccountNumber)) newErrors.accountNumber = 'Số tài khoản phải từ 8-15 chữ số';
+    if (!bankAccountName.trim()) newErrors.accountName = 'Vui lòng nhập tên chủ tài khoản';
+    if (!/^0[0-9]{9}$/.test(bankPhone)) newErrors.bankPhone = 'Số điện thoại không hợp lệ (10 chữ số)';
+    if (!/^([0-9]{9}|[0-9]{12})$/.test(bankIDNumber)) newErrors.bankID = 'Số CCCD phải là 9 hoặc 12 chữ số';
+    
+    setErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) {
+      alert(Object.values(newErrors)[0]);
+      return false;
+    }
+    return true;
+  };
+
+  const handleLinkAccount = async (type) => {
+    if (!user) {
+      alert('Vui lòng đăng nhập để thực hiện.');
+      return;
+    }
+    
+    if (type === 'bank') {
+      if (!validateBankInfo()) return;
+      
+      const data = {
+        bankId: selectedBank,
+        accountNumber: bankAccountNumber,
+        accountName: bankAccountName,
+        idNumber: bankIDNumber,
+        phone: bankPhone,
+        issueDate: bankIDIssueDate,
+        branch: bankBranch
+      };
+
+      setTempData({ type, data });
+      setIsVerifying(true);
+    }
+  };
+
+  const confirmVerification = async () => {
+    if (otpCode.length !== 6) {
+      alert('Vui lòng nhập mã xác thực 6 chữ số từ ứng dụng ngân hàng.');
+      return;
+    }
+
+    setIsLinking(true);
+    try {
+      const response = await api.post('/user/link-account', tempData);
+      if (response.data) {
+        // Update user state if needed or just show success
+        setIsVerifying(false);
+        setOtpCode('');
+        setTempData(null);
+        alert('Xác thực và liên kết thành công!');
+      }
+    } catch (error) {
+      alert(getApiErrorMessage(error));
+    } finally {
+      setIsLinking(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -374,73 +481,158 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
 
                               {/* Bank Grid & Linking Inputs */}
                               {paymentMethod === 'BANK_TRANSFER' && (
-                                 <div className="p-3 space-y-4 animate-fadeIn">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase text-center">Chọn ngân hàng liên kết</p>
-                                    <div className="grid grid-cols-4 gap-2">
-                                       {banks.map(bank => (
-                                          <button 
-                                             key={bank.id} 
-                                             onClick={() => setSelectedBank(bank.id)}
-                                             className={`aspect-square p-2 rounded-xl border-2 transition-all flex items-center justify-center bg-white ${
-                                                selectedBank === bank.id ? 'border-emerald-500 shadow-md scale-105' : 'border-gray-100'
-                                             }`}
-                                          >
-                                             <img src={bank.logo} alt={bank.name} className="max-h-full object-contain" title={bank.name} />
-                                          </button>
-                                       ))}
-                                    </div>
+                                 <div className="space-y-4">
+                                    {isVerifying ? (
+                                       <div className="p-6 bg-white rounded-2xl border-2 border-emerald-500 shadow-xl space-y-6 animate-scaleIn">
+                                          <div className="text-center space-y-2">
+                                             <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                             </div>
+                                             <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Xác thực ứng dụng ngân hàng</h3>
+                                             <p className="text-xs text-slate-500 px-4 leading-relaxed italic">Mã OTP 6 chữ số đã được gửi tới SĐT đăng ký ngân hàng của bạn. Vui lòng nhập để hoàn tất.</p>
+                                          </div>
 
-                                    {selectedBank && (
-                                       <div className="space-y-3 animate-scaleIn">
+                                          <div className="space-y-4">
+                                             <input 
+                                                type="text" 
+                                                maxLength={6}
+                                                placeholder="Mã OTP 6 chữ số" 
+                                                value={otpCode}
+                                                onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                                                className="w-full h-14 text-center text-2xl font-black tracking-[0.5em] bg-gray-50 border-2 border-emerald-100 rounded-2xl focus:border-emerald-500 outline-none transition-all"
+                                             />
+                                             <button 
+                                                onClick={confirmVerification}
+                                                disabled={isLinking}
+                                                className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                             >
+                                                {isLinking ? (
+                                                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                ) : (
+                                                   <>
+                                                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                                      XÁC NHẬN LIÊN KẾT
+                                                   </>
+                                                )}
+                                             </button>
+                                             <button 
+                                                onClick={() => setIsVerifying(false)}
+                                                className="w-full text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
+                                             >
+                                                Hủy bỏ và quay lại
+                                             </button>
+                                          </div>
+                                       </div>
+                                    ) : (
+                                       <div className="p-3 space-y-4 animate-fadeIn">
+                                          <p className="text-[9px] font-black text-slate-400 uppercase text-center tracking-widest">Chọn ngân hàng liên kết</p>
+                                          <div className="space-y-3">
+                                             <div className="grid grid-cols-5 gap-2">
+                                                {banks.map(bank => (
+                                                   <button 
+                                                      key={bank.id} 
+                                                      onClick={() => setSelectedBank(bank.id)}
+                                                      className={`aspect-square p-1.5 rounded-xl border-2 transition-all flex items-center justify-center bg-white ${
+                                                         selectedBank === bank.id ? 'border-emerald-500 shadow-md scale-105' : 'border-gray-100'
+                                                      }`}
+                                                   >
+                                                      <img src={bank.logo} alt={bank.name} className="max-h-full object-contain" title={bank.name} />
+                                                   </button>
+                                                ))}
+                                             </div>
+                                             
+                                             <div className="relative group">
+                                                <select 
+                                                   value={selectedBank || ""} 
+                                                   onChange={(e) => setSelectedBank(e.target.value)}
+                                                   className="w-full h-11 px-4 bg-gray-50 border border-gray-100 rounded-xl outline-none text-xs font-bold text-slate-700 focus:border-emerald-500 appearance-none transition-all cursor-pointer"
+                                                >
+                                                   <option value="" disabled>--- Hoặc chọn ngân hàng khác ---</option>
+                                                   {banks.map(bank => (
+                                                      <option key={bank.id} value={bank.id}>{bank.name}</option>
+                                                   ))}
+                                                </select>
+                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 group-hover:text-emerald-500 transition-colors">
+                                                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                                </div>
+                                             </div>
+                                          </div>
+
                                           <div className="grid grid-cols-2 gap-3">
-                                             <input 
-                                                type="text" 
-                                                placeholder="Số tài khoản" 
-                                                value={bankAccountNumber}
-                                                onChange={(e) => setBankAccountNumber(e.target.value)}
-                                                className="w-full h-11 px-4 bg-white border border-gray-100 rounded-xl outline-none text-xs font-bold text-slate-800 focus:border-emerald-500 transition-all"
-                                             />
-                                             <input 
-                                                type="text" 
-                                                placeholder="Tên chủ tài khoản" 
-                                                value={bankAccountName}
-                                                onChange={(e) => setBankAccountName(e.target.value)}
-                                                className="w-full h-11 px-4 bg-white border border-gray-100 rounded-xl outline-none text-xs font-bold text-slate-800 focus:border-emerald-500 transition-all"
-                                             />
+                                             <div className="space-y-1">
+                                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Số tài khoản</label>
+                                                <input 
+                                                   type="text" 
+                                                   placeholder="Nhập số tài khoản" 
+                                                   value={bankAccountNumber}
+                                                   onChange={(e) => setBankAccountNumber(e.target.value)}
+                                                   className="w-full h-11 px-4 bg-white border border-gray-100 rounded-xl outline-none text-xs font-bold text-slate-800 focus:border-emerald-500 transition-all"
+                                                />
+                                             </div>
+                                             <div className="space-y-1">
+                                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Chủ tài khoản</label>
+                                                <div className="relative">
+                                                   <input 
+                                                      type="text" 
+                                                      placeholder={isLookingUp ? "Đang tra cứu..." : "NGUYEN VAN A"} 
+                                                      value={bankAccountName}
+                                                      onChange={(e) => setBankAccountName(e.target.value)}
+                                                      className={`w-full h-11 px-4 bg-white border border-gray-100 rounded-xl outline-none text-xs font-bold text-slate-800 focus:border-emerald-500 transition-all uppercase ${isLookingUp ? 'animate-pulse' : ''}`}
+                                                      readOnly={isLookingUp}
+                                                   />
+                                                   {isLookingUp && (
+                                                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                         <div className="w-4 h-4 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                                                      </div>
+                                                   )}
+                                                </div>
+                                             </div>
                                           </div>
                                           
                                           <div className="grid grid-cols-2 gap-3">
-                                             <input 
-                                                type="text" 
-                                                placeholder="Số CCCD / CMND" 
-                                                value={bankIDNumber}
-                                                onChange={(e) => setBankIDNumber(e.target.value)}
-                                                className="w-full h-11 px-4 bg-white border border-gray-100 rounded-xl outline-none text-xs font-bold text-slate-800 focus:border-emerald-500 transition-all"
-                                             />
-                                             <input 
-                                                type="text" 
-                                                placeholder="Ngày cấp (DD/MM/YYYY)" 
-                                                value={bankIDIssueDate}
-                                                onChange={(e) => setBankIDIssueDate(e.target.value)}
-                                                className="w-full h-11 px-4 bg-white border border-gray-100 rounded-xl outline-none text-xs font-bold text-slate-800 focus:border-emerald-500 transition-all"
-                                             />
+                                             <div className="space-y-1">
+                                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">CCCD / CMND</label>
+                                                <input 
+                                                   type="text" 
+                                                   placeholder="Nhập số CCCD" 
+                                                   value={bankIDNumber}
+                                                   onChange={(e) => setBankIDNumber(e.target.value)}
+                                                   className="w-full h-11 px-4 bg-white border border-gray-100 rounded-xl outline-none text-xs font-bold text-slate-800 focus:border-emerald-500 transition-all"
+                                                />
+                                             </div>
+                                             <div className="space-y-1">
+                                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Ngày cấp</label>
+                                                <input 
+                                                   type="text" 
+                                                   placeholder="DD/MM/YYYY" 
+                                                   value={bankIDIssueDate}
+                                                   onChange={(e) => setBankIDIssueDate(e.target.value)}
+                                                   className="w-full h-11 px-4 bg-white border border-gray-100 rounded-xl outline-none text-xs font-bold text-slate-800 focus:border-emerald-500 transition-all"
+                                                />
+                                             </div>
                                           </div>
 
                                           <div className="grid grid-cols-2 gap-3">
-                                             <input 
-                                                type="text" 
-                                                placeholder="SĐT liên kết Bank" 
-                                                value={bankPhone}
-                                                onChange={(e) => setBankPhone(e.target.value)}
-                                                className="w-full h-11 px-4 bg-white border border-gray-100 rounded-xl outline-none text-xs font-bold text-slate-800 focus:border-emerald-500 transition-all"
-                                             />
-                                             <input 
-                                                type="text" 
-                                                placeholder="Chi nhánh (Ví dụ: Hà Nội)" 
-                                                value={bankBranch}
-                                                onChange={(e) => setBankBranch(e.target.value)}
-                                                className="w-full h-11 px-4 bg-white border border-gray-100 rounded-xl outline-none text-xs font-bold text-slate-800 focus:border-emerald-500 transition-all"
-                                             />
+                                             <div className="space-y-1">
+                                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">SĐT liên kết Bank</label>
+                                                <input 
+                                                   type="text" 
+                                                   placeholder="09xx xxx xxx" 
+                                                   value={bankPhone}
+                                                   onChange={(e) => setBankPhone(e.target.value)}
+                                                   className="w-full h-11 px-4 bg-white border border-gray-100 rounded-xl outline-none text-xs font-bold text-slate-800 focus:border-emerald-500 transition-all"
+                                                />
+                                             </div>
+                                             <div className="space-y-1">
+                                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Chi nhánh</label>
+                                                <input 
+                                                   type="text" 
+                                                   placeholder="Ví dụ: Hà Nội" 
+                                                   value={bankBranch}
+                                                   onChange={(e) => setBankBranch(e.target.value)}
+                                                   className="w-full h-11 px-4 bg-white border border-gray-100 rounded-xl outline-none text-xs font-bold text-slate-800 focus:border-emerald-500 transition-all"
+                                                />
+                                             </div>
                                           </div>
 
                                           <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
@@ -448,27 +640,150 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
                                                 🔒 Thông tin của bạn được mã hóa và bảo mật tuyệt đối theo tiêu chuẩn PCI DSS.
                                              </p>
                                           </div>
+
+                                          <button 
+                                             type="button"
+                                             onClick={() => handleLinkAccount('bank')}
+                                             className="w-full h-11 bg-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-700 transition-all shadow-md active:scale-95"
+                                          >
+                                             XÁC NHẬN LIÊN KẾT & LƯU THÔNG TIN
+                                          </button>
                                        </div>
                                     )}
                                  </div>
                               )}
                            </div>
 
-                           <button 
-                              onClick={() => setPaymentMethod('VNPAY')}
-                              className={`flex items-center gap-4 px-5 py-3 rounded-xl border-2 transition-all ${
-                                 paymentMethod === 'VNPAY' ? 'border-emerald-500 bg-emerald-50/50' : 'border-gray-50 bg-white'
-                              }`}
-                           >
-                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentMethod === 'VNPAY' ? 'border-emerald-500' : 'border-gray-200'}`}>
-                                 {paymentMethod === 'VNPAY' && <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></div>}
-                              </div>
-                              <span className="text-2xl">🏧</span>
-                              <div className="flex flex-col text-left">
-                                 <span className="text-xs font-black text-slate-700">Thanh toán Ví VNPay/Momo</span>
-                                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Xử lý tức thì</span>
-                              </div>
-                           </button>
+                           <div className={`flex flex-col gap-2 p-1 rounded-2xl transition-all ${paymentMethod === 'VNPAY' || paymentMethod === 'MOMO' ? 'bg-emerald-50/30' : ''}`}>
+                              <button 
+                                 onClick={() => setPaymentMethod('VNPAY')}
+                                 className={`flex items-center gap-4 px-5 py-3 rounded-xl border-2 transition-all ${
+                                    (paymentMethod === 'VNPAY' || paymentMethod === 'MOMO') ? 'border-emerald-500 bg-white' : 'border-gray-50 bg-white'
+                                 }`}
+                              >
+                                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${(paymentMethod === 'VNPAY' || paymentMethod === 'MOMO') ? 'border-emerald-500' : 'border-gray-200'}`}>
+                                    {(paymentMethod === 'VNPAY' || paymentMethod === 'MOMO') && <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full"></div>}
+                                 </div>
+                                 <span className="text-2xl">🏧</span>
+                                 <div className="flex flex-col text-left">
+                                    <span className="text-xs font-black text-slate-700">Ví điện tử VNPay / MoMo</span>
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Xử lý tức thì</span>
+                                 </div>
+                              </button>
+
+                              {/* Wallet Selection */}
+                              {(paymentMethod === 'VNPAY' || paymentMethod === 'MOMO') && (
+                                 <div className="p-3 space-y-4">
+                                    {isVerifying ? (
+                                       <div className="p-6 bg-white rounded-2xl border-2 border-emerald-500 shadow-xl space-y-6 animate-scaleIn">
+                                          <div className="text-center space-y-2">
+                                             <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                             </div>
+                                             <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Xác thực Ví Điện Tử</h3>
+                                             <p className="text-xs text-slate-500 px-4 leading-relaxed italic">Mã OTP đã được gửi tới SĐT đăng ký ví của bạn. Vui lòng nhập để hoàn tất.</p>
+                                          </div>
+
+                                          <div className="space-y-4">
+                                             <input 
+                                                type="text" 
+                                                maxLength={6}
+                                                placeholder="Mã OTP 6 chữ số" 
+                                                value={otpCode}
+                                                onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                                                className="w-full h-14 text-center text-2xl font-black tracking-[0.5em] bg-gray-50 border-2 border-emerald-100 rounded-2xl focus:border-emerald-500 outline-none transition-all"
+                                             />
+                                             <button 
+                                                onClick={confirmVerification}
+                                                disabled={isLinking}
+                                                className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl shadow-lg shadow-emerald-200 transition-all active:scale-95 flex items-center justify-center gap-2"
+                                             >
+                                                {isLinking ? (
+                                                   <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                ) : (
+                                                   <>
+                                                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                                      XÁC NHẬN LIÊN KẾT VÍ
+                                                   </>
+                                                )}
+                                             </button>
+                                             <button 
+                                                onClick={() => setIsVerifying(false)}
+                                                className="w-full text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
+                                             >
+                                                Hủy bỏ và quay lại
+                                             </button>
+                                          </div>
+                                       </div>
+                                    ) : (
+                                       <div className="animate-fadeIn space-y-4">
+                                          <div className="grid grid-cols-2 gap-3">
+                                             {[
+                                                { id: 'VNPAY', name: 'VNPay', icon: 'https://vinadesign.vn/uploads/images/2023/05/vnpay-logo-vinadesign-25-12-57-55.jpg' },
+                                                { id: 'MOMO', name: 'MoMo', icon: 'https://cdn.haitrieu.com/wp-content/uploads/2022/10/Logo-MoMo-Square.png' }
+                                             ].map(wallet => (
+                                                <button 
+                                                   key={wallet.id}
+                                                   onClick={() => setPaymentMethod(wallet.id)}
+                                                   className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${
+                                                      paymentMethod === wallet.id ? 'border-emerald-500 bg-white shadow-sm' : 'border-gray-50 bg-gray-50/50'
+                                                   }`}
+                                                >
+                                                   <img src={wallet.icon} alt={wallet.name} className="w-8 h-8 rounded-lg object-contain" />
+                                                   <span className="text-[11px] font-black uppercase text-slate-700">{wallet.name}</span>
+                                                </button>
+                                             ))}
+                                          </div>
+                                          
+                                          <div className="space-y-3">
+                                             <div className="space-y-1">
+                                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Số điện thoại đăng ký Ví</label>
+                                                <input 
+                                                   type="text" 
+                                                   placeholder="09xx xxx xxx" 
+                                                   value={bankPhone} // Re-using bankPhone for wallet
+                                                   onChange={(e) => setBankPhone(e.target.value)}
+                                                   className="w-full h-11 px-4 bg-white border border-gray-100 rounded-xl outline-none text-xs font-bold text-slate-800 focus:border-emerald-500 transition-all"
+                                                />
+                                             </div>
+                                             <div className="space-y-1">
+                                                <label className="text-[9px] font-black uppercase text-slate-400 ml-1">Tên chủ ví (Không dấu)</label>
+                                                <input 
+                                                   type="text" 
+                                                   placeholder="NGUYEN VAN A" 
+                                                   value={bankAccountName} // Re-using bankAccountName
+                                                   onChange={(e) => setBankAccountName(e.target.value)}
+                                                   className="w-full h-11 px-4 bg-white border border-gray-100 rounded-xl outline-none text-xs font-bold text-slate-800 focus:border-emerald-500 transition-all uppercase"
+                                                />
+                                             </div>
+                                          </div>
+
+                                          <button 
+                                             type="button"
+                                             onClick={() => {
+                                                if (!/^0[0-9]{9}$/.test(bankPhone)) {
+                                                   alert('Số điện thoại ví không hợp lệ');
+                                                   return;
+                                                }
+                                                if (!bankAccountName.trim()) {
+                                                   alert('Vui lòng nhập tên chủ ví');
+                                                   return;
+                                                }
+                                                setTempData({
+                                                   type: 'wallet',
+                                                   data: { walletId: paymentMethod, phone: bankPhone, accountName: bankAccountName }
+                                                });
+                                                setIsVerifying(true);
+                                             }}
+                                             className="w-full h-11 bg-emerald-600 text-white rounded-xl text-xs font-black hover:bg-emerald-700 transition-all shadow-md active:scale-95 uppercase"
+                                          >
+                                             Xác nhận & Liên kết Ví
+                                          </button>
+                                       </div>
+                                    )}
+                                 </div>
+                              )}
+                           </div>
                         </div>
                      )}
                   </div>

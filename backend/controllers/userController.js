@@ -409,3 +409,79 @@ export const sendPromotionalEmail = asyncHandler(async (req, res) => {
     message: `Đã gửi email ưu đãi tới ${user.email} thành công.`,
   });
 });
+
+export const linkAccount = asyncHandler(async (req, res) => {
+  const { type, data } = req.body; // type: 'bank' | 'wallet'
+  const user = await User.findById(req.user._id);
+
+  if (!user) {
+    throw new AppError(404, 'Không tìm thấy người dùng.');
+  }
+
+  if (type === 'bank') {
+    // Check if bank account already exists to avoid duplicates
+    const existingIndex = user.linkedAccounts.banks.findIndex(b => b.accountNumber === data.accountNumber && b.bankId === data.bankId);
+    if (existingIndex > -1) {
+      user.linkedAccounts.banks[existingIndex] = { ...user.linkedAccounts.banks[existingIndex], ...data };
+    } else {
+      user.linkedAccounts.banks.push(data);
+    }
+  } else if (type === 'wallet') {
+    const existingIndex = user.linkedAccounts.wallets.findIndex(w => w.walletId === data.walletId && w.phone === data.phone);
+    if (existingIndex > -1) {
+      user.linkedAccounts.wallets[existingIndex] = { ...user.linkedAccounts.wallets[existingIndex], ...data };
+    } else {
+      user.linkedAccounts.wallets.push(data);
+    }
+  } else {
+    throw new AppError(400, 'Loại tài khoản liên kết không hợp lệ.');
+  }
+
+  await user.save();
+
+  res.json({
+    message: 'Liên kết tài khoản thành công.',
+    linkedAccounts: user.linkedAccounts
+  });
+});
+
+export const lookupBankAccount = asyncHandler(async (req, res) => {
+  const { bin, accountNumber } = req.body;
+
+  if (!bin || !accountNumber) {
+    throw new AppError(400, 'Thiếu thông tin ngân hàng hoặc số tài khoản.');
+  }
+
+  try {
+    const response = await fetch('https://api.vietqr.io/v2/lookup', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        bin,
+        accountNumber,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.code === '00' && result.data) {
+      res.json({
+        success: true,
+        accountName: result.data.accountName,
+      });
+    } else {
+      res.json({
+        success: false,
+        message: result.desc || 'Không tìm thấy thông tin tài khoản.',
+      });
+    }
+  } catch (error) {
+    console.error('Lookup error:', error);
+    res.json({
+      success: false,
+      message: 'Lỗi khi tra cứu tài khoản.',
+    });
+  }
+});
