@@ -4,6 +4,7 @@ import { useOrders } from '../../context/OrdersContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useNavigate, Link } from 'react-router-dom';
 import api, { getApiErrorMessage } from '../../lib/api';
+import { normalizeOrder } from '../../lib/orders';
 import { 
   BarChart3, 
   ShoppingBag, 
@@ -51,9 +52,12 @@ const ProfilePage = () => {
     const [reviewActionLoadingId, setReviewActionLoadingId] = useState('');
     const [reviewStats, setReviewStats] = useState({ total: 0, average: 0 });
     const [searchHistoryItems, setSearchHistoryItems] = useState([]);
-    const [orderHistoryItems, setOrderHistoryItems] = useState([]);
     const [notifications, setNotifications] = useState([]);
     const [addresses, setAddresses] = useState([]);
+    const [orderHistoryYears, setOrderHistoryYears] = useState([]); // Summary of years from DB
+    const [orderHistoryItemsByYear, setOrderHistoryItemsByYear] = useState({}); // Detailed orders per year
+    const [loadingYears, setLoadingYears] = useState({}); // Loading state for each year's details
+    const [expandedYears, setExpandedYears] = useState({}); // Track which years are expanded
     const [addressForm, setAddressForm] = useState({
         label: 'Nha',
         recipientName: '',
@@ -207,8 +211,8 @@ const ProfilePage = () => {
 
         try {
             if (tabId === 'history') {
-                const response = await api.get('/api/orders/user');
-                setOrderHistoryItems(response.data?.data || []);
+                const response = await api.get('/api/orders/user/years');
+                setOrderHistoryYears(response.data?.data || []);
             }
 
             if (tabId === 'comments') {
@@ -344,19 +348,22 @@ const ProfilePage = () => {
         }
     };
 
-    const handleDeleteMyReview = async (reviewId) => {
-        if (!window.confirm('Ban chac chan muon xoa danh gia nay?')) {
+    const handleFetchOrdersByYear = async (year) => {
+        if (orderHistoryItemsByYear[year]) {
+            setExpandedYears(prev => ({ ...prev, [year]: !prev[year] }));
             return;
         }
 
+        setLoadingYears(prev => ({ ...prev, [year]: true }));
         try {
-            setReviewActionLoadingId(reviewId);
-            await api.delete(`/api/reviews/${reviewId}`);
-            await loadTabData(activeTab);
+            const response = await api.get(`/api/orders/user?year=${year}`);
+            const normalized = (response.data?.data || []).map(normalizeOrder);
+            setOrderHistoryItemsByYear(prev => ({ ...prev, [year]: normalized }));
+            setExpandedYears(prev => ({ ...prev, [year]: true }));
         } catch (error) {
-            setTabNotice(getApiErrorMessage(error, 'Khong xoa duoc danh gia.'));
+            setTabNotice(getApiErrorMessage(error, `Khong the tai don hang nam ${year}.`));
         } finally {
-            setReviewActionLoadingId('');
+            setLoadingYears(prev => ({ ...prev, [year]: false }));
         }
     };
 
@@ -917,14 +924,12 @@ const ProfilePage = () => {
                                                                     Hủy đơn
                                                                 </button>
                                                             )}
-                                                            {order.status === 'delivered' && (
-                                                                <Link
-                                                                    to={`/invoice/${order.id}`}
-                                                                    className="px-4 py-2 text-xs font-black bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all uppercase tracking-wide"
-                                                                >
-                                                                    Xuất hóa đơn
-                                                                </Link>
-                                                            )}
+                                                            <Link
+                                                                to={`/invoice/${order.id}`}
+                                                                className="px-4 py-2 text-xs font-black bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all uppercase tracking-wide"
+                                                            >
+                                                                Xuất hóa đơn
+                                                            </Link>
                                                             <Link
                                                                 to={`/orders`}
                                                                 className="px-4 py-2 text-xs font-black bg-[#008d71] text-white rounded-xl hover:bg-[#007a62] transition-all uppercase tracking-wide shadow-sm"
@@ -943,59 +948,150 @@ const ProfilePage = () => {
                         })()}
 
                         {activeTab === 'history' && (
-                            <div className="space-y-6 animate-in fade-in duration-300">
-                                <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Lịch sử mua hàng</h2>
+                            <div className="space-y-6 animate-in fade-in duration-300" style={{ fontFamily: "Calibri, 'Segoe UI', sans-serif" }}>
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Lịch sử mua hàng</h2>
+                                    <div className="bg-white px-4 py-2 rounded-2xl border border-gray-100 shadow-sm">
+                                        <span className="text-sm font-bold text-gray-400">Dữ liệu từ hệ thống API</span>
+                                    </div>
+                                </div>
+
                                 {tabLoading ? (
-                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Dang tai du lieu...</div>
-                                ) : orderHistoryItems.length === 0 ? (
-                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Chua co lich su mua hang.</div>
+                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center shadow-sm">
+                                        <div className="animate-pulse flex flex-col items-center gap-4">
+                                            <div className="w-12 h-12 bg-gray-100 rounded-full"></div>
+                                            <div className="h-4 w-32 bg-gray-100 rounded"></div>
+                                        </div>
+                                    </div>
+                                ) : orderHistoryYears.length === 0 ? (
+                                    <div className="bg-white rounded-3xl py-24 border border-gray-100 text-center shadow-sm flex flex-col items-center">
+                                        <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-6">
+                                            <History size={32} className="text-gray-200" />
+                                        </div>
+                                        <p className="text-gray-400 font-bold">Chưa có lịch sử mua hàng trên hệ thống.</p>
+                                    </div>
                                 ) : (
-                                    <div className="space-y-3">
-                                        {orderHistoryItems.map((item) => {
-                                            const statusMap = {
-                                                pending: { label: 'Chờ xác nhận', cls: 'bg-amber-100 text-amber-700' },
-                                                processing: { label: 'Đang xử lý', cls: 'bg-blue-100 text-blue-700' },
-                                                shipping: { label: 'Đang giao', cls: 'bg-indigo-100 text-indigo-700' },
-                                                delivered: { label: 'Đã giao', cls: 'bg-green-100 text-green-700' },
-                                                cancelled: { label: 'Đã hủy', cls: 'bg-gray-100 text-gray-500' },
-                                            };
-                                            const st = statusMap[item.status] || {
-                                                label: String(item.status || 'pending'),
-                                                cls: 'bg-gray-100 text-gray-500',
-                                            };
+                                    <div className="space-y-8">
+                                        {orderHistoryYears.map(({ year, count, totalSpent }) => {
+                                            const isExpanded = expandedYears[year];
+                                            const yearOrders = orderHistoryItemsByYear[year] || [];
+                                            const isYearLoading = loadingYears[year];
 
                                             return (
-                                                <div key={item._id} className="bg-white rounded-2xl p-4 border border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                                    <div>
-                                                        <p className="font-black text-gray-900">Don hang #{item._id?.slice(-6) || ''}</p>
-                                                        <p className="text-xs text-gray-400">
-                                                            {item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : ''}
-                                                            {' · '}
-                                                            {item.items?.length || 0} san pham
-                                                        </p>
-                                                        <p className="text-sm text-[#008d71] font-bold mt-1">
-                                                            {formatPrice(item.totalAmount || 0)}
-                                                        </p>
-                                                    </div>
-                                                    <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:justify-end">
-                                                        <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase ${st.cls}`}>
-                                                            {st.label}
-                                                        </span>
-                                                        <Link
-                                                            to="/orders"
-                                                            className="text-xs font-black text-[#008d71] border border-[#008d71]/20 bg-[#e5f9e0] px-3 py-1.5 rounded-lg"
-                                                        >
-                                                            Xem chi tiet
-                                                        </Link>
-                                                        {item.status === 'delivered' && (
-                                                            <Link
-                                                                to={`/invoice/${item._id}`}
-                                                                className="text-xs font-black text-gray-700 border border-gray-200 bg-gray-50 px-3 py-1.5 rounded-lg"
+                                                <div key={year} className="space-y-4">
+                                                    {/* Year Header Card */}
+                                                    <div className={`bg-white rounded-3xl p-6 border transition-all duration-300 ${isExpanded ? 'border-[#008d71] shadow-lg shadow-[#008d71]/5' : 'border-gray-100 shadow-sm'}`}>
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                                                            <div className="flex items-center gap-6">
+                                                                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black transition-colors ${isExpanded ? 'bg-[#008d71] text-white' : 'bg-gray-100 text-gray-400'}`}>
+                                                                    {year}
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <h3 className="text-xl font-black text-gray-900">Năm {year}</h3>
+                                                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                                                                        <span className="text-sm font-bold text-gray-400">
+                                                                            Đã đặt <span className="text-gray-900">{count} đơn hàng</span>
+                                                                        </span>
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-gray-200 hidden sm:block"></span>
+                                                                        <span className="text-sm font-bold text-gray-400">
+                                                                            Tổng chi: <span className="text-[#008d71]">{formatPrice(totalSpent)}</span>
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <button 
+                                                                onClick={() => handleFetchOrdersByYear(year)}
+                                                                disabled={isYearLoading}
+                                                                className={`h-12 px-8 rounded-2xl font-black uppercase tracking-widest text-xs transition-all active:scale-95 flex items-center gap-2 ${
+                                                                    isExpanded 
+                                                                    ? 'bg-gray-900 text-white shadow-xl' 
+                                                                    : 'bg-[#e5f9e0] text-[#008d71] hover:bg-[#d4f2cc]'
+                                                                } disabled:opacity-50`}
                                                             >
-                                                                Xuat hoa don
-                                                            </Link>
-                                                        )}
+                                                                {isYearLoading ? (
+                                                                    <span className="animate-pulse">Đang tải...</span>
+                                                                ) : isExpanded ? (
+                                                                    <>Thu gọn lịch sử <ChevronRight size={16} className="rotate-90" /></>
+                                                                ) : (
+                                                                    <>Theo dõi lịch sử <ChevronRight size={16} /></>
+                                                                )}
+                                                            </button>
+                                                        </div>
                                                     </div>
+
+                                                    {/* Expanded Orders List */}
+                                                    {isExpanded && (
+                                                        <div className="pl-4 sm:pl-10 space-y-4 animate-in slide-in-from-top-4 duration-300">
+                                                            {yearOrders.length === 0 && !isYearLoading ? (
+                                                                <div className="p-4 text-gray-400 font-bold italic">Khong co don hang trong nam nay.</div>
+                                                            ) : (
+                                                                yearOrders.map((order) => {
+                                                                    const statusMap = {
+                                                                        pending: { label: 'Chờ xác nhận', cls: 'bg-amber-100 text-amber-700' },
+                                                                        processing: { label: 'Đang xử lý', cls: 'bg-blue-100 text-blue-700' },
+                                                                        shipping: { label: 'Đang giao', cls: 'bg-indigo-100 text-indigo-700' },
+                                                                        delivered: { label: 'Đã giao', cls: 'bg-green-100 text-green-700' },
+                                                                        cancelled: { label: 'Đã hủy', cls: 'bg-gray-100 text-gray-500' },
+                                                                    };
+                                                                    const st = statusMap[order.status] || {
+                                                                        label: String(order.status || 'pending'),
+                                                                        cls: 'bg-gray-100 text-gray-500',
+                                                                    };
+
+                                                                    return (
+                                                                        <div key={order.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-all border-l-4 border-l-[#008d71]">
+                                                                            <div className="px-6 py-4 bg-gray-50/50 flex flex-wrap items-center justify-between gap-4 border-b border-gray-100">
+                                                                                <div className="space-y-1">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <ShoppingBag size={14} className="text-gray-400" />
+                                                                                        <span className="font-black text-gray-900 text-[13px]">Mã đơn #{order.id?.slice(-8).toUpperCase()}</span>
+                                                                                    </div>
+                                                                                    <p className="text-[11px] font-bold text-gray-400 pl-6">
+                                                                                        {order.date}
+                                                                                    </p>
+                                                                                </div>
+                                                                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${st.cls}`}>
+                                                                                    {st.label}
+                                                                                </span>
+                                                                            </div>
+
+                                                                            <div className="p-5 space-y-3">
+                                                                                {order.items?.map((item, idx) => (
+                                                                                    <div key={idx} className="flex gap-4">
+                                                                                        <div className="w-14 h-14 bg-gray-50 rounded-xl p-1.5 border border-gray-100 shrink-0">
+                                                                                            <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
+                                                                                        </div>
+                                                                                        <div className="flex-1 flex justify-between items-center min-w-0">
+                                                                                            <div className="min-w-0">
+                                                                                                <h4 className="font-black text-gray-900 text-sm truncate">{item.name}</h4>
+                                                                                                <p className="text-[11px] font-bold text-gray-400 mt-0.5">
+                                                                                                    {item.selectedColor} {item.selectedStorage} · x{item.qty}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <p className="font-black text-gray-900 text-sm pl-4">{formatPrice(item.price)}</p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+
+                                                                            <div className="px-6 py-4 bg-gray-50/30 border-t border-gray-100 flex items-center justify-between">
+                                                                                <div className="flex items-baseline gap-2">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Tổng:</span>
+                                                                                    <span className="text-lg font-black text-[#008d71]">{formatPrice(order.total)}</span>
+                                                                                </div>
+                                                                                <Link
+                                                                                    to="/orders"
+                                                                                    className="text-[11px] font-black text-[#008d71] hover:underline uppercase tracking-wider"
+                                                                                >
+                                                                                    Xem chi tiết
+                                                                                </Link>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         })}

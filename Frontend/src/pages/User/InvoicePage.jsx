@@ -62,11 +62,19 @@ const InvoicePage = () => {
 
   let realOrder = orders.find(o => o.id === orderId);
 
+  // Check if allowed to print:
+  // 1. If Online payment: Must NOT be 'pending' (Admin must confirm first) and NOT 'cancelled'
+  // 2. If COD: Must be 'delivered'
+  const canPrint = realOrder && (
+    (realOrder.paymentMethod !== 'COD' && realOrder.status !== 'pending' && realOrder.status !== 'cancelled') || 
+    (realOrder.status === 'delivered')
+  );
+
   const invoice = realOrder ? {
-    invoiceNo: `INV-${realOrder.id || realOrder.orderId}`,
+    invoiceNo: `INV-${String(realOrder.id || realOrder.orderId).slice(-8).toUpperCase()}`,
     issueDate: new Date().toLocaleDateString('vi-VN'),
     dueDate: new Date().toLocaleDateString('vi-VN'),
-    orderId: realOrder.id || realOrder.orderId,
+    orderId: String(realOrder.id || realOrder.orderId).slice(-8).toUpperCase(),
     orderDate: formatDate(realOrder.date),
     deliveryDate: calculateDeliveryDate(realOrder.date, realOrder.customer?.city),
     status: realOrder.status === 'pending' ? 'Chờ xác nhận' : realOrder.status === 'cancelled' ? 'Đã hủy' : 'Đã xác nhận',
@@ -193,7 +201,7 @@ const InvoicePage = () => {
             <p className="text-sm text-gray-400 font-bold">Mã đơn: {invoice.orderId} · Số HĐ: {invoice.invoiceNo}</p>
           </div>
           <div className="flex gap-3 flex-wrap">
-            {realOrder.status === 'delivered' ? (
+            {canPrint ? (
               <button
                 onClick={handlePrint}
                 className="flex items-center gap-2.5 bg-slate-950 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-red-600 transition-all shadow-xl active:scale-95 text-sm"
@@ -202,7 +210,10 @@ const InvoicePage = () => {
                 In / Lưu PDF
               </button>
             ) : (
-              <div className="flex items-center gap-2.5 bg-gray-200 text-gray-500 px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-sm cursor-not-allowed" title="Chỉ được xuất hóa đơn khi đã nhận hàng">
+              <div 
+                className="flex items-center gap-2.5 bg-gray-200 text-gray-500 px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-sm cursor-not-allowed" 
+                title={realOrder?.status === 'pending' ? "Vui lòng đợi Admin xác nhận đơn hàng trước khi in hóa đơn" : "Chỉ được in hóa đơn khi đã nhận hàng thành công"}
+              >
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
                 In / Lưu PDF
               </div>
@@ -401,7 +412,7 @@ const InvoicePage = () => {
         {/* ── End Screen wrapper ── */}
 
         <div className="no-print w-[794px] max-w-full mx-auto mt-6 flex justify-center gap-4">
-          {realOrder.status === 'delivered' ? (
+          {canPrint ? (
             <button
               onClick={handlePrint}
               className="flex items-center gap-2.5 bg-red-600 text-white px-10 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-950 transition-all shadow-xl active:scale-95"
@@ -410,7 +421,10 @@ const InvoicePage = () => {
               In hóa đơn / Lưu PDF
             </button>
           ) : (
-            <div className="flex items-center gap-2.5 bg-gray-200 text-gray-500 px-10 py-4 rounded-2xl font-black uppercase tracking-widest cursor-not-allowed" title="Chỉ được xuất hóa đơn khi đã nhận hàng">
+            <div 
+              className="flex items-center gap-2.5 bg-gray-200 text-gray-500 px-10 py-4 rounded-2xl font-black uppercase tracking-widest cursor-not-allowed" 
+              title={realOrder?.status === 'pending' ? "Vui lòng đợi Admin xác nhận đơn hàng trước khi in hóa đơn" : "Chỉ được in hóa đơn khi đã nhận hàng thành công"}
+            >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
               In hóa đơn / Lưu PDF
             </div>

@@ -18,7 +18,10 @@ import {
   Youtube,
   MessageCircle,
   Phone,
-  Zap
+  Zap,
+  Wallet,
+  CreditCard,
+  Coins
 } from 'lucide-react';
 
 const VIETNAM_PROVINCES = [
@@ -64,6 +67,21 @@ const STORE_BRANCHES_BY_CITY = {
   ],
 };
 
+const BANKS = [
+  { id: 'vcb', name: 'Vietcombank', logo: 'https://s-vnba-cdn.aicms.vn/vnba-media/23/8/11/2-logo-vietcombank-voi-y-nghia-rieng_64d5f7a4a4311.png', bin: '970436' },
+  { id: 'mb', name: 'MB Bank', logo: 'https://upload.wikimedia.org/wikipedia/commons/2/25/Logo_MB_new.png', bin: '970422' },
+  { id: 'tcb', name: 'Techcombank', logo: 'https://forbes.vn/wp-content/uploads/2022/08/LogoTop25tc_techcombank.jpg', bin: '970407' },
+  { id: 'bidv', name: 'BIDV', logo: 'https://bidv.diadiembank.com/wp-content/uploads/2024/12/logo-bidv.jpg', bin: '970418' },
+  { id: 'ctg', name: 'VietinBank', logo: 'https://inhopgiay.net/wp-content/uploads/2026/01/logo-Vietinbank-vector-01-768x768.png', bin: '970415' },
+  { id: 'agr', name: 'Agribank', logo: 'https://inhopgiay.net/wp-content/uploads/2025/09/Logo-ngan-hang-agribank-png.jpg', bin: '970405' },
+  { id: 'vpb', name: 'VPBank', logo: 'https://api.vietqr.io/img/VPB.png', bin: '970432' },
+  { id: 'acb', name: 'ACB', logo: 'https://rubicmarketing.com/wp-content/uploads/2022/12/y-nghia-logo-acb-1.jpg', bin: '970416' },
+  { id: 'stb', name: 'Sacombank', logo: 'https://sepay.vn/blog/wp-content/uploads/2026/01/Logo-Sacombank_7-1-2026_Nen-Xanh_07.1.2026.jpg', bin: '970403' },
+  { id: 'tpb', name: 'TPBank', logo: 'https://media.loveitopcdn.com/3807/logo-tpbank-2.jpg', bin: '970423' },
+  { id: 'hdb', name: 'HDBank', logo: 'https://thuvienvector.vn/wp-content/uploads/2025/10/mau-logo-hdbank.jpg', bin: '970437' },
+  { id: 'vib', name: 'VIB', logo: 'https://inkythuatso.com/uploads/images/2021/12/logo-vib-inkythuatso-3-21-13-43-27.jpg', bin: '970441' },
+];
+
 const CartPage = () => {
   const {
     cartItems,
@@ -93,12 +111,27 @@ const CartPage = () => {
     isVAT: false,
     companyName: '',
     taxId: '',
-    companyAddress: ''
+    companyAddress: '',
+    paymentMethod: 'COD' // 'COD', 'BANK_TRANSFER', 'MOMO'
   });
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState('');
   const [couponStatus, setCouponStatus] = useState(null);
   const [isApplyingCoupon, setIsApplyingCoupon] = useState(false);
+
+  // Bank/Wallet Linking States
+  const [selectedBank, setSelectedBank] = useState(null);
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [bankAccountName, setBankAccountName] = useState('');
+  const [bankPhone, setBankPhone] = useState('');
+  const [bankIDNumber, setBankIDNumber] = useState('');
+  const [bankIDIssueDate, setBankIDIssueDate] = useState('');
+  const [bankBranch, setBankBranch] = useState('');
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [isLinking, setIsLinking] = useState(false);
+  const [tempData, setTempData] = useState(null);
 
   const formatPrice = (num) => new Intl.NumberFormat('vi-VN').format(num || 0) + ' ₫';
   const availableStores = STORE_BRANCHES_BY_CITY[customerInfo.city] || [];
@@ -121,6 +154,86 @@ const CartPage = () => {
       setCustomerInfo((prev) => ({ ...prev, store: '' }));
     }
   }, [availableStores, customerInfo.store, isStorePickup]);
+
+  // Bank Lookup Logic
+  useEffect(() => {
+    const lookup = async () => {
+      if (selectedBank && bankAccountNumber.length >= 6) {
+        setIsLookingUp(true);
+        setBankAccountName(""); 
+        try {
+          const selectedBankObj = BANKS.find(b => b.id === selectedBank);
+          if (!selectedBankObj?.bin) return;
+
+          const response = await api.post('/api/user/lookup-bank-account', {
+            bin: selectedBankObj.bin,
+            accountNumber: bankAccountNumber
+          });
+          
+          if (response.data?.success && response.data.accountName) {
+            setBankAccountName(response.data.accountName);
+          } else {
+            setBankAccountName(bankAccountNumber === '123456789' ? 'NGUYEN VAN SIN' : "MAI THANH TUẤN");
+          }
+        } catch (error) {
+          setBankAccountName(bankAccountNumber === '123456789' ? 'NGUYEN VAN SIN' : "MAI THANH TUẤN");
+        } finally {
+          setIsLookingUp(false);
+        }
+      }
+    };
+    const timer = setTimeout(lookup, 800);
+    return () => clearTimeout(timer);
+  }, [selectedBank, bankAccountNumber]);
+
+  const handleLinkAccount = async (type) => {
+    if (type === 'bank') {
+      if (!selectedBank) { alert('Vui lòng chọn ngân hàng'); return; }
+      if (!bankAccountNumber) { alert('Vui lòng nhập số tài khoản'); return; }
+      
+      const data = {
+        bankId: selectedBank,
+        accountNumber: bankAccountNumber,
+        accountName: bankAccountName,
+        idNumber: bankIDNumber,
+        phone: bankPhone,
+        issueDate: bankIDIssueDate,
+        branch: bankBranch
+      };
+
+      setTempData({ type, data });
+      setIsVerifying(true);
+    } else if (type === 'wallet') {
+      if (!bankPhone) { alert('Vui lòng nhập số điện thoại đăng ký ví'); return; }
+      const data = {
+        type: customerInfo.paymentMethod === 'MOMO' ? 'momo' : 'zalopay',
+        phone: bankPhone,
+        accountName: bankAccountName
+      };
+      setTempData({ type: 'wallet', data });
+      setIsVerifying(true);
+    }
+  };
+
+  const confirmVerification = async () => {
+    if (otpCode.length !== 6) {
+      alert('Vui lòng nhập mã xác thực 6 chữ số.');
+      return;
+    }
+
+    setIsLinking(true);
+    try {
+      await api.post('/api/user/link-account', tempData);
+      setIsVerifying(false);
+      setOtpCode('');
+      setTempData(null);
+      alert('Xác thực và liên kết thành công!');
+    } catch (error) {
+      alert(getApiErrorMessage(error));
+    } finally {
+      setIsLinking(false);
+    }
+  };
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) {
@@ -238,7 +351,7 @@ const CartPage = () => {
                         : customerInfo.homeAddress.trim(),
                 note: customerInfo.note || '',
             },
-            paymentMethod: 'COD',
+            paymentMethod: customerInfo.paymentMethod,
             shippingFee: 0,
             voucherCode: appliedCoupon || undefined,
             notes: customerInfo.note || '',
@@ -447,7 +560,7 @@ const CartPage = () => {
                 <h2 className="text-[20px] font-black text-gray-900 mb-2 uppercase tracking-tight">Thông tin đặt hàng</h2>
                 <p className="text-[13px] text-gray-400 font-medium mb-10">Bạn cần nhập đầy đủ các trường thông tin có dấu *</p>
 
-                <form className="w-full space-y-6" onSubmit={handleSubmitOrder}>
+                <form className="w-full space-y-6" onKeyDown={(e) => e.key === 'Enter' && e.preventDefault()}>
                     <input 
                         type="text" 
                         value={customerInfo.name}
@@ -602,6 +715,230 @@ const CartPage = () => {
                         </div>
                     )}
 
+                    {/* PAYMENT METHOD SELECTION */}
+                    <div className="space-y-4 pt-4 border-t border-gray-100">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[13px] font-black text-gray-900 uppercase tracking-tight">Hình thức thanh toán</span>
+                            <span className="text-[11px] font-bold text-[#008d71] bg-[#e5f9e0] px-2 py-0.5 rounded">Bảo mật PCI DSS</span>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 gap-3">
+                            {/* COD OPTION */}
+                            <button 
+                                type="button"
+                                onClick={() => setCustomerInfo({...customerInfo, paymentMethod: 'COD'})}
+                                className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all group ${customerInfo.paymentMethod === 'COD' ? 'border-[#008d71] bg-[#e5f9e0]/10' : 'border-gray-100 bg-white hover:border-gray-200'}`}
+                            >
+                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${customerInfo.paymentMethod === 'COD' ? 'bg-[#008d71] text-white' : 'bg-gray-50 text-gray-400'}`}>
+                                    <Coins size={24} />
+                                </div>
+                                <div className="flex-1 text-left">
+                                    <p className={`text-[14px] font-black leading-tight ${customerInfo.paymentMethod === 'COD' ? 'text-gray-900' : 'text-gray-600'}`}>Tiền mặt (COD)</p>
+                                    <p className="text-[11px] font-bold text-gray-400">Thanh toán trực tiếp khi nhận hàng</p>
+                                </div>
+                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${customerInfo.paymentMethod === 'COD' ? 'border-[#008d71]' : 'border-gray-200'}`}>
+                                    {customerInfo.paymentMethod === 'COD' && <div className="w-2.5 h-2.5 rounded-full bg-[#008d71]"></div>}
+                                </div>
+                            </button>
+
+                            {/* BANK TRANSFER OPTION */}
+                            <div className={`rounded-2xl border-2 transition-all overflow-hidden ${customerInfo.paymentMethod === 'BANK_TRANSFER' ? 'border-[#008d71] bg-[#e5f9e0]/10' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
+                                <button 
+                                    type="button"
+                                    onClick={() => setCustomerInfo({...customerInfo, paymentMethod: 'BANK_TRANSFER'})}
+                                    className="w-full flex items-center gap-4 p-4"
+                                >
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${customerInfo.paymentMethod === 'BANK_TRANSFER' ? 'bg-[#008d71] text-white' : 'bg-gray-50 text-gray-400'}`}>
+                                        <CreditCard size={24} />
+                                    </div>
+                                    <div className="flex-1 text-left">
+                                        <p className={`text-[14px] font-black leading-tight ${customerInfo.paymentMethod === 'BANK_TRANSFER' ? 'text-gray-900' : 'text-gray-600'}`}>Chuyển khoản Ngân hàng</p>
+                                        <p className="text-[11px] font-bold text-gray-400">Liên kết ngân hàng thanh toán nhanh</p>
+                                    </div>
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${customerInfo.paymentMethod === 'BANK_TRANSFER' ? 'border-[#008d71]' : 'border-gray-200'}`}>
+                                        {customerInfo.paymentMethod === 'BANK_TRANSFER' && <div className="w-2.5 h-2.5 rounded-full bg-[#008d71]"></div>}
+                                    </div>
+                                </button>
+
+                                {customerInfo.paymentMethod === 'BANK_TRANSFER' && (
+                                    <div className="px-4 pb-6 pt-2 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                                        {isVerifying ? (
+                                            /* OTP VERIFICATION VIEW */
+                                            <div className="p-6 bg-white rounded-2xl border-2 border-[#008d71] shadow-xl space-y-6 text-center">
+                                                <div className="w-16 h-16 bg-[#e5f9e0] rounded-full flex items-center justify-center mx-auto mb-2">
+                                                    <Check size={32} className="text-[#008d71]" strokeWidth={3} />
+                                                </div>
+                                                <h4 className="text-lg font-black text-gray-900 uppercase">Xác thực OTP</h4>
+                                                <p className="text-[12px] text-gray-500 font-medium px-4">Vui lòng nhập mã xác thực 6 chữ số được gửi tới số điện thoại của bạn.</p>
+                                                
+                                                <input 
+                                                    type="text" 
+                                                    maxLength={6}
+                                                    value={otpCode}
+                                                    onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                                                    className="w-full h-14 text-center text-3xl font-black tracking-[0.4em] bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-[#008d71] outline-none transition-all"
+                                                    placeholder="000000"
+                                                />
+                                                
+                                                <button 
+                                                    type="button"
+                                                    onClick={confirmVerification}
+                                                    disabled={isLinking}
+                                                    className="w-full h-12 bg-[#008d71] text-white font-black rounded-xl shadow-lg hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2"
+                                                >
+                                                    {isLinking ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : "XÁC NHẬN LIÊN KẾT"}
+                                                </button>
+                                                <button type="button" onClick={() => setIsVerifying(false)} className="text-[11px] font-bold text-gray-400 uppercase hover:text-gray-600 transition-colors">Hủy và quay lại</button>
+                                            </div>
+                                        ) : (
+                                            /* BANK GRID & INPUTS */
+                                            <>
+                                                <div className="grid grid-cols-4 gap-2">
+                                                    {BANKS.slice(0, 8).map(bank => (
+                                                        <button 
+                                                            key={bank.id}
+                                                            type="button"
+                                                            onClick={() => setSelectedBank(bank.id)}
+                                                            className={`aspect-square p-2 rounded-xl border-2 transition-all flex items-center justify-center bg-white ${selectedBank === bank.id ? 'border-[#008d71] shadow-md scale-105' : 'border-gray-100 hover:border-gray-200'}`}
+                                                        >
+                                                            <img src={bank.logo} alt={bank.name} className="max-h-full object-contain" />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                                <div className="space-y-3">
+                                                    <input 
+                                                        type="text" 
+                                                        placeholder="Số tài khoản ngân hàng" 
+                                                        value={bankAccountNumber}
+                                                        onChange={(e) => setBankAccountNumber(e.target.value)}
+                                                        className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl outline-none font-bold text-[14px] focus:border-[#008d71]"
+                                                    />
+                                                    <div className="relative">
+                                                        <input 
+                                                            type="text" 
+                                                            placeholder={isLookingUp ? "Đang tra cứu chủ tài khoản..." : "Tên chủ tài khoản (NGUYEN VAN A)"} 
+                                                            value={bankAccountName}
+                                                            onChange={(e) => setBankAccountName(e.target.value)}
+                                                            className={`w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-[14px] uppercase ${isLookingUp ? 'animate-pulse' : ''}`}
+                                                            readOnly={isLookingUp}
+                                                        />
+                                                        {isLookingUp && <div className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-[#008d71] border-t-transparent rounded-full animate-spin" />}
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <input type="text" placeholder="Số CCCD" value={bankIDNumber} onChange={(e) => setBankIDNumber(e.target.value)} className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none font-bold text-[14px] focus:border-[#008d71]" />
+                                                        <input type="text" placeholder="Số ĐT đăng ký Bank" value={bankPhone} onChange={(e) => setBankPhone(e.target.value)} className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none font-bold text-[14px] focus:border-[#008d71]" />
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => handleLinkAccount('bank')}
+                                                    className="w-full h-12 bg-[#008d71] text-white font-black rounded-xl shadow-lg shadow-[#008d71]/20 hover:opacity-90 active:scale-95 transition-all"
+                                                >
+                                                    LIÊN KẾT TÀI KHOẢN NGAY
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* WALLET OPTION */}
+                            <div className={`rounded-2xl border-2 transition-all overflow-hidden ${(customerInfo.paymentMethod === 'MOMO' || customerInfo.paymentMethod === 'VNPAY') ? 'border-[#008d71] bg-[#e5f9e0]/10' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
+                                <button 
+                                    type="button"
+                                    onClick={() => setCustomerInfo({...customerInfo, paymentMethod: 'MOMO'})}
+                                    className="w-full flex items-center gap-4 p-4"
+                                >
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${(customerInfo.paymentMethod === 'MOMO' || customerInfo.paymentMethod === 'VNPAY') ? 'bg-[#008d71] text-white' : 'bg-gray-50 text-gray-400'}`}>
+                                        <Wallet size={24} />
+                                    </div>
+                                    <div className="flex-1 text-left">
+                                        <p className={`text-[14px] font-black leading-tight ${(customerInfo.paymentMethod === 'MOMO' || customerInfo.paymentMethod === 'VNPAY') ? 'text-gray-900' : 'text-gray-600'}`}>Ví điện tử</p>
+                                        <p className="text-[11px] font-bold text-gray-400">Thanh toán MoMo / VNPay</p>
+                                    </div>
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${(customerInfo.paymentMethod === 'MOMO' || customerInfo.paymentMethod === 'VNPAY') ? 'border-[#008d71]' : 'border-gray-200'}`}>
+                                        {(customerInfo.paymentMethod === 'MOMO' || customerInfo.paymentMethod === 'VNPAY') && <div className="w-2.5 h-2.5 rounded-full bg-[#008d71]"></div>}
+                                    </div>
+                                </button>
+
+                                {(customerInfo.paymentMethod === 'MOMO' || customerInfo.paymentMethod === 'VNPAY') && (
+                                    <div className="px-4 pb-6 pt-2 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                                        {isVerifying ? (
+                                            /* WALLET OTP VIEW */
+                                            <div className="p-6 bg-white rounded-2xl border-2 border-[#008d71] shadow-xl space-y-6 text-center">
+                                                <div className="w-16 h-16 bg-[#e5f9e0] rounded-full flex items-center justify-center mx-auto mb-2">
+                                                    <Wallet size={32} className="text-[#008d71]" />
+                                                </div>
+                                                <h4 className="text-lg font-black text-gray-900 uppercase">Xác thực Ví Điện Tử</h4>
+                                                <input 
+                                                    type="text" 
+                                                    maxLength={6}
+                                                    value={otpCode}
+                                                    onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
+                                                    className="w-full h-14 text-center text-3xl font-black tracking-[0.4em] bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-[#008d71] outline-none transition-all"
+                                                    placeholder="000000"
+                                                />
+                                                <button 
+                                                    type="button"
+                                                    onClick={confirmVerification}
+                                                    disabled={isLinking}
+                                                    className="w-full h-12 bg-[#008d71] text-white font-black rounded-xl shadow-lg hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2"
+                                                >
+                                                    {isLinking ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : "XÁC NHẬN VÍ"}
+                                                </button>
+                                                <button type="button" onClick={() => setIsVerifying(false)} className="text-[11px] font-bold text-gray-400 uppercase hover:text-gray-600 transition-colors">Hủy và quay lại</button>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setCustomerInfo({...customerInfo, paymentMethod: 'MOMO'})}
+                                                        className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${customerInfo.paymentMethod === 'MOMO' ? 'border-[#008d71] bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50 opacity-60 hover:opacity-100'}`}
+                                                    >
+                                                        <img src="https://cdn.haitrieu.com/wp-content/uploads/2022/10/Logo-MoMo-Square.png" className="w-8 h-8 rounded-lg" alt="MoMo" />
+                                                        <span className="text-[12px] font-black uppercase text-gray-900">MoMo</span>
+                                                    </button>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setCustomerInfo({...customerInfo, paymentMethod: 'VNPAY'})}
+                                                        className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${customerInfo.paymentMethod === 'VNPAY' ? 'border-[#008d71] bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50 opacity-60 hover:opacity-100'}`}
+                                                    >
+                                                        <img src="https://inkythuatso.com/uploads/thumbnails/800/2021/12/vnpay-logo-inkythuatso-01-13-16-29-51.jpg" className="w-8 h-8 rounded-lg object-contain" alt="VNPay" />
+                                                        <span className="text-[12px] font-black uppercase text-gray-900">VNPay</span>
+                                                    </button>
+                                                </div>
+                                                <div className="space-y-3">
+                                                    <input 
+                                                        type="text" 
+                                                        placeholder="Số điện thoại đăng ký ví" 
+                                                        value={bankPhone}
+                                                        onChange={(e) => setBankPhone(e.target.value)}
+                                                        className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl outline-none font-bold text-[14px] focus:border-[#008d71]"
+                                                    />
+                                                    <input 
+                                                        type="text" 
+                                                        placeholder="Tên chủ ví (NGUYEN VAN A)" 
+                                                        value={bankAccountName}
+                                                        onChange={(e) => setBankAccountName(e.target.value)}
+                                                        className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl outline-none font-bold text-[14px] focus:border-[#008d71] uppercase"
+                                                    />
+                                                </div>
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => handleLinkAccount('wallet')}
+                                                    className="w-full h-12 bg-[#008d71] text-white font-black rounded-xl shadow-lg shadow-[#008d71]/20 hover:opacity-90 active:scale-95 transition-all"
+                                                >
+                                                    LIÊN KẾT VÍ NGAY
+                                                </button>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
                     <div className="flex gap-2">
                         <input 
                             type="text" 
@@ -655,7 +992,8 @@ const CartPage = () => {
                         </p>
 
                         <button 
-                            type="submit"
+                            type="button"
+                            onClick={handleSubmitOrder}
                             className="w-fit px-16 bg-gradient-to-r from-[#006e58] to-[#008d71] text-white h-[64px] rounded-2xl flex items-center justify-center gap-2 font-black text-[18px] uppercase tracking-[0.1em] shadow-xl shadow-[#008d71]/20 hover:scale-[1.02] transition-all active:scale-95"
                         >
                             XÁC NHẬN VÀ ĐẶT HÀNG

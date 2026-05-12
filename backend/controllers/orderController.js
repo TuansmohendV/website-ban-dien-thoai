@@ -607,16 +607,21 @@ export const paymentCallback = asyncHandler(async (req, res) => {
 
   // Verify payment status
   let isSuccess = false;
-  if (method === 'vnpay') {
+  const m = String(method || '').toLowerCase();
+
+  if (m === 'vnpay') {
     // Check signature if it comes from real VNPay Gateway
     if (req.body.vnp_SecureHash && process.env.VNP_HASH_SECRET) {
       isSuccess = verifyVNPayReturn(req.body) && vnp_ResponseCode === '00';
     } else {
-      isSuccess = vnp_ResponseCode === '00'; // fallback mock
+      isSuccess = vnp_ResponseCode === '00' || String(success) === 'true'; // fallback mock
     }
   }
-  else if (method === 'momo' || method === 'momo_sub' || method === 'zalopay') isSuccess = resultCode === '0';
-  else if (method === 'COD' || method === 'bank') isSuccess = success === 'true' || success === true;
+  else if (m === 'momo' || m === 'momo_sub' || m === 'zalopay') {
+    // Check both resultCode (standard) and success flag (mock fallback)
+    isSuccess = String(resultCode) === '0' || String(success) === 'true';
+  }
+  else if (m === 'cod' || m === 'bank' || m === 'bank_transfer') isSuccess = String(success) === 'true';
   else isSuccess = true;
 
   const payment = await Payment.create({
@@ -629,28 +634,53 @@ export const paymentCallback = asyncHandler(async (req, res) => {
     paidAt: method !== 'COD' && isSuccess ? new Date() : undefined,
   });
 
-  if (method === 'COD') {
-    order.status = 'confirmed';
-    order.paymentStatus = 'pending';
-    order.timeline.push(createTimelineEntry('confirmed', 'Đơn chờ giao và thu tiền COD', 'Khách hàng thanh toán khi nhận hàng.'));
-  } else if (isSuccess) {
-    order.status = 'confirmed';
-    order.paymentStatus = 'paid';
-    order.paidAt = new Date();
-    order.timeline.push(createTimelineEntry('confirmed', 'Thanh toán thành công', `Thanh toán qua ${method} đã được xác nhận.`));
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  const dateStr = now.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  
+  const getMethodDetail = (m) => {
+    const map = {
+      'vnpay': 'Cổng thanh toán VNPay',
+      'momo': 'Ví điện tử MoMo',
+      'momo_sub': 'Ví điện tử MoMo',
+      'zalopay': 'Ví điện tử ZaloPay',
+      'bank': 'Chuyển khoản Ngân hàng',
+      'BANK_TRANSFER': 'Chuyển khoản Ngân hàng',
+      'COD': 'Thanh toán khi nhận hàng (COD)'
+    };
+    return map[m] || m;
+  };
 
-    // Send invoice email immediately for successful online payment
-    if (order.customerInfo?.email) {
-        const websiteUrl = `${req.protocol}://${req.get('host')}`;
-        sendDeliveredInvoiceEmail({
-            to: order.customerInfo.email,
-            order: await hydrateOrder({ _id: order._id }),
-            websiteUrl
-        }).catch(err => console.error('Failed to send invoice email after payment:', err));
+  if (method === 'COD') {
+    if (order.status !== 'confirmed') {
+      order.status = 'confirmed';
+      order.paymentStatus = 'pending';
+      order.timeline.push(createTimelineEntry('confirmed', 'Đơn chờ giao và thu tiền COD', `Hệ thống ghi nhận hình thức COD vào lúc ${timeStr} ngày ${dateStr}. Khách hàng sẽ thanh toán khi nhận hàng.`));
+    }
+  } else if (isSuccess) {
+    if (order.paymentStatus !== 'paid') {
+      order.status = 'confirmed';
+      order.paymentStatus = 'paid';
+      order.paidAt = now;
+      
+      const detailMsg = `Thanh toán qua ${getMethodDetail(method)} thành công vào lúc ${timeStr} ngày ${dateStr}. Số tiền: ${order.total.toLocaleString('vi-VN')}đ.`;
+      order.timeline.push(createTimelineEntry('confirmed', 'Thanh toán thành công', detailMsg));
+
+      // Send invoice email immediately for successful online payment
+      if (order.customerInfo?.email) {
+          const websiteUrl = `${req.protocol}://${req.get('host')}`;
+          sendDeliveredInvoiceEmail({
+              to: order.customerInfo.email,
+              order: await hydrateOrder({ _id: order._id }),
+              websiteUrl
+          }).catch(err => console.error('Failed to send invoice email after payment:', err));
+      }
     }
   } else {
-    order.paymentStatus = 'failed';
-    order.timeline.push(createTimelineEntry('pending', 'Thanh toán thất bại', `Thanh toán qua ${method} chưa thành công.`));
+    if (order.paymentStatus !== 'failed') {
+      order.paymentStatus = 'failed';
+      order.timeline.push(createTimelineEntry('pending', 'Thanh toán thất bại', `Giao dịch qua ${getMethodDetail(method)} không thành công vào lúc ${timeStr} ngày ${dateStr}.`));
+    }
   }
 
   order.paymentMethod = method;
@@ -678,13 +708,44 @@ export const getOrderById = asyncHandler(async (req, res) => {
 });
 
 export const getUserOrders = asyncHandler(async (req, res) => {
-  const orders = await Order.find({ user: req.user._id })
+  const { year } = req.query;
+  const query = { user: req.user._id };
+
+  if (year) {
+    const startOfYear = new Date(`${year}-01-01T00:00:00.000Z`);
+    const endOfYear = new Date(`${year}-12-31T23:59:59.999Z`);
+    query.createdAt = { $gte: startOfYear, $lte: endOfYear };
+  }
+
+  const orders = await Order.find(query)
     .sort({ createdAt: -1 })
     .populate('items.product', 'name slug image')
     .populate('items.variant', 'color storage image');
 
   res.json({
     data: orders,
+  });
+});
+
+export const getUserOrderYears = asyncHandler(async (req, res) => {
+  const years = await Order.aggregate([
+    { $match: { user: req.user._id } },
+    {
+      $group: {
+        _id: { $year: '$createdAt' },
+        count: { $sum: 1 },
+        totalSpent: { $sum: '$total' }
+      }
+    },
+    { $sort: { _id: -1 } }
+  ]);
+
+  res.json({
+    data: years.map(y => ({
+      year: y._id,
+      count: y.count,
+      totalSpent: y.totalSpent
+    }))
   });
 });
 

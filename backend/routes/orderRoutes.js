@@ -6,6 +6,7 @@ import {
   getAdminOrders,
   getOrderById,
   getUserOrders,
+  getUserOrderYears,
   updateAdminOrder,
   updateAdminOrderStatus,
   resendInvoiceEmail,
@@ -21,6 +22,7 @@ router.put('/admin/:id/status', protect, requireAdmin, updateAdminOrderStatus);
 router.post('/admin/:id/resend-invoice', protect, requireAdmin, resendInvoiceEmail);
 router.patch('/admin/:id', protect, requireAdmin, updateAdminOrder);
 router.get('/user', protect, getUserOrders);
+router.get('/user/years', protect, getUserOrderYears);
 router.put('/cancel/:id', protect, cancelOrder);
 router.get('/:id', protect, getOrderById);
 

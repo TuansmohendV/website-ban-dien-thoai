@@ -56,6 +56,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    // Persistent Checkout Information
+    province: { type: String, default: '' },
+    district: { type: String, default: '' },
+    ward: { type: String, default: '' },
+    address: { type: String, default: '' },
     lastLoginAt: Date,
     resetPasswordToken: {
       type: String,

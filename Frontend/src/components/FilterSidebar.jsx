@@ -291,12 +291,20 @@ const categoryConfigs = {
       '1 đến 2 triệu'
     ],
     sections: []
+  },
+  'search': {
+    brands: phoneBrands,
+    priceRanges: [
+      'Dưới 1 triệu', '1 đến 3 triệu', '3 đến 5 triệu', '5 đến 10 triệu',
+      '10 đến 20 triệu', '20 đến 30 triệu', 'Trên 30 triệu'
+    ],
+    sections: ['category', 'availability']
   }
 };
 
 const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSingleFilter }) => {
   const [expandedSections, setExpandedSections] = React.useState({
-    brand: true, price: true, availability: true, features: true,
+    category: true, brand: true, price: true, availability: true, features: true,
     screenSize: true, gpu: true, cpu: true, ram: true, storage: true, refreshRate: true,
     componentType: true,
     // phone fields
@@ -344,7 +352,7 @@ const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSin
             <input
               type="checkbox"
               checked={isActive(key, opt)}
-              onChange={() => onSetSingleFilter(key, opt)}
+              onChange={() => onToggleFilter(key, opt)}
               className="w-4.5 h-4.5 accent-[#008d71] border-gray-300 rounded"
             />
             <span className={`text-[14px] font-medium transition-colors ${isActive(key, opt) ? 'text-[#008d71] font-bold' : 'text-gray-600'}`}>{opt}</span>
@@ -364,6 +372,16 @@ const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSin
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 divide-y divide-gray-100">
 
+        {/* Loại sản phẩm (Chỉ hiện khi ở trang Search hoặc yêu cầu) */}
+        {(category === 'search' || currentConfig.sections?.includes('category')) && (
+          <div>
+            <FilterHeader title="Loại sản phẩm" section="category" isExpanded={expandedSections.category} />
+            {expandedSections.category && renderFilterList('category', [
+              'Điện thoại', 'Laptop', 'Tablet', 'Đồng hồ', 'Âm thanh', 'Smart Home', 'Phụ kiện'
+            ])}
+          </div>
+        )}
+
         {/* Hãng */}
         {currentBrands && currentBrands.length > 0 && (
           <div>
@@ -376,7 +394,7 @@ const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSin
                     return displayedBrands.map((m) => (
                       <div
                         key={m.name}
-                        onClick={() => onSetSingleFilter('brand', m.name)}
+                        onClick={() => onToggleFilter('brand', m.name)}
                         className={`flex items-center justify-center border rounded-lg h-[54px] transition-all cursor-pointer group p-1 ${isActive('brand', m.name) ? 'border-[#008d71] bg-white relative' : 'border-gray-300 hover:border-[#008d71]/60'
                           }`}
                       >

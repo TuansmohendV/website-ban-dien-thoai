@@ -233,7 +233,7 @@ const CategoryPage = () => {
     const loadProducts = async () => {
       try {
         const response = await api.get('/api/products', {
-          params: { limit: 50 },
+          params: { limit: 1000 }, // Tăng giới hạn để lọc client-side chính xác hơn
         });
 
         if (!ignore) {
@@ -259,16 +259,21 @@ const CategoryPage = () => {
       if (!p) return false;
 
       // 4.1 Filter by Category/Brand Slug
-      if (categoryMetadata[slug]) {
-        // So sánh không phân biệt hoa thường và khoảng trắng cho chắc chắn
-        const pCat = String(p.category || '').toLowerCase().replace(/\s/g, '-');
-        const targetCat = String(slug).toLowerCase().replace(/\s/g, '-');
-        if (pCat !== targetCat && p.category !== slug) return false;
-      } else if (slug && validBrands.includes(slug.toLowerCase())) {
-        const pBrand = String(p.brandKey || p.brand || '').toLowerCase();
-        if (pBrand !== slug.toLowerCase()) return false;
-      } else if (slug !== 'dien-thoai') {
-        if (p.category !== 'dien-thoai') return false; 
+      // Ưu tiên: Nếu sidebar có chọn brand thì dùng brand của sidebar, nếu không mới dùng slug từ URL
+      if (filters.brand) {
+         const pBrand = String(p.brandKey || p.brand || '').toLowerCase();
+         const targetBrand = String(filters.brand).toLowerCase().replace(/\s/g, '-');
+         if (pBrand !== targetBrand && !p.brand.toLowerCase().includes(targetBrand)) return false;
+      } else {
+        // Nếu không chọn brand ở sidebar, mới áp dụng lọc theo Slug URL
+        if (categoryMetadata[slug]) {
+          const pCat = String(p.category || '').toLowerCase();
+          const targetCat = String(slug).toLowerCase();
+          if (pCat !== targetCat) return false;
+        } else if (slug && validBrands.includes(slug.toLowerCase())) {
+          const pBrand = String(p.brandKey || p.brand || '').toLowerCase();
+          if (pBrand !== slug.toLowerCase()) return false;
+        }
       }
 
       // 4.2 Filter by Sidebar Selections
@@ -291,6 +296,12 @@ const CategoryPage = () => {
           const parts = range.split('đến');
           const min = parseInt(parts[0].replace(/[^\d]/g, '') || '0') * (parts[0].includes('triệu') ? 1000000 : 1000);
           const max = parseInt(parts[1].replace(/[^\d]/g, '') || '0') * (parts[1].includes('triệu') ? 1000000 : 1000);
+          if (price < min || price > max) return false;
+        } else if (range.includes('Từ')) {
+          // Handle 'Từ 200-500k' format
+          const parts = range.replace('Từ ', '').replace(/k/g, '000').split('-');
+          const min = parseInt(parts[0]) || 0;
+          const max = parseInt(parts[1]) || Infinity;
           if (price < min || price > max) return false;
         }
       }

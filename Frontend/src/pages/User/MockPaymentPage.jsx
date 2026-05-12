@@ -27,10 +27,11 @@ const MockPaymentPage = () => {
             
             let finalUrl = `${returnUrl}${separator}orderId=${params.orderId}&method=${params.method}`;
             
-            if (params.method === 'momo' || params.method === 'momo_sub' || params.method === 'zalopay') {
+            const m = String(params.method || '').toLowerCase();
+            if (m === 'momo' || m === 'momo_sub' || m === 'zalopay') {
                 finalUrl += `&resultCode=${success ? '0' : '1006'}&requestId=${params.requestId || Date.now()}`;
-            } else if (params.method === 'BANK_TRANSFER') {
-                finalUrl += `&success=${success ? 'true' : 'false'}`;
+            } else if (m === 'vnpay') {
+                finalUrl += `&vnp_ResponseCode=${success ? '00' : '99'}&vnp_TxnRef=${params.orderId}`;
             } else {
                 finalUrl += `&success=${success ? 'true' : 'false'}`;
             }
@@ -56,11 +57,11 @@ const MockPaymentPage = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#f4f4f4] flex items-center justify-center p-4 font-sans">
+        <div className="min-h-screen bg-[#f4f4f4] flex items-center justify-center p-4" style={{ fontFamily: "Calibri, 'Segoe UI', sans-serif" }}>
             <div className="bg-white max-w-md w-full rounded-[32px] shadow-2xl overflow-hidden border border-gray-100">
                 {/* Header */}
-                <div className="bg-slate-900 p-8 text-white text-center relative">
-                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-amber-500 to-red-500"></div>
+                <div className="bg-[#ffd700] p-8 text-slate-900 text-center relative">
+                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 via-white to-red-500"></div>
                     <div className="w-16 h-16 bg-white rounded-2xl mx-auto mb-4 flex items-center justify-center p-2 shadow-lg">
                         {getMethodIcon().startsWith('http') ? (
                             <img src={getMethodIcon()} alt="icon" className="w-full h-full object-contain" />
@@ -69,7 +70,7 @@ const MockPaymentPage = () => {
                         )}
                     </div>
                     <h1 className="text-xl font-black uppercase tracking-widest">{getMethodName()}</h1>
-                    <p className="text-slate-400 text-xs mt-1 font-bold">MOCK PAYMENT GATEWAY</p>
+                    <p className="text-slate-600 text-xs mt-1 font-bold">MOCK PAYMENT GATEWAY</p>
                 </div>
 
                 <div className="p-8 space-y-8">
@@ -137,7 +138,7 @@ const MockPaymentPage = () => {
                         <button 
                             onClick={() => handlePayment(true)}
                             disabled={loading}
-                            className="w-full h-14 bg-black text-white font-black rounded-2xl hover:bg-red-600 transition-all shadow-xl active:scale-95 uppercase tracking-widest flex items-center justify-center"
+                            className="w-full h-14 bg-[#007bff] text-white font-black rounded-2xl hover:bg-[#0056b3] active:bg-[#ffd700] active:text-slate-900 transition-all shadow-xl active:scale-95 uppercase tracking-widest flex items-center justify-center border-none outline-none"
                         >
                             {loading ? (
                                 <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>

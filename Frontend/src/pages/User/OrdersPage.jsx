@@ -164,7 +164,7 @@ const OrdersPage = () => {
                                             Sin
                                         </div>
                                         <div>
-                                            <p className="text-sm font-bold text-gray-900">#{order.id}</p>
+                                            <p className="text-sm font-bold text-gray-900">#{order.id?.slice(-8).toUpperCase()}</p>
                                             <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
                                                 <ClockIco className="w-3 h-3" /> {order.date}
                                             </p>

@@ -361,6 +361,12 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
   user.gender = req.body.gender || user.gender;
   user.dateOfBirth = req.body.dateOfBirth || user.dateOfBirth;
 
+  // New address fields for Checkout Persistence
+  user.province = req.body.province !== undefined ? req.body.province : user.province;
+  user.district = req.body.district !== undefined ? req.body.district : user.district;
+  user.ward = req.body.ward !== undefined ? req.body.ward : user.ward;
+  user.address = req.body.address !== undefined ? req.body.address : user.address;
+
   await user.save();
 
   res.json({
