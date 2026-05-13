@@ -1,0 +1,4494 @@
+{
+  "info": {
+    "_postman_id": "521d4a62-35fb-4251-969c-f1d6873a80a6",
+    "name": "Mobile Shop Backend - Public User Admin",
+    "description": "Collection tach ro Public, Guest, User, Admin. Toan bo URL dung truc tiep http://localhost:8080. Tai khoan admin mac dinh: admin@mobileshop.local / Admin@123456.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "50971732",
+    "_collection_link": "https://go.postman.co/collection/50971732-521d4a62-35fb-4251-969c-f1d6873a80a6?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "0. Public",
+      "item": [
+        {
+          "name": "Public - Server Root",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                ""
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Public - List Products",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Public list products success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('productId', data.data[0]._id); }",
+                  "if (data.data && data.data.length > 1) { pm.collectionVariables.set('compareProductId', data.data[1]._id); }",
+                  "if (data.data && data.data[0] && data.data[0].brandRef && data.data[0].brandRef._id) { pm.collectionVariables.set('brandId', data.data[0].brandRef._id); }",
+                  "if (data.data && data.data[0] && data.data[0].categoryRef && data.data[0].categoryRef._id) { pm.collectionVariables.set('categoryId', data.data[0].categoryRef._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/products?limit=5&page=1&sort=newest",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "sort",
+                  "value": "newest"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Public - Product Suggest",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Public product suggest success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0 && data.data[0]._id) { pm.collectionVariables.set('productId', data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/products/suggest?q=iphone",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "products",
+                "suggest"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "iphone"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Public - Get Product Detail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Public get product detail success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.product && data.product.variants && data.product.variants.length > 0) { pm.collectionVariables.set('variantId', data.product.variants[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/products/{{productId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "products",
+                "{{productId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Public - Get Reviews By Product",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/reviews/{{productId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "reviews",
+                "{{productId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "1. Guest",
+      "item": [
+        {
+          "name": "Guest - Add To Cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-guest-id",
+                "value": "{{guestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"variantId\": \"{{variantId}}\",\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/cart",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "cart"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Guest - Get Cart",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-guest-id",
+                "value": "{{guestId}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/cart",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "cart"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Guest - Cart Count",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Guest cart count success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-guest-id",
+                "value": "{{guestId}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/cart/count",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "cart",
+                "count"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Guest - Create Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-guest-id",
+                "value": "{{guestId}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentMethod\": \"COD\",\n  \"shippingFee\": 30000,\n  \"customerInfo\": {\n    \"fullName\": \"Guest Postman\",\n    \"email\": \"guest@example.com\",\n    \"phone\": \"0911222333\"\n  },\n  \"shippingAddress\": {\n    \"label\": \"Nha rieng\",\n    \"recipientName\": \"Guest Postman\",\n    \"phone\": \"0911222333\",\n    \"province\": \"TP HCM\",\n    \"district\": \"Quan 1\",\n    \"ward\": \"Ben Nghe\",\n    \"street\": \"1 Nguyen Hue\",\n    \"note\": \"Goi truoc khi giao\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/orders",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "orders"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Admin Auth",
+      "item": [
+        {
+          "name": "Admin - Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin login success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.token) { pm.collectionVariables.set('adminToken', data.token); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/auth/login",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Admin Vouchers",
+      "item": [
+        {
+          "name": "Admin - Create Voucher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin create voucher success', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "if (data.voucher && data.voucher._id) { pm.collectionVariables.set('adminVoucherId', data.voucher._id); }",
+                  "if (!pm.collectionVariables.get('targetVoucherId') && data.voucher && data.voucher._id) { pm.collectionVariables.set('targetVoucherId', data.voucher._id); }",
+                  "if (data.voucher && data.voucher.code) { pm.collectionVariables.set('voucherCode', data.voucher.code); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"POSTMAN{{$timestamp}}\",\n  \"description\": \"Voucher tao boi admin Postman\",\n  \"discountType\": \"percentage\",\n  \"discountValue\": 10,\n  \"minOrderValue\": 1000000,\n  \"maxDiscount\": 500000,\n  \"usageLimit\": 100,\n  \"usageLimitPerUser\": 5,\n  \"startsAt\": \"2026-01-01T00:00:00.000Z\",\n  \"expiresAt\": \"2027-01-01T00:00:00.000Z\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/vouchers",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "vouchers"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Update Voucher",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"<nhap-code-moi-neu-can>\",\n  \"description\": \"<nhap-mo-ta-moi>\",\n  \"discountType\": \"percentage\",\n  \"discountValue\": 12,\n  \"minOrderValue\": 1500000,\n  \"maxDiscount\": 600000,\n  \"usageLimit\": 120,\n  \"usedCount\": 0,\n  \"usageLimitPerUser\": 5,\n  \"startsAt\": \"2026-01-01T00:00:00.000Z\",\n  \"expiresAt\": \"2027-12-31T23:59:59.000Z\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/vouchers/{{targetVoucherId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "vouchers",
+                "{{targetVoucherId}}"
+              ]
+            },
+            "description": "Nhap ID voucher can sua vao collection variable targetVoucherId truoc khi gui request."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - List Vouchers",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin list vouchers success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('adminVoucherId', data.data[0]._id); }",
+                  "if (!pm.collectionVariables.get('targetVoucherId') && data.data && data.data.length > 0) { pm.collectionVariables.set('targetVoucherId', data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/vouchers?page=1&limit=10",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "vouchers"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Get Voucher Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/vouchers/{{targetVoucherId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "vouchers",
+                "{{targetVoucherId}}"
+              ]
+            },
+            "description": "Nhap ID voucher can xem vao collection variable targetVoucherId."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Deactivate Voucher",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/vouchers/{{targetVoucherId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "vouchers",
+                "{{targetVoucherId}}"
+              ]
+            },
+            "description": "Nhap ID voucher can ngung kich hoat vao collection variable targetVoucherId."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. User Auth",
+      "item": [
+        {
+          "name": "User - Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User register success or already exists', function () { pm.expect(pm.response.code).to.be.oneOf([201, 409]); });",
+                  "if (pm.response.code === 201) { const data = pm.response.json(); if (data.token) { pm.collectionVariables.set('authToken', data.token); } }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"{{fullName}}\",\n  \"email\": \"{{userEmail}}\",\n  \"phone\": \"{{userPhone}}\",\n  \"password\": \"{{userPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/auth/register",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User login success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.token) { pm.collectionVariables.set('authToken', data.token); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{userEmail}}\",\n  \"password\": \"{{userPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/auth/login",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Social Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"google\",\n  \"idToken\": \"<nhap-google-id-token-hoac-de-trong-neu-dung-accessToken>\",\n  \"accessToken\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/auth/social-login",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "auth",
+                "social-login"
+              ]
+            },
+            "description": "Can token that cua Google hoac Facebook. Google dung idToken hoac accessToken. Facebook bat buoc accessToken."
+          },
+          "response": []
+        },
+        {
+          "name": "User - Forgot Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User forgot password success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.resetToken) { pm.collectionVariables.set('resetToken', data.resetToken); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{userEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/auth/forgot-password",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "auth",
+                "forgot-password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Reset Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User reset password success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.token) { pm.collectionVariables.set('authToken', data.token); }",
+                  "pm.collectionVariables.set('userPassword', pm.collectionVariables.get('newPassword'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/auth/reset-password",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "auth",
+                "reset-password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User logout success', function () { pm.response.to.have.status(200); });",
+                  "pm.collectionVariables.unset('authToken');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/auth/logout",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "auth",
+                "logout"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. User Profile",
+      "item": [
+        {
+          "name": "User - Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/user/profile",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "user",
+                "profile"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"{{fullName}} Updated\",\n  \"phone\": \"{{userPhone}}\",\n  \"gender\": \"other\",\n  \"avatar\": \"https://example.com/avatar.png\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/user/profile",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "user",
+                "profile"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Change Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User change password success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.token) { pm.collectionVariables.set('authToken', data.token); }",
+                  "const nextPassword = pm.collectionVariables.get('newPassword');",
+                  "if (nextPassword) { pm.collectionVariables.set('userPassword', nextPassword); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{userPassword}}\",\n  \"newPassword\": \"{{newPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/auth/change-password",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "auth",
+                "change-password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Get Stats",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User get stats success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/user/stats",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "user",
+                "stats"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "6. User Address",
+      "item": [
+        {
+          "name": "User - Create Address",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User create address success', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "if (data.address && data.address._id) { pm.collectionVariables.set('addressId', data.address._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Nha rieng\",\n  \"recipientName\": \"{{fullName}}\",\n  \"phone\": \"{{userPhone}}\",\n  \"province\": \"TP HCM\",\n  \"district\": \"Thu Duc\",\n  \"ward\": \"Linh Trung\",\n  \"street\": \"1 Vo Van Ngan\",\n  \"note\": \"Giao gio hanh chinh\",\n  \"isDefault\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/address",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "address"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Get Addresses",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/address",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "address"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Update Address",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"label\": \"Van phong\",\n  \"recipientName\": \"{{fullName}}\",\n  \"phone\": \"{{userPhone}}\",\n  \"province\": \"TP HCM\",\n  \"district\": \"Thu Duc\",\n  \"ward\": \"Ben Nghe\",\n  \"street\": \"2 Le Loi\",\n  \"note\": \"Lien he truoc khi giao\",\n  \"isDefault\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/address/{{addressId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "address",
+                "{{addressId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Delete Address",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/address/{{addressId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "address",
+                "{{addressId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "7. User Cart",
+      "item": [
+        {
+          "name": "User - Add To Cart",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"variantId\": \"{{variantId}}\",\n  \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/cart",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "cart"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Get Cart",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User get cart success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.items && data.items.length > 0) { pm.collectionVariables.set('cartItemId', data.items[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/cart",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "cart"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Cart Count",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User cart count success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/cart/count",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "cart",
+                "count"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Update Cart Item",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemId\": \"{{cartItemId}}\",\n  \"variantId\": \"{{variantId}}\",\n  \"quantity\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/cart",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "cart"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Remove Cart Item",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemId\": \"{{cartItemId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/cart",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "cart"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "8. User Orders And Reviews",
+      "item": [
+        {
+          "name": "User - Apply Voucher",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"{{voucherCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/voucher/apply",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "voucher",
+                "apply"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Create Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User create order success', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "if (data.order && data.order._id) { pm.collectionVariables.set('orderId', data.order._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"addressId\": \"{{addressId}}\",\n  \"paymentMethod\": \"COD\",\n  \"shippingFee\": 30000,\n  \"notes\": \"Giao trong gio hanh chinh\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/orders",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "orders"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Get Order Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/orders/{{orderId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "orders",
+                "{{orderId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Get My Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/orders/user",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "orders",
+                "user"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Process Payment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"orderId\": \"{{orderId}}\",\n  \"method\": \"MOMO\",\n  \"simulateSuccess\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/payment",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "payment"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Create Review",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User create review success or already reviewed', function () { pm.expect(pm.response.code).to.be.oneOf([201, 409]); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"rating\": 5,\n  \"title\": \"Danh gia tu Postman\",\n  \"comment\": \"San pham on, API hoat dong tot\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/reviews",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "reviews"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Cancel Order",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Khach hang doi y\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/orders/cancel/{{orderId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "orders",
+                "cancel",
+                "{{orderId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "9. Admin Users",
+      "item": [
+        {
+          "name": "Admin - List Users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin list users success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('adminUserId', data.data[0]._id); }",
+                  "if (!pm.collectionVariables.get('targetUserId') && data.data && data.data.length > 0) { pm.collectionVariables.set('targetUserId', data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/users?page=1&limit=10&role=user",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "role",
+                  "value": "user"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Create User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin create user success', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "if (data.user && data.user._id) { pm.collectionVariables.set('adminUserId', data.user._id); }",
+                  "if (!pm.collectionVariables.get('targetUserId') && data.user && data.user._id) { pm.collectionVariables.set('targetUserId', data.user._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Postman Manager {{$timestamp}}\",\n  \"email\": \"postman.manager.{{$timestamp}}@example.com\",\n  \"phone\": \"\",\n  \"password\": \"Admin@123456\",\n  \"avatar\": \"\",\n  \"gender\": \"other\",\n  \"dateOfBirth\": \"2000-01-01\",\n  \"role\": \"manager\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/users",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "users"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Update User",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  const payload = JSON.parse(pm.request.body?.raw || '{}');",
+                  "  if (payload.targetUserId) {",
+                  "    pm.collectionVariables.set('targetUserId', String(payload.targetUserId).trim());",
+                  "  }",
+                  "} catch (error) {",
+                  "  console.log('Cannot parse targetUserId from request body', error);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetUserId\": \"<nhap-id-user-can-sua>\",\n  \"fullName\": \"<nhap-ten-moi>\",\n  \"email\": \"<nhap-email-moi-neu-can>\",\n  \"phone\": \"<nhap-so-dien-thoai-moi-neu-can>\",\n  \"avatar\": \"<nhap-link-avatar-moi-neu-can>\",\n  \"gender\": \"other\",\n  \"dateOfBirth\": \"2000-01-01\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/users/{{targetUserId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{targetUserId}}"
+              ]
+            },
+            "description": "Nhap targetUserId ngay trong body de xac dinh user can cap nhat. Request nay dung de cap nhat thong tin nguoi dung."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Update User Role",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  const payload = JSON.parse(pm.request.body?.raw || '{}');",
+                  "  if (payload.targetUserId) {",
+                  "    pm.collectionVariables.set('targetUserId', String(payload.targetUserId).trim());",
+                  "  }",
+                  "} catch (error) {",
+                  "  console.log('Cannot parse targetUserId from request body', error);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetUserId\": \"<nhap-id-user-can-doi-role>\",\n  \"role\": \"admin\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/users/{{targetUserId}}/role",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{targetUserId}}",
+                "role"
+              ]
+            },
+            "description": "Nhap targetUserId ngay trong body de xac dinh user can doi role. Request nay dung de doi role user/admin va goi dung endpoint /api/admin/users/:id/role."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Get User Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/users/{{targetUserId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{targetUserId}}"
+              ]
+            },
+            "description": "Nhap ID user can xem vao collection variable targetUserId hoac chay Admin - List Users truoc de tu dong set."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Deactivate User",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/users/{{targetUserId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "users",
+                "{{targetUserId}}"
+              ]
+            },
+            "description": "Nhap ID user can khoa vao collection variable targetUserId hoac chay Admin - List Users truoc de tu dong set."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "10. Admin Categories",
+      "item": [
+        {
+          "name": "Admin - Create Category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin create category success', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "if (data.category && data.category._id) { pm.collectionVariables.set('adminCategoryId', data.category._id); }",
+                  "if (!pm.collectionVariables.get('targetCategoryId') && data.category && data.category._id) { pm.collectionVariables.set('targetCategoryId', data.category._id); }",
+                  "if (data.category && data.category.name) { pm.collectionVariables.set('adminCategoryName', data.category.name); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Category {{$timestamp}}\",\n  \"description\": \"Danh muc tao bang Postman de test admin categories.\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/categories",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "categories"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Update Category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin update category success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.category && data.category._id) { pm.collectionVariables.set('adminCategoryId', data.category._id); }",
+                  "if (data.category && data.category._id) { pm.collectionVariables.set('targetCategoryId', data.category._id); }",
+                  "if (data.category && data.category.name) { pm.collectionVariables.set('adminCategoryName', data.category.name); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<nhap-ten-danh-muc-moi>\",\n  \"slug\": \"<nhap-slug-moi-neu-can>\",\n  \"description\": \"<nhap-mo-ta-moi>\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/categories/{{targetCategoryId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "categories",
+                "{{targetCategoryId}}"
+              ]
+            },
+            "description": "Nhap ID category can sua vao collection variable targetCategoryId truoc khi gui request."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - List Categories",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin list categories success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0 && data.data[0]._id) { pm.collectionVariables.set('adminCategoryId', data.data[0]._id); }",
+                  "if (!pm.collectionVariables.get('targetCategoryId') && data.data && data.data.length > 0 && data.data[0]._id) { pm.collectionVariables.set('targetCategoryId', data.data[0]._id); }",
+                  "if (data.data && data.data.length > 0 && data.data[0].name) { pm.collectionVariables.set('adminCategoryName', data.data[0].name); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/categories?page=1&limit=10",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "categories"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Get Category Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/categories/{{targetCategoryId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "categories",
+                "{{targetCategoryId}}"
+              ]
+            },
+            "description": "Nhap ID category can xem vao collection variable targetCategoryId."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Deactivate Category",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/categories/{{targetCategoryId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "categories",
+                "{{targetCategoryId}}"
+              ]
+            },
+            "description": "Nhap ID category can ngung kich hoat vao collection variable targetCategoryId."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "11. Admin Products",
+      "item": [
+        {
+          "name": "Admin - List Products",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin list products success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('adminProductId', data.data[0]._id); }",
+                  "if (!pm.collectionVariables.get('targetProductId') && data.data && data.data.length > 0) { pm.collectionVariables.set('targetProductId', data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/products?page=1&limit=10",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Create Product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin create product success', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "if (data.product && data.product._id) { pm.collectionVariables.set('adminProductId', data.product._id); }",
+                  "if (!pm.collectionVariables.get('targetProductId') && data.product && data.product._id) { pm.collectionVariables.set('targetProductId', data.product._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Admin Product {{$timestamp}}\",\n  \"slug\": \"postman-admin-product-{{$timestamp}}\",\n  \"image\": \"https://placehold.co/600x600/png?text=Postman+Admin+Product\",\n  \"images\": [\"https://placehold.co/600x600/png?text=Postman+Admin+Front\"],\n  \"imageFileData\": \"\",\n  \"imagesFileData\": [],\n  \"brand\": \"Postman\",\n  \"category\": \"{{adminCategoryName}}\",\n  \"categoryId\": \"{{adminCategoryId}}\",\n  \"description\": \"San pham do admin tao de test API quan tri.\",\n  \"price\": 15990000,\n  \"originalPrice\": 17990000,\n  \"countInStock\": 15,\n  \"screen\": \"6.5 inch AMOLED\",\n  \"battery\": \"5000mAh\",\n  \"camera\": \"50MP + 8MP\",\n  \"ram\": \"8GB\",\n  \"storage\": \"256GB\",\n  \"colors\": [\"Black\", \"Blue\"],\n  \"features\": [\"5G\", \"AMOLED\"],\n  \"tags\": [\"postman\", \"admin\"],\n  \"specifications\": { \"chip\": \"Snapdragon 7 Gen 3\", \"os\": \"Android 15\" },\n  \"status\": \"active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/products",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "products"
+              ]
+            },
+            "description": "Truong image va images ho tro ca URL anh thong thuong lan data URL base64. Co the gui them imageFileData va imagesFileData de backend tu upload len Cloudinary roi luu URL."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Get Product Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/products/{{targetProductId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "products",
+                "{{targetProductId}}"
+              ]
+            },
+            "description": "Nhap ID product can xem vao collection variable targetProductId."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Update Product",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<nhap-ten-san-pham-moi>\",\n  \"slug\": \"<nhap-slug-moi-neu-can>\",\n  \"image\": \"<nhap-link-anh-dai-dien-hoac-data-url>\",\n  \"images\": [\"<nhap-link-anh-1-hoac-data-url>\", \"<nhap-link-anh-2-hoac-data-url>\"],\n  \"imageFileData\": \"\",\n  \"imagesFileData\": [],\n  \"brand\": \"<nhap-brand-moi>\",\n  \"category\": \"{{adminCategoryName}}\",\n  \"categoryId\": \"{{targetCategoryId}}\",\n  \"description\": \"<nhap-mo-ta-moi>\",\n  \"price\": 14990000,\n  \"originalPrice\": 16990000,\n  \"countInStock\": 20,\n  \"screen\": \"<nhap-thong-so-man-hinh>\",\n  \"battery\": \"<nhap-thong-so-pin>\",\n  \"camera\": \"<nhap-thong-so-camera>\",\n  \"ram\": \"<nhap-ram>\",\n  \"storage\": \"<nhap-bo-nho>\",\n  \"colors\": [\"Black\", \"Silver\"],\n  \"features\": [\"5G\", \"AMOLED\", \"Fast Charge\"],\n  \"tags\": [\"postman\", \"admin\", \"updated\"],\n  \"specifications\": { \"chip\": \"<nhap-chip>\", \"os\": \"<nhap-he-dieu-hanh>\", \"refreshRate\": \"120Hz\" },\n  \"status\": \"active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/products/{{targetProductId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "products",
+                "{{targetProductId}}"
+              ]
+            },
+            "description": "Nhap ID product can sua vao collection variable targetProductId. Neu doi danh muc, nhap targetCategoryId dung voi category can gan. Truong image va images ho tro URL hoac data URL; imageFileData va imagesFileData duoc tu dong upload len Cloudinary."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Deactivate Product",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/products/{{targetProductId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "products",
+                "{{targetProductId}}"
+              ]
+            },
+            "description": "Nhap ID product can ngung kinh doanh vao collection variable targetProductId."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "12. Admin Orders",
+      "item": [
+        {
+          "name": "Admin - List Orders",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin list orders success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('adminOrderId', data.data[0]._id); }",
+                  "if (!pm.collectionVariables.get('targetOrderId') && data.data && data.data.length > 0) { pm.collectionVariables.set('targetOrderId', data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/orders?page=1&limit=10",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Update Order",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"confirmed\",\n  \"paymentStatus\": \"paid\",\n  \"notes\": \"Admin da cap nhat don hang tu Postman\",\n  \"timelineMessage\": \"Admin xac nhan va chuyen trang thai don hang\",\n  \"paymentNote\": \"Thanh toan da duoc admin xac nhan\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/orders/{{targetOrderId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "orders",
+                "{{targetOrderId}}"
+              ]
+            },
+            "description": "Nhap ID order can cap nhat vao collection variable targetOrderId truoc khi gui request."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Get Order Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/orders/{{targetOrderId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "orders",
+                "{{targetOrderId}}"
+              ]
+            },
+            "description": "Nhap ID order can xem vao collection variable targetOrderId."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "13. Admin Dashboard",
+      "item": [
+        {
+          "name": "Admin - Get Dashboard",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin dashboard success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/dashboard",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "dashboard"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "14. Public Catalog And Support",
+      "item": [
+        {
+          "name": "Public - List Brands",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Public list brands success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('brandId', data.data[0]._id); }",
+                  "if (!pm.collectionVariables.get('targetBrandId') && data.data && data.data.length > 0) { pm.collectionVariables.set('targetBrandId', data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/brands",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "brands"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Public - Get Brand Detail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Public get brand detail success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/brands/{{brandId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "brands",
+                "{{brandId}}"
+              ]
+            },
+            "description": "Chay Public - List Brands truoc de tu dong lay brandId."
+          },
+          "response": []
+        },
+        {
+          "name": "Public - List Categories",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Public list categories success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('categoryId', data.data[0]._id); }",
+                  "if (!pm.collectionVariables.get('targetCategoryId') && data.data && data.data.length > 0) { pm.collectionVariables.set('targetCategoryId', data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/categories",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "categories"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Public - Get Category Detail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Public get category detail success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/categories/{{categoryId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "categories",
+                "{{categoryId}}"
+              ]
+            },
+            "description": "Chay Public - List Categories truoc de tu dong lay categoryId."
+          },
+          "response": []
+        },
+        {
+          "name": "Public - Compare Product Specs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Public compare specs success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/products/specs/compare?ids={{productId}},{{compareProductId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "products",
+                "specs",
+                "compare"
+              ],
+              "query": [
+                {
+                  "key": "ids",
+                  "value": "{{productId}},{{compareProductId}}"
+                }
+              ]
+            },
+            "description": "Chay Public - List Products truoc de tu dong lay productId va compareProductId. Endpoint nay can it nhat 2 productId hop le."
+          },
+          "response": []
+        },
+        {
+          "name": "Public - Get Product Specs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Public get product specs success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/products/{{productId}}/specs",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "products",
+                "{{productId}}",
+                "specs"
+              ]
+            },
+            "description": "Chay Public - List Products truoc de tu dong lay productId."
+          },
+          "response": []
+        },
+        {
+          "name": "Public - List FAQs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Public list faqs success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8080/api/support/faqs",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "support",
+                "faqs"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "Nhung API public con thieu de test danh muc, thuong hieu, FAQ va compare specs."
+    },
+    {
+      "name": "15. User Wishlist Search Notifications Support",
+      "item": [
+        {
+          "name": "User - Add Wishlist Item",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User add wishlist success', function () { pm.response.to.have.status(201); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/user/wishlist",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "user",
+                "wishlist"
+              ]
+            },
+            "description": "Chay Public - List Products hoac User - Search Products And Save History truoc de co productId."
+          },
+          "response": []
+        },
+        {
+          "name": "User - Get Wishlist",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User get wishlist success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/user/wishlist",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "user",
+                "wishlist"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Get Wishlist Count",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User get wishlist count success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/user/wishlist/count",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "user",
+                "wishlist",
+                "count"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Remove Wishlist Item",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User remove wishlist success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/user/wishlist/{{productId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "user",
+                "wishlist",
+                "{{productId}}"
+              ]
+            },
+            "description": "Chay User - Add Wishlist Item truoc de dam bao san pham da nam trong danh sach yeu thich."
+          },
+          "response": []
+        },
+        {
+          "name": "User - Get Search History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User get search history success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('searchHistoryId', data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/user/search-history",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "user",
+                "search-history"
+              ]
+            },
+            "description": "Neu list trong, chay User - Search Products And Save History truoc."
+          },
+          "response": []
+        },
+        {
+          "name": "User - Delete Search History Item",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User delete search history item success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/user/search-history/{{searchHistoryId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "user",
+                "search-history",
+                "{{searchHistoryId}}"
+              ]
+            },
+            "description": "Chay User - Get Search History truoc de tu dong lay searchHistoryId."
+          },
+          "response": []
+        },
+        {
+          "name": "User - Clear Search History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User clear search history success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/user/search-history",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "user",
+                "search-history"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Get Notifications",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User get notifications success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('notificationId', data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/notifications?page=1&limit=10",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Muons co du lieu de test nhanh, chay Admin - Create Notification Broadcast hoac Admin - Update Support Ticket co adminResponse truoc."
+          },
+          "response": []
+        },
+        {
+          "name": "User - Get Unread Notification Count",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User get unread notification count success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/notifications/unread-count",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "notifications",
+                "unread-count"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Mark Notification As Read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User mark notification as read success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/notifications/{{notificationId}}/read",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "notifications",
+                "{{notificationId}}",
+                "read"
+              ]
+            },
+            "description": "Chay User - Get Notifications truoc de tu dong lay notificationId."
+          },
+          "response": []
+        },
+        {
+          "name": "User - Mark All Notifications As Read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User mark all notifications as read success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/notifications/read-all",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "notifications",
+                "read-all"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Create Support Ticket",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User create support ticket success', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "if (data.ticket && data.ticket._id) { pm.collectionVariables.set('supportTicketId', data.ticket._id); }",
+                  "if (!pm.collectionVariables.get('targetSupportTicketId') && data.ticket && data.ticket._id) { pm.collectionVariables.set('targetSupportTicketId', data.ticket._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"Postman support {{$timestamp}}\",\n  \"message\": \"Minh tao ticket tu Postman de test workflow support.\",\n  \"contactEmail\": \"{{userEmail}}\",\n  \"contactPhone\": \"{{userPhone}}\",\n  \"attachments\": [\n    \"https://placehold.co/600x400/png?text=Support+Attachment\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/support/tickets",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "support",
+                "tickets"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Get Support Tickets",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User get support tickets success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('supportTicketId', data.data[0]._id); }",
+                  "if (!pm.collectionVariables.get('targetSupportTicketId') && data.data && data.data.length > 0) { pm.collectionVariables.set('targetSupportTicketId', data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/support/tickets",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "support",
+                "tickets"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "User - Get Support Ticket Detail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User get support ticket detail success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/support/tickets/{{supportTicketId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "support",
+                "tickets",
+                "{{supportTicketId}}"
+              ]
+            },
+            "description": "Chay User - Create Support Ticket hoac User - Get Support Tickets truoc de tu dong lay supportTicketId."
+          },
+          "response": []
+        },
+        {
+          "name": "User - Upload Avatar Image",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('User upload avatar image success', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "if (data.file && data.file.url) { pm.collectionVariables.set('uploadedImageUrl', data.file.url); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{authToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fileData\": \"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jx7kAAAAASUVORK5CYII=\",\n  \"target\": \"avatar\",\n  \"publicId\": \"\",\n  \"autoAssignAvatar\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/uploads/image",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "uploads",
+                "image"
+              ]
+            },
+            "description": "Request nay can Cloudinary da cau hinh trong backend. target=avatar se tu dong cap nhat avatar cho user neu autoAssignAvatar=true."
+          },
+          "response": []
+        }
+      ],
+      "description": "Cac API user con thieu ve wishlist, lich su tim kiem, thong bao, ho tro va upload."
+    },
+    {
+      "name": "16. Admin Brands",
+      "item": [
+        {
+          "name": "Admin - Create Brand",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin create brand success', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "if (data.brand && data.brand._id) { pm.collectionVariables.set('adminBrandId', data.brand._id); }",
+                  "if (!pm.collectionVariables.get('targetBrandId') && data.brand && data.brand._id) { pm.collectionVariables.set('targetBrandId', data.brand._id); }",
+                  "if (data.brand && data.brand._id) { pm.collectionVariables.set('brandId', data.brand._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Brand {{$timestamp}}\",\n  \"slug\": \"postman-brand-{{$timestamp}}\",\n  \"description\": \"Thuong hieu tao bang Postman de test admin brands.\",\n  \"logo\": \"https://placehold.co/200x200/png?text=Brand\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/brands",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "brands"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Get Brand Detail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin get brand detail success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/brands/{{targetBrandId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "brands",
+                "{{targetBrandId}}"
+              ]
+            },
+            "description": "Chay Admin - Create Brand hoac Admin - List Brands truoc de tu dong lay targetBrandId."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - List Brands",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin list brands success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('adminBrandId', data.data[0]._id); }",
+                  "if (!pm.collectionVariables.get('targetBrandId') && data.data && data.data.length > 0) { pm.collectionVariables.set('targetBrandId', data.data[0]._id); }",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('brandId', data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/brands?page=1&limit=10",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "brands"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Update Brand",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"<nhap-ten-thuong-hieu-moi>\",\n  \"slug\": \"<nhap-slug-moi-neu-can>\",\n  \"description\": \"<nhap-mo-ta-moi>\",\n  \"logo\": \"<nhap-link-logo-moi>\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/brands/{{targetBrandId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "brands",
+                "{{targetBrandId}}"
+              ]
+            },
+            "description": "Nhap ID brand can sua vao collection variable targetBrandId."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Deactivate Brand",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/brands/{{targetBrandId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "brands",
+                "{{targetBrandId}}"
+              ]
+            },
+            "description": "Nhap ID brand can ngung kich hoat vao collection variable targetBrandId."
+          },
+          "response": []
+        }
+      ],
+      "description": "CRUD thuong hieu danh cho admin."
+    },
+    {
+      "name": "17. Admin FAQs And Support",
+      "item": [
+        {
+          "name": "Admin - List FAQs",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin list faqs success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('adminFaqId', data.data[0]._id); }",
+                  "if (!pm.collectionVariables.get('targetFaqId') && data.data && data.data.length > 0) { pm.collectionVariables.set('targetFaqId', data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/faqs",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "faqs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Create FAQ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin create faq success', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "if (data.faq && data.faq._id) { pm.collectionVariables.set('adminFaqId', data.faq._id); }",
+                  "if (!pm.collectionVariables.get('targetFaqId') && data.faq && data.faq._id) { pm.collectionVariables.set('targetFaqId', data.faq._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"Postman FAQ {{$timestamp}} la gi?\",\n  \"answer\": \"Day la FAQ duoc tao tu Postman de test backend.\",\n  \"category\": \"general\",\n  \"order\": 0,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/faqs",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "faqs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Update FAQ",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"<nhap-cau-hoi-moi>\",\n  \"answer\": \"<nhap-cau-tra-loi-moi>\",\n  \"category\": \"general\",\n  \"order\": 1,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/faqs/{{targetFaqId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "faqs",
+                "{{targetFaqId}}"
+              ]
+            },
+            "description": "Chay Admin - Create FAQ hoac Admin - List FAQs truoc de tu dong lay targetFaqId."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Delete FAQ",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/faqs/{{targetFaqId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "faqs",
+                "{{targetFaqId}}"
+              ]
+            },
+            "description": "Nhap ID FAQ can xoa vao collection variable targetFaqId."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - List Support Tickets",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin list support tickets success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('adminSupportTicketId', data.data[0]._id); }",
+                  "if (!pm.collectionVariables.get('targetSupportTicketId') && data.data && data.data.length > 0) { pm.collectionVariables.set('targetSupportTicketId', data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/support/tickets?page=1&limit=10",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "support",
+                "tickets"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Neu list trong, chay User - Create Support Ticket truoc de tao du lieu."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Get Support Ticket Detail",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin get support ticket detail success', function () { pm.response.to.have.status(200); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/support/tickets/{{targetSupportTicketId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "support",
+                "tickets",
+                "{{targetSupportTicketId}}"
+              ]
+            },
+            "description": "Chay Admin - List Support Tickets truoc de tu dong lay targetSupportTicketId."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Update Support Ticket",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"resolved\",\n  \"adminResponse\": \"Quan tri vien da tiep nhan va xu ly yeu cau ho tro cua ban.\",\n  \"adminNotes\": \"Cap nhat boi Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/support/tickets/{{targetSupportTicketId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "support",
+                "tickets",
+                "{{targetSupportTicketId}}"
+              ]
+            },
+            "description": "Neu dien adminResponse, backend se tao thong bao support cho user. Ban co the test tiep User - Get Notifications ngay sau do."
+          },
+          "response": []
+        }
+      ],
+      "description": "Quan ly FAQ va yeu cau ho tro cua nguoi dung."
+    },
+    {
+      "name": "18. Admin Reviews Broadcasts Icons",
+      "item": [
+        {
+          "name": "Admin - List Reviews",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin list reviews success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('adminReviewId', data.data[0]._id); }",
+                  "if (!pm.collectionVariables.get('targetReviewId') && data.data && data.data.length > 0) { pm.collectionVariables.set('targetReviewId', data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/reviews?page=1&limit=10",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "reviews"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Neu list trong, chay flow tao don hang va User - Create Review truoc."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Update Review",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"moderationStatus\": \"approved\",\n  \"moderationNote\": \"Review hop le va da duoc duyet.\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/reviews/{{targetReviewId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "reviews",
+                "{{targetReviewId}}"
+              ]
+            },
+            "description": "Chay Admin - List Reviews truoc de tu dong lay targetReviewId."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Delete Review",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/reviews/{{targetReviewId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "reviews",
+                "{{targetReviewId}}"
+              ]
+            },
+            "description": "Nhap ID review can xoa vao collection variable targetReviewId."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - List Notification Broadcasts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin list notification broadcasts success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('adminBroadcastId', data.data[0]._id); }",
+                  "if (!pm.collectionVariables.get('targetBroadcastId') && data.data && data.data.length > 0) { pm.collectionVariables.set('targetBroadcastId', data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/notifications/broadcasts?page=1&limit=10",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "notifications",
+                "broadcasts"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Create Notification Broadcast",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Admin create notification broadcast success', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "if (data.broadcast && data.broadcast._id) { pm.collectionVariables.set('adminBroadcastId', data.broadcast._id); }",
+                  "if (!pm.collectionVariables.get('targetBroadcastId') && data.broadcast && data.broadcast._id) { pm.collectionVariables.set('targetBroadcastId', data.broadcast._id); }"
+                ],
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"update moi\",\n  \"message\": \"Thay đổi \",\n  \"url\": \"/promotions/postman\",\n  \"target\": \"all_users\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/notifications/broadcasts",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "notifications",
+                "broadcasts"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Delete Notification Broadcast",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/notifications/broadcasts/{{targetBroadcastId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "notifications",
+                "broadcasts",
+                "{{targetBroadcastId}}"
+              ]
+            },
+            "description": "Nhap ID broadcast can xoa vao collection variable targetBroadcastId."
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - List Icons",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin list icons success', function () { pm.response.to.have.status(200); });",
+                  "const data = pm.response.json();",
+                  "if (data.data && data.data.length > 0) { pm.collectionVariables.set('adminIconId', data.data[0].id || data.data[0]._id); }",
+                  "if (!pm.collectionVariables.get('targetIconId') && data.data && data.data.length > 0) { pm.collectionVariables.set('targetIconId', data.data[0].id || data.data[0]._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/icons?page=1&limit=10",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "icons"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Create Icon",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Admin create icon success', function () { pm.response.to.have.status(201); });",
+                  "const data = pm.response.json();",
+                  "if (data.icon && (data.icon.id || data.icon._id)) { pm.collectionVariables.set('adminIconId', data.icon.id || data.icon._id); }",
+                  "if (!pm.collectionVariables.get('targetIconId') && data.icon && (data.icon.id || data.icon._id)) { pm.collectionVariables.set('targetIconId', data.icon.id || data.icon._id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"\",\n  \"name\": \"Postman Icon {{$timestamp}}\",\n  \"url\": \"https://placehold.co/128x128/png?text=ICON\",\n  \"fileData\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "http://localhost:8080/api/admin/icons",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "icons"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Admin - Delete Icon",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": {
+              "raw": "http://localhost:8080/api/admin/icons/{{targetIconId}}",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8080",
+              "path": [
+                "api",
+                "admin",
+                "icons",
+                "{{targetIconId}}"
+              ]
+            },
+            "description": "Nhap ID icon can go vao collection variable targetIconId."
+          },
+          "response": []
+        }
+      ],
+      "description": "Cac API admin lien quan den moderation review, broadcast thong bao va thu vien icon."
+    }
+  ],
+  "variable": [
+    {
+      "key": "userEmail",
+      "value": "postman-user@example.com"
+    },
+    {
+      "key": "userPhone",
+      "value": "0900000001"
+    },
+    {
+      "key": "fullName",
+      "value": "Postman User"
+    },
+    {
+      "key": "userPassword",
+      "value": "12345678"
+    },
+    {
+      "key": "newPassword",
+      "value": "12345679"
+    },
+    {
+      "key": "authToken",
+      "value": ""
+    },
+    {
+      "key": "resetToken",
+      "value": ""
+    },
+    {
+      "key": "guestId",
+      "value": "guest-postman-001"
+    },
+    {
+      "key": "addressId",
+      "value": ""
+    },
+    {
+      "key": "productId",
+      "value": ""
+    },
+    {
+      "key": "variantId",
+      "value": ""
+    },
+    {
+      "key": "cartItemId",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    },
+    {
+      "key": "voucherCode",
+      "value": "POSTMAN10"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@mobileshop.local"
+    },
+    {
+      "key": "adminPassword",
+      "value": "Admin@123456"
+    },
+    {
+      "key": "adminToken",
+      "value": ""
+    },
+    {
+      "key": "adminUserId",
+      "value": ""
+    },
+    {
+      "key": "targetUserId",
+      "value": ""
+    },
+    {
+      "key": "adminProductId",
+      "value": ""
+    },
+    {
+      "key": "targetProductId",
+      "value": ""
+    },
+    {
+      "key": "adminOrderId",
+      "value": ""
+    },
+    {
+      "key": "targetOrderId",
+      "value": ""
+    },
+    {
+      "key": "adminVoucherId",
+      "value": ""
+    },
+    {
+      "key": "targetVoucherId",
+      "value": ""
+    },
+    {
+      "key": "adminCategoryId",
+      "value": ""
+    },
+    {
+      "key": "targetCategoryId",
+      "value": ""
+    },
+    {
+      "key": "adminCategoryName",
+      "value": "Smartphone"
+    },
+    {
+      "key": "compareProductId",
+      "value": ""
+    },
+    {
+      "key": "brandId",
+      "value": ""
+    },
+    {
+      "key": "categoryId",
+      "value": ""
+    },
+    {
+      "key": "notificationId",
+      "value": ""
+    },
+    {
+      "key": "searchHistoryId",
+      "value": ""
+    },
+    {
+      "key": "supportTicketId",
+      "value": ""
+    },
+    {
+      "key": "uploadedImageUrl",
+      "value": ""
+    },
+    {
+      "key": "adminBrandId",
+      "value": ""
+    },
+    {
+      "key": "targetBrandId",
+      "value": ""
+    },
+    {
+      "key": "adminFaqId",
+      "value": ""
+    },
+    {
+      "key": "targetFaqId",
+      "value": ""
+    },
+    {
+      "key": "adminSupportTicketId",
+      "value": ""
+    },
+    {
+      "key": "targetSupportTicketId",
+      "value": ""
+    },
+    {
+      "key": "adminReviewId",
+      "value": ""
+    },
+    {
+      "key": "targetReviewId",
+      "value": ""
+    },
+    {
+      "key": "adminBroadcastId",
+      "value": ""
+    },
+    {
+      "key": "targetBroadcastId",
+      "value": ""
+    },
+    {
+      "key": "adminIconId",
+      "value": ""
+    },
+    {
+      "key": "targetIconId",
+      "value": ""
+    }
+  ]
+}
