@@ -77,6 +77,14 @@ const voucherSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isHuntedOnly: {
+      type: Boolean,
+      default: false,
+    },
+    missionTask: {
+      type: String,
+      default: '', // Description of the task/mission
+    },
   },
   {
     timestamps: true,

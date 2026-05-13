@@ -29,6 +29,8 @@ const CheckoutPage = () => {
     const [isApplying, setIsApplying] = useState(false);
     const [couponStatus, setCouponStatus] = useState(null); // { type: 'success'|'error', message, discountAmount }
     const [appliedCoupon, setAppliedCoupon] = useState(null);
+    const [availableVouchers, setAvailableVouchers] = useState([]);
+    const [showVoucherList, setShowVoucherList] = useState(false);
     const [isPlacingOrder, setIsPlacingOrder] = useState(false);
     const [successfulOrderId, setSuccessfulOrderId] = useState('');
     const [walletPhone, setWalletPhone] = useState('');
@@ -252,8 +254,46 @@ const CheckoutPage = () => {
     const discount = cartDiscount;
     const total = (cartTotal || Math.max(subtotal - discount, 0)) + shippingFee;
 
-    const handleApplyCoupon = async () => {
-        if (!couponCode.trim()) return;
+    useEffect(() => {
+        const fetchVouchers = async () => {
+            try {
+                const response = await api.get('/api/voucher');
+                setAvailableVouchers(response.data?.data || []);
+            } catch (error) {
+                console.error('Failed to fetch vouchers:', error);
+            }
+        };
+        fetchVouchers();
+    }, []);
+
+    const fetchVouchers = async () => {
+        try {
+            const [publicRes, myRes] = await Promise.all([
+                api.get('/api/voucher'),
+                user ? api.get('/api/voucher/my-vouchers') : Promise.resolve({ data: { data: [] } })
+            ]);
+            
+            const publicVouchers = publicRes.data?.data || [];
+            const myVouchers = myRes.data?.data || [];
+            
+            // Deduplicate if needed (though isHuntedOnly handles this)
+            const combined = [...publicVouchers, ...myVouchers].filter((v, index, self) => 
+                index === self.findIndex((t) => t.code === v.code)
+            );
+            
+            setAvailableVouchers(combined);
+        } catch (error) {
+            console.error('Failed to fetch vouchers:', error);
+        }
+    };
+
+    useEffect(() => {
+        fetchVouchers();
+    }, []);
+
+    const handleApplyCoupon = async (manualCode = null) => {
+        const codeToApply = manualCode || couponCode;
+        if (!codeToApply.trim()) return;
         setIsApplying(true);
         setCouponStatus(null);
 
@@ -1166,6 +1206,67 @@ const CheckoutPage = () => {
                                     <p className={`text-xs mt-2 font-bold ${couponStatus.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
                                         {couponStatus.message}
                                     </p>
+                                )}
+
+                                {/* Available Vouchers List */}
+                                {availableVouchers.length > 0 && (
+                                    <div className="mt-4">
+                                        <button 
+                                            onClick={() => setShowVoucherList(!showVoucherList)}
+                                            className="text-[10px] font-black text-amber-500 uppercase tracking-widest hover:text-white transition-colors flex items-center gap-2"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                                            {showVoucherList ? 'Ẩn danh sách mã' : 'Xem mã giảm giá có sẵn'}
+                                        </button>
+                                        
+                                        {showVoucherList && (() => {
+                                            const sorted = [...availableVouchers].sort((a, b) => {
+                                                const valA = a.discountType === 'percentage' ? a.discountValue * (subtotal / 100) : a.discountValue;
+                                                const valB = b.discountType === 'percentage' ? b.discountValue * (subtotal / 100) : b.discountValue;
+                                                return valB - valA;
+                                            });
+                                            const maxCode = sorted[0]?.code;
+                                            const minCode = sorted[availableVouchers.length - 1]?.code;
+
+                                            return (
+                                                <div className="mt-4 grid grid-cols-1 gap-3 max-h-[300px] overflow-y-auto pr-2 hh-scrollbar animate-fadeIn">
+                                                    {availableVouchers.map(v => {
+                                                        const isMax = v.code === maxCode;
+                                                        const isMin = v.code === minCode && v.code !== maxCode;
+                                                        return (
+                                                            <div 
+                                                                key={v.code}
+                                                                onClick={() => {
+                                                                    setCouponCode(v.code);
+                                                                    handleApplyCoupon(v.code);
+                                                                    setShowVoucherList(false);
+                                                                }}
+                                                                className={`relative group rounded-2xl p-4 flex justify-between items-center cursor-pointer transition-all shadow-md active:scale-[0.98] ${
+                                                                    isMax ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/20 border border-white/20">
+                                                                        <Ticket size={20} className="text-white" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-sm font-black tracking-tight text-white uppercase">{v.code}</p>
+                                                                        <p className="text-[10px] font-bold text-white/70 italic">
+                                                                            Giảm {v.discountType === 'percentage' ? `${v.discountValue}%` : formatPrice(v.discountValue)}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition-all group-hover:bg-slate-100">Chọn</span>
+                                                                    <p className="text-[8px] text-white/60 mt-1 font-bold">Đơn từ {formatPrice(v.minOrderValue)}</p>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
                                 )}
                             </div>
 

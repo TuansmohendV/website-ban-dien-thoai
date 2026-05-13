@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import api from '../../lib/api';
 import { 
   Plus, 
   Search, 
@@ -22,12 +23,21 @@ import {
 } from 'lucide-react';
 
 const BannerManagement = () => {
-  const [banners, setBanners] = useState([
-    { id: 1, title: 'Siêu sale iPhone 15 Pro Max', type: 'Main Carousel', targetPage: 'Trang chủ', image: 'https://cdn.tgdd.vn/2024/03/banner/800-200-800x200-2.png', link: '/category/iphone', status: 'active', position: 1 },
-    { id: 2, title: 'Samsung S24 Ultra - Đặt trước ngay', type: 'Main Carousel', targetPage: 'Trang chủ', image: 'https://cdn.tgdd.vn/2024/04/banner/S24-800-200-800x200.png', link: '/category/samsung', status: 'active', position: 2 },
-    { id: 3, title: 'Thu cũ đổi mới - Trợ giá 2 triệu', type: 'Sub Banner', targetPage: 'Trang chủ', image: 'https://cdn.tgdd.vn/2024/03/banner/TGDD-720-220-720x220.png', link: '/trade-in', status: 'active', position: 1 },
-    { id: 4, title: 'Phụ kiện giảm đến 50%', type: 'Side Banner', targetPage: 'Chi tiết sản phẩm', image: 'https://cdn.tgdd.vn/2024/03/banner/Phukien-390-210-390x210.png', link: '/category/phu-kien', status: 'hidden', position: 1 },
-  ]);
+  const [banners, setBanners] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadBanners = async () => {
+    try {
+      const res = await api.get('/api/banners/admin');
+      setBanners(res.data?.data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => { loadBanners(); }, []);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('Tất cả loại');
@@ -42,8 +52,8 @@ const BannerManagement = () => {
     title: '',
     type: 'Main Carousel',
     targetPage: 'Trang chủ',
-    image: '',
-    link: '',
+    imageUrl: '',
+    linkUrl: '',
     status: 'active',
     position: 1
   });
@@ -52,7 +62,7 @@ const BannerManagement = () => {
     if (banner) {
       setEditingBanner(banner);
       setFormData({ ...banner });
-      setImagePreview(banner.image);
+      setImagePreview(banner.imageUrl);
       setImageSource('url');
     } else {
       setEditingBanner(null);
@@ -60,8 +70,8 @@ const BannerManagement = () => {
         title: '',
         type: 'Main Carousel',
         targetPage: 'Trang chủ',
-        image: '',
-        link: '',
+        imageUrl: '',
+        linkUrl: '',
         status: 'active',
         position: banners.length + 1
       });
@@ -71,35 +81,57 @@ const BannerManagement = () => {
     setShowModal(true);
   };
 
-  const handleImageChange = (e) => {
+  const handleImageChange = async (e) => {
     const file = e.target.files[0];
     if (file) {
+      // Show local preview immediately
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-        setFormData(prev => ({ ...prev, image: reader.result }));
-      };
+      reader.onloadend = () => setImagePreview(reader.result);
       reader.readAsDataURL(file);
+
+      // Upload to server
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      try {
+        const res = await api.post('/api/upload/image', formDataUpload, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        if (res.data?.success) {
+          setFormData(prev => ({ ...prev, imageUrl: res.data.url }));
+        }
+      } catch (err) {
+        alert('Lỗi tải ảnh lên: ' + err.message);
+      }
     }
   };
 
-  const handleSave = () => {
-    if (!formData.title || !formData.image) {
+  const handleSave = async () => {
+    if (!formData.title || !formData.imageUrl) {
       alert('Vui lòng điền đầy đủ thông tin bắt buộc và chọn hình ảnh');
       return;
     }
 
-    if (editingBanner) {
-      setBanners(banners.map(b => b.id === editingBanner.id ? { ...b, ...formData } : b));
-    } else {
-      setBanners([...banners, { id: Date.now(), ...formData }]);
+    try {
+      if (editingBanner) {
+        await api.put(`/api/banners/admin/${editingBanner._id}`, formData);
+      } else {
+        await api.post('/api/banners/admin', formData);
+      }
+      setShowModal(false);
+      loadBanners();
+    } catch (err) {
+      alert('Lỗi lưu banner: ' + err.message);
     }
-    setShowModal(false);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa banner này?')) {
-      setBanners(banners.filter(b => b.id !== id));
+      try {
+        await api.delete(`/api/banners/admin/${id}`);
+        loadBanners();
+      } catch(err) {
+        alert('Lỗi xóa banner');
+      }
     }
   };
 
@@ -173,13 +205,13 @@ const BannerManagement = () => {
             </thead>
             <tbody>
               {filteredBanners.length > 0 ? filteredBanners.map((banner) => (
-                <tr key={banner.id}>
+                <tr key={banner._id}>
                   <td style={{ paddingLeft: '20px', width: '220px' }}>
                     <div className="banner-table-preview" style={{ 
                       width: '180px', height: '60px', borderRadius: '8px', overflow: 'hidden', 
                       background: '#f1f5f9', border: '1px solid #e2e8f0' 
                     }}>
-                      <img src={banner.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <img src={banner.imageUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     </div>
                   </td>
                   <td>
@@ -199,7 +231,7 @@ const BannerManagement = () => {
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#2563eb', fontSize: '13px', fontWeight: '500' }}>
                       <LinkIcon size={14} />
-                      <span style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{banner.link}</span>
+                      <span style={{ maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{banner.linkUrl}</span>
                     </div>
                   </td>
                   <td>
@@ -224,7 +256,7 @@ const BannerManagement = () => {
                   <td>
                     <div className="actions-cell">
                       <button className="action-btn edit" onClick={() => handleOpenModal(banner)}><Edit size={16} /></button>
-                      <button className="action-btn delete" onClick={() => handleDelete(banner.id)}><Trash2 size={16} /></button>
+                      <button className="action-btn delete" onClick={() => handleDelete(banner._id)}><Trash2 size={16} /></button>
                     </div>
                   </td>
                 </tr>
@@ -303,14 +335,14 @@ const BannerManagement = () => {
                     <div className="input-group">
                       <label>Trang hiển thị *</label>
                       <select value={formData.targetPage} onChange={e => setFormData({...formData, targetPage: e.target.value})}>
-                        <option value="Trang chủ">Trang chủ</option><option value="Trang Danh mục">Trang Danh mục</option><option value="Chi tiết sản phẩm">Chi tiết sản phẩm</option><option value="Trang Tin tức">Trang Tin tức</option><option value="Trang Khuyến mãi">Trang Khuyến mãi</option><option value="Trang Liên hệ">Trang Liên hệ</option>
+                        <option value="Trang chủ">Trang chủ</option><option value="Trang Danh mục">Trang Danh mục</option><option value="Chi tiết sản phẩm">Chi tiết sản phẩm</option><option value="Trang Tin tức">Trang Tin tức</option><option value="Trang Khuyến mãi">Trang Khuyến mãi</option><option value="Trang Liên hệ">Trang Liên hệ</option><option value="Trang Săn Voucher">Trang Săn Voucher</option>
                       </select>
                     </div>
                     <div className="input-group">
                       <label>Link điều hướng</label>
                       <select 
-                        value={formData.link} 
-                        onChange={e => setFormData({...formData, link: e.target.value})}
+                        value={formData.linkUrl} 
+                        onChange={e => setFormData({...formData, linkUrl: e.target.value})}
                       >
                         <option value="">Không có liên kết</option>
                         <option value="/">Trang chủ</option>

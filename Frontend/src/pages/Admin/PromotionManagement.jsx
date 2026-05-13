@@ -48,6 +48,8 @@ const mapVoucherForAdmin = (voucher = {}) => ({
   expiry: toDateInput(voucher.expiresAt),
   status: voucher.status || (voucher.isActive === false ? 'Tạm tắt' : 'Hoạt động'),
   isActive: voucher.isActive !== false,
+  isHuntedOnly: voucher.isHuntedOnly === true,
+  missionTask: voucher.missionTask || '',
 });
 
 const PromotionManagement = () => {
@@ -58,33 +60,53 @@ const PromotionManagement = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingPromo, setEditingPromo] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [pendingProofs, setPendingProofs] = useState([]);
+  const [isLoadingProofs, setIsLoadingProofs] = useState(false);
+  const [reviewNote, setReviewNote] = useState('');
+  const [isProcessingReview, setIsProcessingReview] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const promosPerPage = 10;
   
   const [formData, setFormData] = useState({
-    code: '', type: 'Giảm tiền', value: '', minSpend: '', total: '', expiry: '', isActive: true
+    code: '', type: 'Giảm tiền', value: '', minSpend: '', total: '', expiry: '', isActive: true,
+    isHuntedOnly: false, missionTask: ''
   });
 
   const loadPromos = useCallback(async () => {
     setIsLoading(true);
-
+    setLoadError('');
     try {
       const response = await api.get('/api/voucher/admin');
-      setPromos((response.data?.data || []).map(mapVoucherForAdmin));
-      setLoadError('');
+      const mappedPromos = (response.data?.data || []).map(mapVoucherForAdmin);
+      setPromos(mappedPromos);
     } catch (error) {
-      setPromos([]);
-      setLoadError(getApiErrorMessage(error, 'Không thể tải mã khuyến mãi từ database.'));
+      const msg = getApiErrorMessage(error) || 'Failed to load promotions';
+      setLoadError(msg);
+      console.error(msg);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
+  const loadPendingProofs = useCallback(async () => {
+    setIsLoadingProofs(true);
+    try {
+      const response = await api.get('/api/voucher/admin/pending-proofs');
+      setPendingProofs(response.data?.data || []);
+    } catch (error) {
+      console.error('Failed to load pending proofs:', error);
+    } finally {
+      setIsLoadingProofs(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadPromos();
-  }, [loadPromos]);
+    loadPendingProofs();
+  }, [loadPromos, loadPendingProofs]);
 
   // Derived Stats
   const stats = useMemo(() => {
@@ -124,10 +146,15 @@ const PromotionManagement = () => {
         total: promo.total,
         expiry: promo.expiry,
         isActive: promo.isActive,
+        isHuntedOnly: promo.isHuntedOnly,
+        missionTask: promo.missionTask,
       });
     } else {
       setEditingPromo(null);
-      setFormData({ code: '', type: 'Giảm tiền', value: '', minSpend: 0, total: 0, expiry: '', isActive: true });
+      setFormData({ 
+        code: '', type: 'Giảm tiền', value: '', minSpend: 0, total: 0, expiry: '', isActive: true,
+        isHuntedOnly: false, missionTask: ''
+      });
     }
     setShowModal(true);
   };
@@ -153,6 +180,8 @@ const PromotionManagement = () => {
       usageLimit: cleanData.total,
       expiresAt: cleanData.expiry,
       isActive: cleanData.isActive,
+      isHuntedOnly: cleanData.isHuntedOnly,
+      missionTask: cleanData.missionTask,
     };
 
     setIsSaving(true);
@@ -184,6 +213,20 @@ const PromotionManagement = () => {
     }
   };
 
+  const handleReview = async (id, status) => {
+    setIsProcessingReview(true);
+    try {
+      await api.post(`/api/voucher/admin/review-proof/${id}`, { status, adminNote: reviewNote });
+      alert(`Đã ${status === 'approved' ? 'duyệt' : 'từ chối'} thành công!`);
+      setReviewNote('');
+      loadPendingProofs();
+    } catch (error) {
+      alert(getApiErrorMessage(error));
+    } finally {
+      setIsProcessingReview(false);
+    }
+  };
+
   const copyToClipboard = (code) => {
     navigator.clipboard.writeText(code);
     alert(`Đã copy mã: ${code}`);
@@ -196,10 +239,16 @@ const PromotionManagement = () => {
           <h1 className="page-title">Quản lý Khuyến mãi</h1>
           <p className="page-subtitle">Tạo mã giảm giá, chương trình ưu đãi và voucher cho khách hàng.</p>
         </div>
-        <button className="btn-primary" onClick={() => handleOpenModal()}>
-          <Plus size={20} />
-          Tạo mã mới
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button className="btn-outline" onClick={() => setShowReviewModal(true)} style={{ position: 'relative' }}>
+            <Zap size={20} className="text-amber-500" />
+            Duyệt Voucher {pendingProofs.length > 0 && <span style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#ef4444', color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '10px' }}>{pendingProofs.length}</span>}
+          </button>
+          <button className="btn-primary" onClick={() => handleOpenModal()}>
+            <Plus size={20} />
+            Tạo mã mới
+          </button>
+        </div>
       </div>
 
       <div className="promo-stats-grid">
@@ -421,15 +470,38 @@ const PromotionManagement = () => {
                     onChange={e => setFormData({...formData, expiry: e.target.value})}
                   />
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#334155' }}>
-                  <input
-                    type="checkbox"
-                    checked={formData.isActive}
-                    onChange={e => setFormData({...formData, isActive: e.target.checked})}
-                    style={{ width: '18px', height: '18px', accentColor: '#2563eb' }}
-                  />
-                  Kích hoạt mã
-                </label>
+                <div style={{ gridColumn: 'span 2', display: 'flex', gap: '30px', background: '#f8fafc', padding: '15px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={formData.isActive}
+                      onChange={e => setFormData({...formData, isActive: e.target.checked})}
+                      style={{ width: '18px', height: '18px', accentColor: '#2563eb' }}
+                    />
+                    Kích hoạt mã
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#ef4444', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={formData.isHuntedOnly}
+                      onChange={e => setFormData({...formData, isHuntedOnly: e.target.checked})}
+                      style={{ width: '18px', height: '18px', accentColor: '#ef4444' }}
+                    />
+                    Mã dành cho Săn Voucher
+                  </label>
+                </div>
+
+                {formData.isHuntedOnly && (
+                  <div className="input-group" style={{ gridColumn: 'span 2' }}>
+                    <label style={{ color: '#ef4444' }}>Mô tả nhiệm vụ (Dành cho thợ săn)</label>
+                    <textarea 
+                      placeholder="VD: Chia sẻ sản phẩm lên Facebook hoặc Chờ đợi hệ thống xác thực..." 
+                      value={formData.missionTask}
+                      onChange={e => setFormData({...formData, missionTask: e.target.value})}
+                      style={{ width: '100%', height: '80px', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', outline: 'none' }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
             <div className="modal-footer">
@@ -437,6 +509,91 @@ const PromotionManagement = () => {
               <button className="btn-primary" onClick={handleSave} disabled={isSaving}>
                 {isSaving ? 'Đang lưu...' : 'Lưu thông tin'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Review Proof Modal */}
+      {showReviewModal && (
+        <div className="modal-overlay" onClick={() => setShowReviewModal(false)}>
+          <div className="modal-content" style={{ maxWidth: '900px' }} onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Phê duyệt minh chứng Săn Voucher</h2>
+              <button className="close-btn" onClick={() => setShowReviewModal(false)}><X size={24} /></button>
+            </div>
+            <div className="modal-body">
+              {isLoadingProofs ? (
+                <p>Đang tải danh sách chờ duyệt...</p>
+              ) : pendingProofs.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <Ticket size={48} style={{ margin: '0 auto 15px', color: '#cbd5e1' }} />
+                  <p style={{ color: '#64748b', fontWeight: 600 }}>Không có minh chứng nào đang chờ duyệt.</p>
+                </div>
+              ) : (
+                <div className="table-responsive">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>Khách hàng</th>
+                        <th>Voucher</th>
+                        <th>Minh chứng</th>
+                        <th>Ghi chú Admin</th>
+                        <th>Hành động</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pendingProofs.map((p) => (
+                        <tr key={p._id}>
+                          <td>
+                            <div style={{ fontSize: '13px' }}>
+                              <p style={{ fontWeight: 800 }}>{p.user?.fullName}</p>
+                              <p style={{ color: '#64748b', fontSize: '11px' }}>{p.user?.phone}</p>
+                            </div>
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <Tag size={14} className="text-emerald-500" />
+                              <span style={{ fontWeight: 800 }}>{p.voucher?.code}</span>
+                            </div>
+                          </td>
+                          <td>
+                            <a href={p.proofImage} target="_blank" rel="noreferrer" style={{ display: 'block', width: '60px', height: '40px', borderRadius: '4px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
+                              <img src={p.proofImage} alt="Proof" style={{ width: '100%', height: '100%', objectCover: 'cover' }} />
+                            </a>
+                          </td>
+                          <td>
+                            <input 
+                              type="text" 
+                              placeholder="Nhập lý do nếu từ chối..." 
+                              value={reviewNote}
+                              onChange={(e) => setReviewNote(e.target.value)}
+                              style={{ width: '100%', padding: '6px 10px', fontSize: '12px', border: '1px solid #e2e8f0', borderRadius: '6px' }}
+                            />
+                          </td>
+                          <td>
+                            <div className="flex gap-2">
+                              <button 
+                                onClick={() => handleReview(p._id, 'approved')}
+                                disabled={isProcessingReview}
+                                className="px-3 py-1.5 bg-emerald-500 text-white text-[11px] font-black rounded-lg hover:bg-emerald-600 transition-all"
+                              >
+                                Duyệt
+                              </button>
+                              <button 
+                                onClick={() => handleReview(p._id, 'rejected')}
+                                disabled={isProcessingReview}
+                                className="px-3 py-1.5 bg-red-500 text-white text-[11px] font-black rounded-lg hover:bg-red-600 transition-all"
+                              >
+                                Từ chối
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>

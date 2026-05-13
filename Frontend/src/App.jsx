@@ -33,6 +33,8 @@ import MockPaymentPage from './pages/User/MockPaymentPage';
 import StoreLocatorPage from './pages/User/StoreLocatorPage';
 import CustomerSupportPage from './pages/User/CustomerSupportPage';
 import ChangePasswordPage from './pages/User/ChangePasswordPage';
+import VoucherHuntingPage from './pages/User/VoucherHuntingPage';
+import MyVouchersPage from './pages/User/MyVouchersPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import ScrollToTop from './components/ScrollToTop';
 
@@ -123,6 +125,8 @@ function App() {
               <Route path="flash-voucher" element={<FlashVoucherPage />} />
               <Route path="invoice/:orderId" element={<ProtectedRoute><InvoicePage /></ProtectedRoute>} />
               <Route path="customer-support" element={<ProtectedRoute><CustomerSupportPage /></ProtectedRoute>} />
+              <Route path="hunt-vouchers" element={<VoucherHuntingPage />} />
+              <Route path="my-vouchers" element={<ProtectedRoute><MyVouchersPage /></ProtectedRoute>} />
             </Route>
 
             {/* Các trang không dùng chung Layout (Trang đăng nhập/đăng ký/giỏ hàng) */}

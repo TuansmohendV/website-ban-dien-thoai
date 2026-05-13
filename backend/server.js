@@ -33,6 +33,9 @@ import adminUserRoutes from './routes/adminUserRoutes.js';
 import adminProductRoutes from './routes/adminProductRoutes.js';
 import adminOrderRoutes from './routes/adminOrderRoutes.js';
 import adminReviewRoutes from './routes/adminReviewRoutes.js';
+import bannerRoutes from './routes/bannerRoutes.js';
+import { startWeeklyVoucherJob } from './jobs/weeklyVoucherJob.js';
+
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
 
 const app = express();
@@ -163,6 +166,10 @@ app.use('/api/cart', cartRoutes);
 app.use('/api/voucher', voucherRoutes);
 app.use('/api/admin/vouchers', adminVoucherRoutes);
 
+// ─── Banners ─────────────────────────────────────
+app.use('/api/banners', bannerRoutes);
+
+
 // ─── Orders ──────────────────────────────────────
 app.use('/api/orders', orderRoutes);
 app.use('/api/admin/orders', adminOrderRoutes);
@@ -204,6 +211,10 @@ app.use('/api/admin/notifications/broadcasts', broadcastRoutes);
 app.use('/api/icons', iconRoutes);
 app.use('/api/admin/icons', iconRoutes);
 
+import path from 'path';
+const __dirname = path.resolve();
+app.use('/uploads', express.static(path.join(__dirname, '/public/uploads')));
+
 app.use(notFound);
 app.use(errorHandler);
 
@@ -219,6 +230,9 @@ const startServer = async () => {
   });
 
   console.log('MongoDB connected.');
+
+  // Khởi chạy job phát voucher tự động hàng tuần
+  startWeeklyVoucherJob();
 
   httpServer.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

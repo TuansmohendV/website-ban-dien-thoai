@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import api from '../../lib/api';
 import { 
   Plus, Search, Grid, List, Trash2, Download, Eye, Image as ImageIcon, 
   Video, File, Filter, CheckSquare, Square, Upload, X, Play, FileText, 
@@ -16,14 +17,23 @@ const MediaManagement = () => {
   
   const fileInputRef = useRef(null);
 
-  const [mediaData, setMediaData] = useState([
-    { id: 1, name: 'iphone-15-banner.jpg', type: 'image', size: '2.4 MB', dimensions: '1920x600', url: 'https://images.unsplash.com/photo-1696446701796-da61225697cc?w=800&h=450&fit=crop', date: '22/04/2026' },
-    { id: 2, name: 'promo-video-intro.mp4', type: 'video', size: '15.8 MB', duration: '0:30', url: 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4', date: '21/04/2026', thumbnail: 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=400&h=250&fit=crop' },
-    { id: 3, name: 'samsung-s24-ultra.png', type: 'image', size: '1.2 MB', dimensions: '1200x800', url: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?w=800&h=500&fit=crop', date: '20/04/2026' },
-    { id: 4, name: 'brand-guidelines.pdf', type: 'file', size: '4.5 MB', url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf', date: '19/04/2026' },
-    { id: 5, name: 'summer-sale-poster.webp', type: 'image', size: '450 KB', dimensions: '1080x1080', url: 'https://images.unsplash.com/photo-1616348436168-de43ad0db179?w=400&h=250&fit=crop', date: '18/04/2026' },
-    { id: 6, name: 'review-iphone-15.mp4', type: 'video', size: '24.2 MB', duration: '5:12', url: 'https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4', date: '17/04/2026', thumbnail: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=400&h=250&fit=crop' },
-  ]);
+  const [mediaData, setMediaData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchMedia = async () => {
+    try {
+      const res = await api.get('/api/upload/files');
+      setMediaData(res.data?.data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMedia();
+  }, []);
 
   const filteredMedia = activeType === 'all' ? mediaData : mediaData.filter(m => m.type === activeType);
 
@@ -31,49 +41,35 @@ const MediaManagement = () => {
     setSelectedItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files || e.dataTransfer.files);
     if (files.length === 0) return;
 
-    // Start simulation
     setUploadingFiles(files.map(f => ({ name: f.name, progress: 0 })));
     
-    // Simulate upload progress for each file
-    files.forEach((file, index) => {
-      let progress = 0;
-      const interval = setInterval(() => {
-        progress += Math.random() * 30;
-        if (progress >= 100) {
-          progress = 100;
-          clearInterval(interval);
-          
-          // Add to media data when "done"
-          const type = file.type.startsWith('video/') ? 'video' : file.type.startsWith('image/') ? 'image' : 'file';
-          const newMediaItem = {
-            id: Date.now() + index,
-            name: file.name,
-            type: type,
-            size: (file.size / (1024 * 1024)).toFixed(1) + ' MB',
-            date: new Date().toLocaleDateString('vi-VN'),
-            url: URL.createObjectURL(file),
-            thumbnail: type === 'image' ? URL.createObjectURL(file) : null,
-            dimensions: type === 'image' ? 'Processing...' : null,
-            duration: type === 'video' ? 'Processing...' : null
-          };
+    // Upload files sequentially for simplicity
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      setUploadingFiles(prev => prev.map((f, idx) => idx === i ? { ...f, progress: 50 } : f));
+      
+      try {
+        await api.post('/api/upload/image', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        setUploadingFiles(prev => prev.map((f, idx) => idx === i ? { ...f, progress: 100 } : f));
+      } catch (err) {
+        console.error('Upload failed:', err);
+      }
+    }
 
-          setMediaData(prev => [newMediaItem, ...prev]);
-          
-          // Clear uploading state when last file is done
-          if (index === files.length - 1) {
-            setTimeout(() => {
-              setUploadingFiles([]);
-              setShowUploadModal(false);
-            }, 500);
-          }
-        }
-        setUploadingFiles(prev => prev.map((f, i) => i === index ? { ...f, progress } : f));
-      }, 300);
-    });
+    setTimeout(() => {
+      setUploadingFiles([]);
+      setShowUploadModal(false);
+      fetchMedia();
+    }, 500);
   };
 
   const handleDragOver = (e) => {

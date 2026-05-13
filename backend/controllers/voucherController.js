@@ -1,5 +1,6 @@
 import Cart from '../models/Cart.js';
 import Voucher from '../models/Voucher.js';
+import UserVoucher from '../models/UserVoucher.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import AppError from '../utils/appError.js';
 import { recalculateCart } from '../utils/cart.js';
@@ -27,6 +28,8 @@ const normalizeVoucherPayload = (body = {}) => {
     expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
     startsAt: body.startsAt ? new Date(body.startsAt) : undefined,
     isActive: body.isActive !== false,
+    isHuntedOnly: body.isHuntedOnly === true,
+    missionTask: String(body.missionTask || '').trim(),
   };
 };
 
@@ -48,6 +51,140 @@ export const getAdminVouchers = asyncHandler(async (req, res) => {
   res.json({
     data: vouchers.map(mapVoucherForAdmin),
   });
+});
+
+export const getPublicVouchers = asyncHandler(async (req, res) => {
+  const now = new Date();
+  
+  const vouchers = await Voucher.find({
+    isActive: true,
+    isHuntedOnly: { $ne: true },
+    $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: now } }],
+    $or: [{ startsAt: { $exists: false } }, { startsAt: { $lt: now } }],
+  })
+    .sort({ discountValue: -1 })
+    .lean();
+
+  res.json({
+    data: vouchers.map((v) => ({
+      code: v.code,
+      description: v.description,
+      discountType: v.discountType,
+      discountValue: v.discountValue,
+      minOrderValue: v.minOrderValue,
+      maxDiscount: v.maxDiscount,
+      expiresAt: v.expiresAt,
+    })),
+  });
+});
+
+export const getHuntedVouchers = asyncHandler(async (req, res) => {
+  const now = new Date();
+  
+  const vouchers = await Voucher.find({
+    isActive: true,
+    isHuntedOnly: true,
+    $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: now } }],
+    $or: [{ startsAt: { $exists: false } }, { startsAt: { $lt: now } }],
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  res.json({
+    data: vouchers.map((v) => ({
+      _id: v._id,
+      code: v.code,
+      description: v.description,
+      discountType: v.discountType,
+      discountValue: v.discountValue,
+      minOrderValue: v.minOrderValue,
+      maxDiscount: v.maxDiscount,
+      expiresAt: v.expiresAt,
+      missionTask: v.missionTask
+    })),
+  });
+});
+
+export const huntVoucher = asyncHandler(async (req, res) => {
+  const { voucherId, proofImage } = req.body;
+  
+  const voucher = await Voucher.findById(voucherId);
+  if (!voucher || !isVoucherActive(voucher)) {
+    throw new AppError(400, 'Voucher không khả dụng để săn.');
+  }
+
+  const existing = await UserVoucher.findOne({ user: req.user._id, voucher: voucherId });
+  if (existing) {
+    if (existing.status === 'pending') throw new AppError(400, 'Bạn đã gửi minh chứng, vui lòng chờ Admin duyệt.');
+    if (existing.status === 'approved') throw new AppError(400, 'Bạn đã sở hữu voucher này rồi.');
+    // If rejected, let them try again
+  }
+
+  if (existing && existing.status === 'rejected') {
+    existing.status = 'pending';
+    existing.proofImage = proofImage;
+    existing.huntedAt = new Date();
+    await existing.save();
+  } else {
+    await UserVoucher.create({
+      user: req.user._id,
+      voucher: voucherId,
+      proofImage,
+      status: 'pending'
+    });
+  }
+
+  res.status(201).json({
+    message: 'Gửi minh chứng thành công! Vui lòng chờ Admin duyệt để nhận mã.',
+  });
+});
+
+export const getUserVouchers = asyncHandler(async (req, res) => {
+  const userVouchers = await UserVoucher.find({ 
+    user: req.user._id, 
+    isUsed: false,
+    status: 'approved' // Only show approved ones
+  })
+    .populate('voucher')
+    .lean();
+
+  res.json({
+    data: userVouchers.filter(uv => uv.voucher && uv.voucher.isActive).map(uv => ({
+      code: uv.voucher.code,
+      description: uv.voucher.description,
+      discountType: uv.voucher.discountType,
+      discountValue: uv.voucher.discountValue,
+      minOrderValue: uv.voucher.minOrderValue,
+      maxDiscount: uv.voucher.maxDiscount,
+      expiresAt: uv.voucher.expiresAt,
+      earnedAt: uv.huntedAt
+    }))
+  });
+});
+
+// Admin Review APIs
+export const getPendingProofs = asyncHandler(async (req, res) => {
+  const proofs = await UserVoucher.find({ status: 'pending' })
+    .populate('user', 'fullName phone email')
+    .populate('voucher')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  res.json({ data: proofs });
+});
+
+export const reviewProof = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { status, adminNote } = req.body; // status: 'approved' or 'rejected'
+
+  const userVoucher = await UserVoucher.findById(id);
+  if (!userVoucher) throw new AppError(404, 'Không tìm thấy minh chứng.');
+
+  userVoucher.status = status;
+  userVoucher.adminNote = adminNote;
+  await userVoucher.save();
+
+  res.json({ message: `Đã ${status === 'approved' ? 'duyệt' : 'từ chối'} minh chứng này.` });
 });
 
 export const getAdminVoucherDetail = asyncHandler(async (req, res) => {
@@ -157,6 +294,20 @@ export const applyVoucher = asyncHandler(async (req, res) => {
 
   if (!voucher || !isVoucherActive(voucher)) {
     throw new AppError(400, 'Mã giảm giá không hợp lệ hoặc đã hết hạn.');
+  }
+
+  if (voucher.isHuntedOnly) {
+    if (!req.user) {
+      throw new AppError(401, 'Vui lòng đăng nhập để sử dụng mã ưu đãi đặc biệt này.');
+    }
+    const userVoucher = await UserVoucher.findOne({ 
+      user: req.user._id, 
+      voucher: voucher._id,
+      status: 'approved' // CHECK STATUS
+    });
+    if (!userVoucher) {
+      throw new AppError(400, 'Mã này yêu cầu bạn phải săn voucher và được Admin duyệt mới có thể sử dụng.');
+    }
   }
 
   if (req.user && voucher.usageLimitPerUser > 0) {

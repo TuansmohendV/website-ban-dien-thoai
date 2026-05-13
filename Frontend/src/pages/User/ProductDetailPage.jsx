@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { 
     ChevronRight, ChevronLeft, Star, Heart, Share2, ShieldCheck, Truck, RefreshCw, 
     MapPin, Video, Image as ImageIcon, Info, Plus, ShoppingCart, Settings, 
-    FileText, Wallet, Check, Cpu, Monitor, Zap, HardDrive, Smartphone, X, Box
+    FileText, Wallet, Check, Cpu, Monitor, HardDrive, Smartphone, X, Box
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCart } from '../../context/CartContext';
@@ -51,6 +51,7 @@ const ProductDetailPage = () => {
     const [isPromoExpanded, setIsPromoExpanded] = useState(false);
     const [selectedPayment, setSelectedPayment] = useState(0);
     const [showBuyModal, setShowBuyModal] = useState(false);
+
     const [reviewRating, setReviewRating] = useState(0);
     const [reviewContent, setReviewContent] = useState('');
     const [isSubmittingReview, setIsSubmittingReview] = useState(false);
@@ -151,6 +152,9 @@ const ProductDetailPage = () => {
         };
 
         loadProduct();
+
+        // Load Vouchers
+
 
         // Socket.io Real-time Stock Update
         socket.emit('join_product', id);
@@ -767,6 +771,7 @@ const ProductDetailPage = () => {
                                 <span className="text-[#cc0000] text-[28px] font-black">{formatPrice(selectedStorage.price)}</span>
                                 <span className="text-gray-400 line-through text-[14px] mb-1">{formatPrice(selectedStorage.price * 1.2)}</span>
                             </div>
+
                             
                             <div className="space-y-4">
                                 <h4 className="text-[13px] font-bold">Lựa chọn phiên bản</h4>

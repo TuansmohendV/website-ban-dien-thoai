@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { Search, MapPin, User, ShoppingCart } from 'lucide-react';
+import { Search, MapPin, User, ShoppingCart, Ticket, Zap } from 'lucide-react';
 import api from '../lib/api';
 import { normalizeProduct } from '../lib/products';
 
@@ -156,10 +156,10 @@ const Navbar = () => {
 
     return (
         <nav className="w-full z-50 flex flex-col font-sans sticky top-10 sm:top-11 bg-[#f0f2f5] py-2.5 md:py-4">
-            <div className="max-w-[1200px] mx-auto px-4 w-full">
+            <div className="max-w-[1400px] mx-auto px-4 w-full">
                 
                 {/* Main Row */}
-                <div className="flex flex-wrap lg:flex-nowrap items-center gap-2.5 lg:gap-x-10 h-auto lg:h-[46px]">
+                <div className="flex flex-wrap lg:flex-nowrap items-center gap-2.5 lg:gap-x-6 h-auto lg:h-[46px]">
                     
                     {/* 1. Logo (Customizable) */}
                     <Link to="/" className="flex items-center gap-2 shrink-0 group h-full">
@@ -186,7 +186,7 @@ const Navbar = () => {
                     <div className="w-full lg:flex-1 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 lg:gap-x-6 h-auto lg:h-full min-w-0">
                         
                         {/* Search Bar Wrapper */}
-                        <div className="w-full lg:max-w-[680px] lg:flex-1 flex flex-col relative h-[42px] sm:h-[44px] lg:h-full min-w-0" ref={suggestionRef}>
+                        <div className="w-full lg:flex-1 flex flex-col relative h-[42px] sm:h-[44px] lg:h-full min-w-0" ref={suggestionRef}>
                             <div className="relative group flex items-center h-full">
                                 <input 
                                     type="text" 
@@ -243,12 +243,14 @@ const Navbar = () => {
                         </div>
 
                         {/* Right Actions */}
-                        <div className="flex items-center justify-end gap-2 sm:gap-4 lg:gap-7 shrink-0 h-9 sm:h-11 lg:h-full min-w-0">
+                        <div className="flex items-center justify-end gap-2 sm:gap-4 lg:gap-4 shrink-0 h-9 sm:h-11 lg:h-full min-w-0">
                             {/* Location */}
                             <Link to="/store-locator" className="flex items-center gap-1.5 cursor-pointer group h-full focus-within:ring-2 ring-[#008d71] rounded-md transition-shadow">
                                 <MapPin size={20} className="text-[#008d71]" strokeWidth={1.5} />
                                 <span className="hidden md:inline text-[15px] font-semibold text-[#008d71] whitespace-nowrap">Tìm siêu thị</span>
                             </Link>
+
+
 
                             {/* User Profile */}
                             <Link to={user ? "/profile" : "/login"} className="flex items-center gap-1.5 cursor-pointer group h-full">
@@ -265,6 +267,13 @@ const Navbar = () => {
                                 </span>
                             </Link>
 
+                            {/* My Vouchers Wallet */}
+                            {user && (
+                                <Link to="/my-vouchers" className="flex items-center gap-1.5 cursor-pointer group h-full px-2 hover:bg-slate-100 rounded-lg transition-all" title="Ví Voucher của tôi">
+                                    <Ticket size={20} className="text-slate-700" strokeWidth={1.5} />
+                                </Link>
+                            )}
+
                             {/* Admin Shortcut (Temporary for testing) */}
                             {(user?.role === 'admin' || user?.isAdmin) && (
                                 <Link to="/admin" className="hidden xl:flex items-center gap-1.5 px-3 py-1 bg-[#008d71]/10 rounded-full hover:bg-[#008d71]/20 transition-all">
@@ -272,6 +281,12 @@ const Navbar = () => {
                                     <span className="text-[13px] font-bold text-[#008d71]">Admin Panel</span>
                                 </Link>
                             )}
+
+                            {/* Voucher Hunting - next to Cart */}
+                            <Link to="/hunt-vouchers" className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-400 hover:bg-amber-500 rounded-full transition-all shadow-sm border border-amber-400 group" title="Săn Voucher">
+                                <Zap size={16} className="text-white" fill="white" />
+                                <span className="text-[12px] font-black text-white whitespace-nowrap uppercase tracking-tight hidden sm:inline">Săn</span>
+                            </Link>
 
                             {/* Simple Cart Bag */}
                             <Link to="/cart" className="flex items-center gap-1.5 p-1 group">
