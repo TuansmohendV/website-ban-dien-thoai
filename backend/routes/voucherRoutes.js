@@ -19,7 +19,7 @@ const router = express.Router();
 
 // Public
 router.get('/', getPublicVouchers);
-router.get('/hunted-list', getHuntedVouchers);
+router.get('/hunted-list', optionalAuth, getHuntedVouchers);
 
 // User routes
 router.post('/apply', optionalAuth, applyVoucher);

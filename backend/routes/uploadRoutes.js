@@ -6,9 +6,11 @@ import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
+const __dirname = path.resolve();
+
 const storage = multer.diskStorage({
   destination(req, file, cb) {
-    const dir = 'public/uploads';
+    const dir = path.join(__dirname, 'public/uploads');
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
@@ -19,15 +21,33 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit
+});
 
-router.post('/image', protect, upload.single('file'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ success: false, message: 'No file uploaded' });
-  }
-  const url = `/uploads/${req.file.filename}`;
+router.post('/image', protect, (req, res) => {
+  console.log('--- Upload Request Started ---');
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
   
-  res.json({ success: true, url });
+  upload.single('file')(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      console.error('Multer Error:', err);
+      return res.status(400).json({ success: false, message: `Multer error: ${err.message}` });
+    } else if (err) {
+      console.error('Upload Error:', err);
+      return res.status(500).json({ success: false, message: `Internal server error: ${err.message}` });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn file ảnh để tải lên.' });
+    }
+
+    const url = `/uploads/${req.file.filename}`;
+    console.log('Upload success:', url);
+    res.json({ success: true, url });
+  });
 });
 
 router.get('/files', protect, (req, res) => {

@@ -6,7 +6,7 @@ import {
   Copy, Check, Loader2, FileUp, MousePointer2
 } from 'lucide-react';
 
-const MediaManagement = () => {
+const MediaManagement = ({ isEmbedded = false, uploadTrigger = 0 }) => {
   const [viewMode, setViewMode] = useState('grid');
   const [selectedItems, setSelectedItems] = useState([]);
   const [activeType, setActiveType] = useState('all');
@@ -19,6 +19,11 @@ const MediaManagement = () => {
 
   const [mediaData, setMediaData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const fetchMedia = async () => {
     try {
@@ -35,7 +40,26 @@ const MediaManagement = () => {
     fetchMedia();
   }, []);
 
-  const filteredMedia = activeType === 'all' ? mediaData : mediaData.filter(m => m.type === activeType);
+  // React to parent's upload trigger
+  useEffect(() => {
+    if (uploadTrigger > 0) {
+      setShowUploadModal(true);
+    }
+  }, [uploadTrigger]);
+
+  const filteredMedia = mediaData.filter(m => {
+    const matchesType = activeType === 'all' || m.type === activeType;
+    const matchesSearch = m.name.toLowerCase().includes(searchTerm.toLowerCase());
+    return matchesType && matchesSearch;
+  });
+
+  const totalPages = Math.ceil(filteredMedia.length / itemsPerPage);
+  const displayedMedia = filteredMedia.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeType, searchTerm]);
 
   const toggleSelect = (id) => {
     setSelectedItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
@@ -88,25 +112,36 @@ const MediaManagement = () => {
   };
 
   return (
-    <div className="management-container">
-      <div className="header-actions">
-        <div>
-          <h1 className="page-title">Thư viện Phương tiện</h1>
-          <p className="page-subtitle">Quản lý tập trung hình ảnh, video và tài liệu của hệ thống.</p>
-        </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
-          {selectedItems.length > 0 && (
-            <button className="btn-primary" style={{ backgroundColor: '#ef4444' }} onClick={() => setMediaData(mediaData.filter(m => !selectedItems.includes(m.id)))}>
-              <Trash2 size={18} /> Xóa {selectedItems.length} mục
+    <div className={`management-container ${isEmbedded ? 'embedded-mode' : ''}`}>
+      {!isEmbedded && (
+        <div className="header-actions">
+          <div>
+            <h1 className="page-title">Thư viện Phương tiện</h1>
+            <p className="page-subtitle">Quản lý tập trung hình ảnh, video và tài liệu của hệ thống.</p>
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            {selectedItems.length > 0 && (
+              <button className="btn-primary" style={{ backgroundColor: '#ef4444' }} onClick={() => { if(window.confirm(`Xóa ${selectedItems.length} mục khỏi giao diện? (Dữ liệu gốc vẫn còn)`)) setMediaData(mediaData.filter(m => !selectedItems.includes(m.id))) }}>
+                <Trash2 size={18} /> Xóa {selectedItems.length} mục
+              </button>
+            )}
+            <button className="btn-primary" onClick={() => setShowUploadModal(true)}>
+              <Upload size={20} /> Tải lên tệp mới
             </button>
-          )}
-          <button className="btn-primary" onClick={() => setShowUploadModal(true)}>
-            <Upload size={20} /> Tải lên tệp mới
-          </button>
+          </div>
         </div>
-      </div>
+      )}
 
-      <div className="media-toolbar card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', padding: '15px 25px !important' }}>
+      <div className="media-toolbar card" style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginBottom: '25px', 
+        padding: '20px 25px !important',
+        background: 'white',
+        border: '1px solid #f1f5f9',
+        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)'
+      }}>
         <div className="filter-group">
           <button className={`btn-tab ${activeType === 'all' ? 'active' : ''}`} onClick={() => setActiveType('all')}>Tất cả</button>
           <button className={`btn-tab ${activeType === 'image' ? 'active' : ''}`} onClick={() => setActiveType('image')}><ImageIcon size={16} /> Hình ảnh</button>
@@ -116,7 +151,7 @@ const MediaManagement = () => {
 
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
           <div className="search-box" style={{ width: '250px' }}>
-            <Search size={18} /><input type="text" placeholder="Tìm tên tệp..." />
+            <Search size={18} /><input type="text" placeholder="Tìm tên tệp..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
           </div>
           <div style={{ display: 'flex', background: '#f1f5f9', padding: '4px', borderRadius: '10px' }}>
             <button onClick={() => setViewMode('grid')} style={{ padding: '8px', border: 'none', borderRadius: '8px', cursor: 'pointer', background: viewMode === 'grid' ? 'white' : 'transparent' }}>
@@ -131,7 +166,7 @@ const MediaManagement = () => {
 
       {viewMode === 'grid' ? (
         <div className="media-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '20px' }}>
-          {filteredMedia.map(item => (
+          {displayedMedia.map(item => (
             <div 
               key={item.id} 
               className={`media-card ${selectedItems.includes(item.id) ? 'selected' : ''}`}
@@ -181,18 +216,85 @@ const MediaManagement = () => {
                </tr>
              </thead>
              <tbody>
-               {filteredMedia.map(item => (
+               {displayedMedia.map(item => (
                  <tr key={item.id} className={selectedItems.includes(item.id) ? 'selected-row' : ''} onClick={() => toggleSelect(item.id)}>
                    <td style={{ paddingLeft: '20px' }}>{selectedItems.includes(item.id) ? <CheckSquare size={18} color="#2563eb" /> : <Square size={18} color="#94a3b8" />}</td>
                    <td><div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><div style={{ width: '32px', height: '32px', borderRadius: '6px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.type === 'image' ? <ImageIcon size={16} /> : item.type === 'video' ? <Video size={16} /> : <File size={16} />}</div><span style={{ fontWeight: '600' }}>{item.name}</span></div></td>
                    <td><span className="badge">{item.type}</span></td><td>{item.size}</td><td>{item.date}</td>
-                   <td><div className="actions-cell"><button className="action-btn view" onClick={() => setPreviewItem(item)}><Eye size={16} /></button><button className="action-btn delete"><Trash2 size={16} /></button></div></td>
+                   <td><div className="actions-cell"><button className="action-btn view" onClick={() => setPreviewItem(item)}><Eye size={16} /></button><button className="action-btn delete" onClick={(e) => { e.stopPropagation(); if(window.confirm('Xóa tệp này khỏi giao diện? (Dữ liệu gốc vẫn còn)')) setMediaData(mediaData.filter(m => m.id !== item.id)) }}><Trash2 size={16} /></button></div></td>
                  </tr>
                ))}
              </tbody>
            </table>
         </div>
       )}
+
+      {/* Smart Pagination Bar */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        padding: '15px 25px', 
+        borderTop: '1px solid #f1f5f9',
+        background: 'white',
+        borderRadius: '16px',
+        marginTop: '25px'
+      }}>
+        <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
+          Hiển thị {Math.min((currentPage - 1) * itemsPerPage + 1, filteredMedia.length)} - {Math.min(currentPage * itemsPerPage, filteredMedia.length)} trên {filteredMedia.length} tệp
+        </span>
+        <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+          <button 
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f8fafc' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
+          >
+            Trước
+          </button>
+          
+          {(() => {
+            const pages = [];
+            const minPagesToShow = 10;
+            let start = 1;
+            let end = Math.max(minPagesToShow, totalPages);
+            
+            if (totalPages > minPagesToShow && currentPage > 6) {
+              start = Math.max(1, currentPage - 5);
+              end = Math.min(totalPages, start + 9);
+              if (end - start < 9) start = Math.max(1, end - 9);
+            } else if (totalPages > minPagesToShow) {
+              end = 10;
+            }
+
+            for (let i = start; i <= end; i++) {
+              pages.push(
+                <button
+                  key={i}
+                  onClick={() => setCurrentPage(i)}
+                  style={{ 
+                    minWidth: '40px', height: '40px', borderRadius: '8px', border: '1px solid',
+                    borderColor: currentPage === i ? '#2563eb' : '#e2e8f0',
+                    background: currentPage === i ? '#2563eb' : 'white',
+                    color: currentPage === i ? 'white' : '#64748b',
+                    fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                  }}
+                >
+                  {i}
+                </button>
+              );
+            }
+            return pages;
+          })()}
+
+          <button 
+            onClick={() => setCurrentPage(p => Math.min(Math.max(10, totalPages), p + 1))}
+            disabled={currentPage >= Math.max(10, totalPages)}
+            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage >= Math.max(10, totalPages) ? '#f8fafc' : 'white', cursor: currentPage >= Math.max(10, totalPages) ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
+          >
+            Sau
+          </button>
+        </div>
+      </div>
 
       {/* Upload Modal */}
       {showUploadModal && (

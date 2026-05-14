@@ -202,14 +202,9 @@ const PromotionManagement = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa mã khuyến mãi này?')) {
-      try {
-        await api.delete(`/api/voucher/admin/${id}`);
-        setPromos(promos.filter(p => p.id !== id));
-      } catch (error) {
-        alert(getApiErrorMessage(error, 'Không thể xóa mã khuyến mãi.'));
-      }
+  const handleDelete = (id) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa mã khuyến mãi này khỏi giao diện? (Dữ liệu trong database vẫn còn)')) {
+      setPromos(promos.filter(p => p.id !== id));
     }
   };
 
@@ -240,9 +235,9 @@ const PromotionManagement = () => {
           <p className="page-subtitle">Tạo mã giảm giá, chương trình ưu đãi và voucher cho khách hàng.</p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <button className="btn-outline" onClick={() => setShowReviewModal(true)} style={{ position: 'relative' }}>
-            <Zap size={20} className="text-amber-500" />
-            Duyệt Voucher {pendingProofs.length > 0 && <span style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#ef4444', color: 'white', fontSize: '10px', padding: '2px 6px', borderRadius: '10px' }}>{pendingProofs.length}</span>}
+          <button className="btn-primary" onClick={() => setShowReviewModal(true)} style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', position: 'relative' }}>
+            <Zap size={20} />
+            Duyệt Voucher {pendingProofs.length > 0 && <span style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#ef4444', color: 'white', fontSize: '10px', minWidth: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, borderRadius: '50%', border: '2px solid white', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{pendingProofs.length}</span>}
           </button>
           <button className="btn-primary" onClick={() => handleOpenModal()}>
             <Plus size={20} />
@@ -361,7 +356,6 @@ const PromotionManagement = () => {
           </table>
         </div>
 
-        {/* Pagination Footer */}
         {filteredPromos.length > 0 && (
           <div className="table-footer" style={{
             padding: '15px 25px',
@@ -369,38 +363,63 @@ const PromotionManagement = () => {
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            background: '#fcfcfd'
+            background: 'white',
+            borderBottomLeftRadius: '16px',
+            borderBottomRightRadius: '16px'
           }}>
-            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
+            <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
               Hiển thị {(currentPage - 1) * promosPerPage + 1}-{Math.min(currentPage * promosPerPage, filteredPromos.length)} trên {filteredPromos.length} mã
             </span>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
               <button 
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                style={{
-                  width: '32px', height: '32px', borderRadius: '8px', border: '1px solid #e2e8f0',
-                  background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1
-                }}
+                style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f8fafc' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
               >
-                <ChevronLeft size={16} />
+                Trước
               </button>
               
-              <span style={{ display: 'flex', alignItems: 'center', padding: '0 10px', fontSize: '0.85rem', fontWeight: '700' }}>
-                Trang {currentPage} / {totalPages}
-              </span>
+              {/* Luôn hiển thị ít nhất 10 trang đầu tiên */}
+              {(() => {
+                const pages = [];
+                const minPagesToShow = 10;
+                let start = 1;
+                let end = Math.max(minPagesToShow, totalPages);
+                
+                if (totalPages > minPagesToShow && currentPage > 6) {
+                  start = Math.max(1, currentPage - 5);
+                  end = Math.min(totalPages, start + 9);
+                  if (end - start < 9) start = Math.max(1, end - 9);
+                } else if (totalPages > minPagesToShow) {
+                  end = 10;
+                }
+
+                for (let i = start; i <= end; i++) {
+                  pages.push(
+                    <button
+                      key={i}
+                      onClick={() => setCurrentPage(i)}
+                      style={{ 
+                        minWidth: '40px', height: '40px', borderRadius: '8px', border: '1px solid',
+                        borderColor: currentPage === i ? '#2563eb' : '#e2e8f0',
+                        background: currentPage === i ? '#2563eb' : 'white',
+                        color: currentPage === i ? 'white' : '#64748b',
+                        fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                      }}
+                    >
+                      {i}
+                    </button>
+                  );
+                }
+                return pages;
+              })()}
 
               <button 
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                style={{
-                  width: '32px', height: '32px', borderRadius: '8px', border: '1px solid #e2e8f0',
-                  background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1
-                }}
+                onClick={() => setCurrentPage(p => Math.min(Math.max(10, totalPages), p + 1))}
+                disabled={currentPage >= Math.max(10, totalPages)}
+                style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage >= Math.max(10, totalPages) ? '#f8fafc' : 'white', cursor: currentPage >= Math.max(10, totalPages) ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
               >
-                <ChevronRight size={16} />
+                Sau
               </button>
             </div>
           </div>
@@ -516,7 +535,7 @@ const PromotionManagement = () => {
       {/* Review Proof Modal */}
       {showReviewModal && (
         <div className="modal-overlay" onClick={() => setShowReviewModal(false)}>
-          <div className="modal-content" style={{ maxWidth: '900px' }} onClick={e => e.stopPropagation()}>
+          <div className="modal-content" style={{ maxWidth: '1000px' }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Phê duyệt minh chứng Săn Voucher</h2>
               <button className="close-btn" onClick={() => setShowReviewModal(false)}><X size={24} /></button>
@@ -557,8 +576,8 @@ const PromotionManagement = () => {
                             </div>
                           </td>
                           <td>
-                            <a href={p.proofImage} target="_blank" rel="noreferrer" style={{ display: 'block', width: '60px', height: '40px', borderRadius: '4px', overflow: 'hidden', border: '1px solid #e2e8f0' }}>
-                              <img src={p.proofImage} alt="Proof" style={{ width: '100%', height: '100%', objectCover: 'cover' }} />
+                            <a href={p.proofImage} target="_blank" rel="noreferrer" style={{ display: 'block', width: '150px', height: '100px', borderRadius: '12px', overflow: 'hidden', border: '2px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                              <img src={p.proofImage} alt="Proof" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             </a>
                           </td>
                           <td>
@@ -567,22 +586,48 @@ const PromotionManagement = () => {
                               placeholder="Nhập lý do nếu từ chối..." 
                               value={reviewNote}
                               onChange={(e) => setReviewNote(e.target.value)}
-                              style={{ width: '100%', padding: '6px 10px', fontSize: '12px', border: '1px solid #e2e8f0', borderRadius: '6px' }}
+                              style={{ width: '100%', padding: '12px 16px', fontSize: '16px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none' }}
                             />
                           </td>
                           <td>
-                            <div className="flex gap-2">
+                            <div style={{ display: 'flex', gap: '12px' }}>
                               <button 
                                 onClick={() => handleReview(p._id, 'approved')}
                                 disabled={isProcessingReview}
-                                className="px-3 py-1.5 bg-emerald-500 text-white text-[11px] font-black rounded-lg hover:bg-emerald-600 transition-all"
+                                style={{ 
+                                  padding: '12px 24px', 
+                                  background: '#10b981', 
+                                  color: 'white', 
+                                  fontSize: '16px', 
+                                  fontWeight: '800', 
+                                  borderRadius: '12px',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s',
+                                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
+                                }}
+                                onMouseOver={(e) => e.target.style.background = '#059669'}
+                                onMouseOut={(e) => e.target.style.background = '#10b981'}
                               >
                                 Duyệt
                               </button>
                               <button 
                                 onClick={() => handleReview(p._id, 'rejected')}
                                 disabled={isProcessingReview}
-                                className="px-3 py-1.5 bg-red-500 text-white text-[11px] font-black rounded-lg hover:bg-red-600 transition-all"
+                                style={{ 
+                                  padding: '12px 24px', 
+                                  background: '#ef4444', 
+                                  color: 'white', 
+                                  fontSize: '16px', 
+                                  fontWeight: '800', 
+                                  borderRadius: '12px',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s',
+                                  boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)'
+                                }}
+                                onMouseOver={(e) => e.target.style.background = '#dc2626'}
+                                onMouseOut={(e) => e.target.style.background = '#ef4444'}
                               >
                                 Từ chối
                               </button>

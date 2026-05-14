@@ -178,19 +178,14 @@ const CategoryManagement = () => {
     }
   };
 
-  const handleDelete = async (cat) => {
+  const handleDelete = (cat) => {
     if (cat.isDerived) {
       alert('Danh mục này đang được suy ra từ sản phẩm trong database. Hãy tạo danh mục chính thức trước khi xóa.');
       return;
     }
 
-    if (window.confirm('Bạn có chắc chắn muốn xóa danh mục này?')) {
-      try {
-        await api.delete(`/api/categories/${cat.id}`);
-        setCategories(categories.filter(c => c.id !== cat.id));
-      } catch (error) {
-        alert(getApiErrorMessage(error, 'Không thể xóa danh mục.'));
-      }
+    if (window.confirm('Bạn có chắc chắn muốn xóa danh mục này khỏi giao diện? (Dữ liệu trong database vẫn còn)')) {
+      setCategories(categories.filter(c => c.id !== cat.id));
     }
   };
 
@@ -384,40 +379,72 @@ const CategoryManagement = () => {
             </table>
           </div>
           
-          {/* Pagination */}
           <div style={{ 
             display: 'flex', 
             justifyContent: 'space-between', 
             alignItems: 'center', 
             padding: '15px 20px', 
             borderTop: '1px solid #f1f5f9',
-            background: '#f8fafc',
+            background: 'white',
             borderBottomLeftRadius: '16px',
             borderBottomRightRadius: '16px'
           }}>
-            <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
+            <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
               Hiển thị {filteredCats.length > 0 ? indexOfFirstCat + 1 : 0} - {Math.min(indexOfLastCat, filteredCats.length)} trong {filteredCats.length} danh mục
             </span>
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
               <button 
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                style={{ padding: '6px 12px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f1f5f9' : 'white', borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: currentPage === 1 ? '#94a3b8' : '#1e293b' }}
+                style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f8fafc' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
               >
                 Trước
               </button>
-              <span style={{ display: 'flex', alignItems: 'center', padding: '0 10px', fontSize: '0.9rem', fontWeight: '600', color: '#1e293b' }}>
-                Trang {currentPage} / {Math.max(1, totalPages)}
-              </span>
-              <button 
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage >= totalPages}
-                style={{ padding: '6px 12px', border: '1px solid #e2e8f0', background: currentPage >= totalPages ? '#f1f5f9' : 'white', borderRadius: '6px', cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer', color: currentPage >= totalPages ? '#94a3b8' : '#1e293b' }}
-              >
-                Sau
-              </button>
-            </div>
+              
+            {/* Luôn hiển thị ít nhất 10 trang đầu tiên */}
+            {(() => {
+              const pages = [];
+              const minPagesToShow = 10;
+              let start = 1;
+              let end = Math.max(minPagesToShow, totalPages);
+              
+              if (totalPages > minPagesToShow && currentPage > 6) {
+                start = Math.max(1, currentPage - 5);
+                end = Math.min(totalPages, start + 9);
+                if (end - start < 9) start = Math.max(1, end - 9);
+              } else if (totalPages > minPagesToShow) {
+                end = 10;
+              }
+
+              for (let i = start; i <= end; i++) {
+                pages.push(
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i)}
+                    style={{ 
+                      minWidth: '40px', height: '40px', borderRadius: '8px', border: '1px solid',
+                      borderColor: currentPage === i ? '#2563eb' : '#e2e8f0',
+                      background: currentPage === i ? '#2563eb' : 'white',
+                      color: currentPage === i ? 'white' : '#64748b',
+                      fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                    }}
+                  >
+                    {i}
+                  </button>
+                );
+              }
+              return pages;
+            })()}
+
+            <button 
+              onClick={() => setCurrentPage(p => Math.min(Math.max(10, totalPages), p + 1))}
+              disabled={currentPage >= Math.max(10, totalPages)}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage >= Math.max(10, totalPages) ? '#f8fafc' : 'white', cursor: currentPage >= Math.max(10, totalPages) ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
+            >
+              Sau
+            </button>
           </div>
+        </div>
         </div>
 
         {/* Info Grid */}

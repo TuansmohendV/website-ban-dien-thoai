@@ -79,28 +79,29 @@ export const getPublicVouchers = asyncHandler(async (req, res) => {
 });
 
 export const getHuntedVouchers = asyncHandler(async (req, res) => {
-  const now = new Date();
+  const vouchers = await Voucher.find({ isHuntedOnly: true, isActive: true }).lean();
   
-  const vouchers = await Voucher.find({
-    isActive: true,
-    isHuntedOnly: true,
-    $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: now } }],
-    $or: [{ startsAt: { $exists: false } }, { startsAt: { $lt: now } }],
-  })
-    .sort({ createdAt: -1 })
-    .lean();
+  // If user is logged in, check their hunt status for each voucher
+  let userHuntStatuses = {};
+  if (req.user) {
+    const userVouchers = await UserVoucher.find({ user: req.user._id }).lean();
+    userVouchers.forEach(uv => {
+      userHuntStatuses[uv.voucher.toString()] = uv.status;
+    });
+  }
 
   res.json({
-    data: vouchers.map((v) => ({
+    data: vouchers.map(v => ({
       _id: v._id,
       code: v.code,
       description: v.description,
       discountType: v.discountType,
       discountValue: v.discountValue,
       minOrderValue: v.minOrderValue,
-      maxDiscount: v.maxDiscount,
+      maxDiscountValue: v.maxDiscount,
       expiresAt: v.expiresAt,
-      missionTask: v.missionTask
+      missionTask: v.missionTask,
+      userStatus: userHuntStatuses[v._id.toString()] || 'none' // 'none', 'pending', 'approved', 'rejected'
     })),
   });
 });
@@ -140,16 +141,24 @@ export const huntVoucher = asyncHandler(async (req, res) => {
 });
 
 export const getUserVouchers = asyncHandler(async (req, res) => {
+  console.log('Fetching vouchers for user:', req.user._id);
+  
   const userVouchers = await UserVoucher.find({ 
     user: req.user._id, 
     isUsed: false,
-    status: 'approved' // Only show approved ones
+    status: 'approved' 
   })
     .populate('voucher')
     .lean();
 
-  res.json({
-    data: userVouchers.filter(uv => uv.voucher && uv.voucher.isActive).map(uv => ({
+  console.log(`Found ${userVouchers.length} approved vouchers for user.`);
+
+  // We should show the voucher even if it's not "active" for new hunts, 
+  // as long as the user has already successfully hunted it.
+  const filteredData = userVouchers
+    .filter(uv => uv.voucher) // Just ensure the voucher record exists
+    .map(uv => ({
+      _id: uv._id,
       code: uv.voucher.code,
       description: uv.voucher.description,
       discountType: uv.voucher.discountType,
@@ -158,7 +167,10 @@ export const getUserVouchers = asyncHandler(async (req, res) => {
       maxDiscount: uv.voucher.maxDiscount,
       expiresAt: uv.voucher.expiresAt,
       earnedAt: uv.huntedAt
-    }))
+    }));
+
+  res.json({
+    data: filteredData
   });
 });
 

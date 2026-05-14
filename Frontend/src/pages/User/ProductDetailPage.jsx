@@ -32,6 +32,7 @@ const ProductDetailPage = () => {
     const resultRef = useRef(null);
     const specsRef = useRef(null);
     const descriptionRef = useRef(null);
+    const videoRef = useRef(null);
 
     const [product, setProduct] = useState(null);
     const [relatedProducts, setRelatedProducts] = useState([]);
@@ -227,6 +228,43 @@ const ProductDetailPage = () => {
             ),
         [searchQuery, tradeInProducts]
     );
+
+    const videoUrls = useMemo(() => {
+        let urls = [];
+        
+        // Priority 1: Use dedicated videoUrl array field
+        if (Array.isArray(product?.videoUrl) && product.videoUrl.length > 0) {
+            product.videoUrl.forEach(url => {
+                let embedId = '';
+                if (url.includes('v=')) {
+                    embedId = url.split('v=')[1].split('&')[0];
+                } else if (url.includes('be/')) {
+                    embedId = url.split('be/')[1].split('?')[0];
+                } else if (url.includes('embed/')) {
+                    embedId = url.split('embed/')[1].split('?')[0];
+                }
+                
+                if (embedId) urls.push(`https://www.youtube-nocookie.com/embed/${embedId}`);
+                else if (url.includes('youtube') && url.includes('embed')) urls.push(url);
+            });
+        }
+
+        // Priority 2: Fallback to extracting from description if array is empty
+        if (urls.length === 0 && product?.description) {
+            const matches = [...product.description.matchAll(/src="([^"]+youtube(?:-nocookie)?\.com\/embed\/([^"\s?]+)[^"]*)"/gi)];
+            matches.forEach(match => {
+                urls.push(match[1].replace('youtube.com', 'youtube-nocookie.com'));
+            });
+        }
+        
+        return [...new Set(urls)]; // Remove duplicates
+    }, [product?.videoUrl, product?.description]);
+
+    const cleanDescription = useMemo(() => {
+        if (!product?.description) return '';
+        // Remove iframe tags to avoid double video display and link-leak issues
+        return product.description.replace(/<iframe[^>]*>.*?<\/iframe>/gi, '');
+    }, [product?.description]);
 
     // Auto-slide for cross-sell
     useEffect(() => {
@@ -561,7 +599,23 @@ const ProductDetailPage = () => {
                             
                             {/* Action Buttons below image */}
                             <div className="flex justify-center gap-4 mt-6">
-                                <button className="flex flex-col items-center gap-1 group">
+                                <button 
+                                    onClick={() => {
+                                        if (videoRef.current) {
+                                            videoRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        } else {
+                                            const videoElement = descriptionRef.current?.querySelector('.video-wrapper');
+                                            if (videoElement) {
+                                                videoElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                if (!isDescriptionExpanded) setIsDescriptionExpanded(true);
+                                            } else {
+                                                descriptionRef.current?.scrollIntoView({ behavior: 'smooth' });
+                                            }
+                                        }
+                                    }}
+                                    className="flex flex-col items-center gap-1 group"
+                                    style={{ display: videoUrls.length > 0 ? 'flex' : 'none' }}
+                                >
                                     <div className="w-12 h-12 rounded-xl border border-gray-200 flex items-center justify-center group-hover:border-[#00917a] group-hover:text-[#00917a] transition-all">
                                         <Video size={20} />
                                     </div>
@@ -1126,6 +1180,29 @@ const ProductDetailPage = () => {
                     </div>
                 </div>
 
+                {/* VIDEO SECTION - Dynamic Rendering */}
+                {videoUrls.length > 0 && (
+                    <section ref={videoRef} className="mt-10">
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                            <h2 className="text-[18px] font-bold text-[#333] mb-5">
+                                {videoUrls.length > 1 ? `Danh sách Video về ${product.name}` : `Video về ${product.name}`}
+                            </h2>
+                            <div className={`grid gap-6 ${videoUrls.length > 1 ? 'grid-cols-1 md:grid-cols-2' : 'max-w-[900px] mx-auto'}`}>
+                                {videoUrls.map((url, index) => (
+                                    <div key={index} className="video-wrapper">
+                                        <iframe 
+                                            src={url} 
+                                            title={`Video ${product.name} ${index + 1}`}
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                            allowFullScreen
+                                        ></iframe>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </section>
+                )}
+
                 {/* PRODUCT INFO SECTION - FULL WIDTH BENEATH COLUMNS */}
                 <div className="mt-10">
                     <div ref={descriptionRef} className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 relative group">
@@ -1166,21 +1243,30 @@ const ProductDetailPage = () => {
                                 </ul>
                             </div>
 
-                            {/* Content Area */}
-                            <div className="space-y-12 max-w-[1200px] mx-auto px-10 pb-20">
-                                <p className="text-[18px] leading-relaxed text-gray-700 text-center">
-                                    <strong className="text-[#333] font-black">{product.name}</strong> là sản phẩm đột phá thuộc phân khúc cao cấp của PhoneSin, tập trung vào trải nghiệm người dùng hoàn mỹ và công nghệ tương lai. 
-                                </p>
-                                <div className="text-center space-y-6">
-                                    <img src={product.image} className="w-full max-w-[1000px] mx-auto rounded-3xl shadow-2xl border border-gray-100 hover:scale-[1.01] transition-transform duration-500" alt="Detail" />
-                                    <p className="text-[15px] italic text-gray-500 font-medium">Hình ảnh thực tế sắc nét của {product.name}</p>
-                                </div>
+                            {/* Content Area - Rendering Real Product Description */}
+                            <div className="space-y-8 max-w-[1200px] mx-auto px-4 md:px-10 pb-20">
+                                <div 
+                                    className="product-description-content"
+                                    dangerouslySetInnerHTML={{ __html: cleanDescription }}
+                                    style={{ 
+                                        fontSize: '17px', 
+                                        lineHeight: '1.8', 
+                                        color: '#374151'
+                                    }}
+                                />
+                                
+                                {/* Fallback if description is very short or missing images */}
+                                {!product.description?.includes('<img') && (
+                                    <div className="text-center space-y-6 mt-10">
+                                        <img src={product.image} className="w-full max-w-[800px] mx-auto rounded-3xl shadow-xl border border-gray-100" alt="Product Detail" />
+                                        <p className="text-[15px] italic text-gray-500 font-medium">Hình ảnh minh họa sản phẩm {product.name}</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
-                        {/* EXPAND/COLLAPSE BUTTON */}
                         <div className={`${!isDescriptionExpanded 
-                            ? 'absolute bottom-0 left-0 w-full flex justify-center pb-10 pt-40 bg-gradient-to-t from-white via-white/95 to-transparent z-20' 
+                            ? 'absolute bottom-0 left-0 w-full flex justify-center pb-10 pt-40 bg-gradient-to-t from-white via-white/95 to-transparent z-20 pointer-events-none' 
                             : 'relative flex justify-center py-10 bg-white border-t border-gray-50 z-20'}`}>
                             <button 
                                 onClick={() => {
@@ -1189,7 +1275,7 @@ const ProductDetailPage = () => {
                                         descriptionRef.current?.scrollIntoView({ behavior: 'smooth' });
                                     }
                                 }}
-                                className="bg-white border-2 border-gray-300 text-[#333] px-20 py-3.5 rounded-xl text-[15px] font-black uppercase flex items-center gap-6 hover:bg-black hover:text-white hover:border-black transition-all shadow-xl active:scale-95 group"
+                                className="bg-white border-2 border-gray-300 text-[#333] px-20 py-3.5 rounded-xl text-[15px] font-black uppercase flex items-center gap-6 hover:bg-black hover:text-white hover:border-black transition-all shadow-xl active:scale-95 group pointer-events-auto"
                             >
                                 {isDescriptionExpanded ? (
                                     <><span>Thu gọn nội dung bài viết</span> <ChevronLeft className="rotate-90" size={20} /></>
@@ -1357,12 +1443,6 @@ const ProductDetailPage = () => {
                                         {/* Name */}
                                         <h3 className="text-[13px] font-bold text-[#333] text-center line-clamp-2 mb-3 min-h-[36px] leading-snug">{p.name}</h3>
 
-                                        {/* Price Row */}
-                                        <div className="flex items-center gap-2 mb-2 flex-wrap justify-center">
-                                            <span className="text-[15px] font-black text-[#cc0000]">{formatPrice(p.priceNum)}</span>
-                                            <span className="text-[12px] text-gray-400 line-through">{formatPrice(originalPrice)}</span>
-                                        </div>
-
                                         {/* Final Price Badge */}
                                         <div className="w-full bg-[#fff0f0] border border-red-100 rounded-lg px-3 py-2 text-center mb-2">
                                             <p className="text-[11px] font-bold text-[#cc0000] uppercase">Giá cuối:</p>
@@ -1390,36 +1470,8 @@ const ProductDetailPage = () => {
                     </div>
                 </section>
 
-                {/* VIDEO SECTION */}
-                <section className="mt-10">
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                        <h2 className="text-[18px] font-bold text-[#333] mb-5">Video về {product.name}</h2>
-                        <div className="flex flex-col sm:flex-row gap-6 items-start">
-                            {/* Video Thumbnail */}
-                            <div className="relative group cursor-pointer shrink-0">
-                                <div className="w-[240px] h-[145px] rounded-xl overflow-hidden relative bg-black">
-                                    <img
-                                        src={product.image}
-                                        alt={`Video ${product.name}`}
-                                        className="w-full h-full object-cover opacity-80 group-hover:opacity-70 transition-opacity"
-                                    />
-                                    {/* Play Button Overlay */}
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <div className="w-14 h-14 bg-white/90 rounded-full flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
-                                            <div className="w-0 h-0 border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent border-l-[18px] border-l-[#cc0000] ml-1.5" />
-                                        </div>
-                                    </div>
-                                    {/* Duration */}
-                                    <div className="absolute bottom-2 right-2 bg-black/80 text-white text-[11px] font-bold px-1.5 py-0.5 rounded">3:24</div>
-                                </div>
-                                {/* Video Title below thumbnail */}
-                                <p className="text-[13px] font-bold text-[#00917a] hover:underline cursor-pointer mt-2 max-w-[240px] leading-snug">
-                                    {product.name} | Titan Durability
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+
+
 
                 {/* NEWS SECTION */}
                 <section className="mt-6">

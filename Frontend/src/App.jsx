@@ -53,11 +53,12 @@ import FeedbackManagement from './pages/Admin/FeedbackManagement';
 import PromotionManagement from './pages/Admin/PromotionManagement';
 import IconManagement from './pages/Admin/IconManagement';
 import BannerManagement from './pages/Admin/BannerManagement';
-import NewsManagement from './pages/Admin/NewsManagement';
 import SystemSettings from './pages/Admin/SystemSettings';
 import MediaManagement from './pages/Admin/MediaManagement';
 import NotificationManagement from './pages/Admin/NotificationManagement';
 import HashtagManagement from './pages/Admin/HashtagManagement';
+import InventoryManagement from './pages/Admin/InventoryManagement';
+import LibraryManagement from './pages/Admin/LibraryManagement';
 
 function App() {
   // Sync Brand Assets (Logo, Favicon, Title) from localStorage
@@ -141,13 +142,14 @@ function App() {
               <Route path="products" element={<ProductManagement />} />
               <Route path="categories" element={<CategoryManagement />} />
               <Route path="orders" element={<OrderManagement />} />
+              <Route path="inventory" element={<InventoryManagement />} />
               <Route path="users" element={<UserManagement />} />
               <Route path="promotions" element={<PromotionManagement />} />
               <Route path="feedback" element={<FeedbackManagement />} />
               <Route path="icons" element={<IconManagement />} />
               <Route path="banners" element={<BannerManagement />} />
-              <Route path="news" element={<NewsManagement />} />
               <Route path="media" element={<MediaManagement />} />
+              <Route path="library" element={<LibraryManagement />} />
               <Route path="settings" element={<SystemSettings />} />
               <Route path="notifications" element={<NotificationManagement />} />
               <Route path="hashtags" element={<HashtagManagement />} />

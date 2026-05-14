@@ -17,6 +17,10 @@ const NotificationManagement = () => {
   const [activeFilter, setActiveFilter] = useState('all');
   const primaryColor = localStorage.getItem('primaryColor') || '#2563eb';
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
   const notifications = [
     { id: 1, type: 'fraud', title: 'CẢNH BÁO LỪA ĐẢO!', content: 'Phát hiện hành vi gian lận thanh toán từ địa chỉ IP: 192.168.1.45. Cần kiểm tra ngay!', time: '2 phút trước', status: 'unread' },
     { id: 2, type: 'order', title: 'Đơn hàng mới #1294', content: 'Khách hàng Nguyễn Văn A vừa đặt mua iPhone 15 Pro Max.', time: '15 phút trước', status: 'unread' },
@@ -24,7 +28,22 @@ const NotificationManagement = () => {
     { id: 4, type: 'fraud', title: 'Truy cập bất thường', content: 'Nhiều yêu cầu đăng nhập sai liên tiếp từ tài khoản: admin_test.', time: '3 giờ trước', status: 'read' },
     { id: 5, type: 'order', title: 'Đơn hàng đã hoàn thành', content: 'Đơn hàng #1280 đã được giao thành công cho khách hàng.', time: '5 giờ trước', status: 'read' },
     { id: 6, type: 'system', title: 'Cập nhật hệ thống', content: 'Phiên bản v2.4.0 đã được triển khai thành công với các bản vá bảo mật mới.', time: '1 ngày trước', status: 'read' },
+    // Mocking more for pagination demo if needed, but the logic will work regardless
   ];
+
+  const filteredNotifs = notifications.filter(n => {
+    if (activeFilter === 'all') return true;
+    if (activeFilter === 'unread') return n.status === 'unread';
+    return n.type === activeFilter;
+  });
+
+  const totalPages = Math.ceil(filteredNotifs.length / itemsPerPage);
+  const displayedNotifs = filteredNotifs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Reset page on filter change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFilter]);
 
   const getIcon = (type) => {
     switch (type) {
@@ -78,7 +97,7 @@ const NotificationManagement = () => {
 
       {/* Notification List */}
       <div className="notif-full-list" style={{ background: 'white', borderRadius: '16px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-        {notifications.map((notif) => (
+        {displayedNotifs.map((notif) => (
           <div 
             key={notif.id} 
             className="notif-full-item"
@@ -113,12 +132,75 @@ const NotificationManagement = () => {
           </div>
         ))}
 
-        {/* Pagination */}
-        <div style={{ padding: '20px 25px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
-          <span style={{ fontSize: '14px', color: '#64748b' }}>Hiển thị 1 - 6 của 24 thông báo</span>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button disabled style={{ padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#cbd5e1' }}><ChevronLeft size={18} /></button>
-            <button style={{ padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b' }}><ChevronRight size={18} /></button>
+        {displayedNotifs.length === 0 && (
+          <div style={{ padding: '60px', textAlign: 'center', color: '#94a3b8' }}>
+            <Bell size={48} style={{ marginBottom: '15px', opacity: 0.2 }} />
+            <p>Không có thông báo nào trong mục này.</p>
+          </div>
+        )}
+
+        {/* Smart Pagination Bar */}
+        <div style={{ 
+          padding: '20px 25px', 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          background: 'white',
+          borderTop: '1px solid #f1f5f9'
+        }}>
+          <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
+            Hiển thị {Math.min((currentPage - 1) * itemsPerPage + 1, filteredNotifs.length)} - {Math.min(currentPage * itemsPerPage, filteredNotifs.length)} trên {filteredNotifs.length} thông báo
+          </span>
+          <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+            <button 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f8fafc' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
+            >
+              Trước
+            </button>
+            
+            {(() => {
+              const pages = [];
+              const minPagesToShow = 10;
+              let start = 1;
+              let end = Math.max(minPagesToShow, totalPages);
+              
+              if (totalPages > minPagesToShow && currentPage > 6) {
+                start = Math.max(1, currentPage - 5);
+                end = Math.min(totalPages, start + 9);
+                if (end - start < 9) start = Math.max(1, end - 9);
+              } else if (totalPages > minPagesToShow) {
+                end = 10;
+              }
+
+              for (let i = start; i <= end; i++) {
+                pages.push(
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i)}
+                    style={{ 
+                      minWidth: '40px', height: '40px', borderRadius: '8px', border: '1px solid',
+                      borderColor: currentPage === i ? primaryColor : '#e2e8f0',
+                      background: currentPage === i ? primaryColor : 'white',
+                      color: currentPage === i ? 'white' : '#64748b',
+                      fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                    }}
+                  >
+                    {i}
+                  </button>
+                );
+              }
+              return pages;
+            })()}
+
+            <button 
+              onClick={() => setCurrentPage(p => Math.min(Math.max(10, totalPages), p + 1))}
+              disabled={currentPage >= Math.max(10, totalPages)}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage >= Math.max(10, totalPages) ? '#f8fafc' : 'white', cursor: currentPage >= Math.max(10, totalPages) ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
+            >
+              Sau
+            </button>
           </div>
         </div>
       </div>

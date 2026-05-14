@@ -36,7 +36,7 @@ const MyVouchersPage = () => {
                     </div>
                     <h2 className="text-2xl font-black text-slate-900 mb-2 uppercase italic tracking-tighter">Yêu cầu đăng nhập</h2>
                     <p className="text-gray-500 font-medium mb-8">Vui lòng đăng nhập để xem danh sách voucher bạn đã săn được.</p>
-                    <Link to="/login" className="inline-flex items-center justify-center px-10 py-4 bg-slate-900 text-white font-black rounded-2xl shadow-xl active:scale-95 transition-all uppercase tracking-widest text-sm">Đăng nhập ngay</Link>
+                    <Link to="/login" className="inline-flex items-center justify-center px-10 py-4 bg-blue-600 text-white font-black rounded-2xl shadow-xl active:scale-95 transition-all uppercase tracking-widest text-sm hover:bg-amber-500">Đăng nhập ngay</Link>
                 </div>
             </div>
         );
@@ -55,7 +55,7 @@ const MyVouchersPage = () => {
                             <ChevronRight size={14} className="text-gray-300" />
                             <span className="text-slate-900 font-black">Ví Voucher</span>
                         </div>
-                        <h1 className="text-5xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">Ví Voucher của tôi</h1>
+                        <h1 className="text-5xl font-black text-blue-700 tracking-tighter uppercase italic leading-none">Ví Voucher của tôi</h1>
                         <p className="text-slate-400 text-lg font-medium mt-4 uppercase tracking-[0.2em]">Kho ưu đãi đặc quyền đã thu thập</p>
                     </div>
                     <Link to="/hunt-vouchers" className="px-8 py-4 bg-emerald-500 text-white font-black rounded-2xl shadow-xl shadow-emerald-500/20 hover:bg-emerald-600 transition-all flex items-center gap-3 active:scale-95">
@@ -85,18 +85,6 @@ const MyVouchersPage = () => {
                                     <div key={idx} className={`bg-white rounded-[32px] overflow-hidden flex shadow-xl shadow-slate-200/50 border group hover:scale-[1.02] transition-all duration-300 ${
                                         isMax ? 'border-red-500/30' : 'border-blue-500/30'
                                     }`}>
-                                        {/* Left Side - Decor */}
-                                        <div className={`w-6 relative ${isMax ? 'bg-red-600' : 'bg-blue-600'}`}>
-                                            <div className="absolute top-1/2 -left-3 w-6 h-6 bg-[#f8fafc] rounded-full -translate-y-1/2"></div>
-                                            <div className="absolute top-1/2 -right-3 w-6 h-6 bg-white rounded-full -translate-y-1/2 border border-transparent shadow-inner"></div>
-                                            
-                                            {/* Ticket Holes */}
-                                            <div className="absolute inset-y-0 right-0 flex flex-col justify-around py-4">
-                                                {[...Array(6)].map((_, i) => (
-                                                    <div key={i} className="w-2 h-2 bg-white rounded-full -mr-1"></div>
-                                                ))}
-                                            </div>
-                                        </div>
                                         
                                         {/* Content */}
                                         <div className="flex-1 p-8 flex flex-col xl:flex-row items-center gap-8 relative overflow-hidden">
@@ -139,11 +127,11 @@ const MyVouchersPage = () => {
     
                                             <div className="border-t xl:border-t-0 xl:border-l border-gray-100 pt-6 xl:pt-0 xl:pl-8 flex flex-col items-center justify-center min-w-[150px]">
                                                 <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1 italic">Giá trị giảm</p>
-                                                <p className={`text-4xl font-black tracking-tighter mb-5 italic ${isMax ? 'text-red-600' : 'text-slate-900'}`}>
+                                                <p className={`text-4xl font-black tracking-tighter mb-5 italic ${isMax ? 'text-red-600' : 'text-blue-700'}`}>
                                                     -{v.discountType === 'percentage' ? `${v.discountValue}%` : formatPrice(v.discountValue)}
                                                 </p>
                                                 <Link to="/search" className={`w-full py-3 text-white text-[11px] font-black rounded-xl text-center uppercase tracking-widest shadow-lg transition-all active:scale-95 ${
-                                                    isMax ? 'bg-red-600 hover:bg-black' : 'bg-slate-900 hover:bg-blue-600'
+                                                    isMax ? 'bg-red-600 hover:bg-amber-500' : 'bg-blue-600 hover:bg-amber-500'
                                                 }`}>
                                                     Sử dụng ngay
                                                 </Link>
@@ -161,7 +149,7 @@ const MyVouchersPage = () => {
                         </div>
                         <h2 className="text-3xl font-black text-slate-900 mb-3 uppercase italic tracking-tighter">Ví voucher đang trống</h2>
                         <p className="text-slate-400 text-lg font-medium mb-12">Bạn chưa sở hữu mã giảm giá đặc quyền nào.</p>
-                        <Link to="/hunt-vouchers" className="px-12 py-5 bg-slate-900 text-white font-black rounded-2xl shadow-2xl active:scale-95 transition-all uppercase tracking-widest text-sm flex items-center gap-3 mx-auto w-fit">
+                        <Link to="/hunt-vouchers" className="px-12 py-5 bg-blue-600 text-white font-black rounded-2xl shadow-2xl active:scale-95 transition-all uppercase tracking-widest text-sm flex items-center gap-3 mx-auto w-fit hover:bg-amber-500">
                             <Zap size={20} fill="currentColor" />
                             Đến trang săn Voucher ngay
                         </Link>

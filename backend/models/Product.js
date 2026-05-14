@@ -39,6 +39,7 @@ const productSchema = new mongoose.Schema(
     isFeatured: { type: Boolean, default: false },
     isBestSeller: { type: Boolean, default: false },
     isRecommended: { type: Boolean, default: false },
+    videoUrl: { type: [String], default: [] },
   },
   {
     timestamps: true,

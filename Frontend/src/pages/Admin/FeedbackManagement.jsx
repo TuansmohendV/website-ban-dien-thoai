@@ -50,7 +50,7 @@ const FeedbackManagement = () => {
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 8;
+  const itemsPerPage = 10;
 
   const loadComments = useCallback(async () => {
     setIsLoadingComments(true);
@@ -125,25 +125,15 @@ const FeedbackManagement = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa vĩnh viễn bình luận này?')) {
-      try {
-        await api.delete(`/api/admin/reviews/${id}`);
-        await loadComments();
-      } catch (error) {
-        alert(getApiErrorMessage(error, 'Không thể xóa bình luận.'));
-      }
+  const handleDelete = (id) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa bình luận này khỏi giao diện? (Dữ liệu trong database vẫn còn)')) {
+      setComments(comments.filter(c => c.id !== id));
     }
   };
 
-  const handleDeleteNotification = async (id) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa thông báo này?')) {
-      try {
-        await api.delete(`/api/admin/broadcasts/${id}`);
-        await loadNotifications();
-      } catch (error) {
-        alert(getApiErrorMessage(error, 'Không thể xóa thông báo.'));
-      }
+  const handleDeleteNotification = (id) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa thông báo này khỏi giao diện? (Dữ liệu trong database vẫn còn)')) {
+      setNotifications(notifications.filter(n => n._id !== id));
     }
   };
 
@@ -424,42 +414,72 @@ const FeedbackManagement = () => {
         )}
 
         {/* Pagination Bar */}
-        {totalPages > 1 && (
-          <div style={{ 
-            display: 'flex', justifyContent: 'center', alignItems: 'center', 
-            padding: '25px', gap: '15px', borderTop: '1px solid #f1f5f9' 
-          }}>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          padding: '15px 25px', 
+          borderTop: '1px solid #f1f5f9',
+          background: 'white',
+          borderBottomLeftRadius: '16px',
+          borderBottomRightRadius: '16px'
+        }}>
+          <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
+            Hiển thị {Math.min((currentPage - 1) * itemsPerPage + 1, (activeTab === 'history' ? notifications.length : filteredComments.length))} - {Math.min(currentPage * itemsPerPage, (activeTab === 'history' ? notifications.length : filteredComments.length))} trên {(activeTab === 'history' ? notifications.length : filteredComments.length)} mục
+          </span>
+          <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
             <button 
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className={`p-btn ${currentPage === 1 ? 'disabled' : ''}`}
-              style={{
-                width: '36px', height: '36px', borderRadius: '10px', border: '1px solid #e2e8f0',
-                background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1
-              }}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f8fafc' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
             >
-              <ChevronLeft size={18} />
+              Trước
             </button>
             
-            <span style={{ fontWeight: '700', color: '#1e293b', fontSize: '0.9rem' }}>
-              Trang {currentPage} / {totalPages}
-            </span>
+            {/* Luôn hiển thị ít nhất 10 trang đầu tiên */}
+            {(() => {
+              const pages = [];
+              const minPagesToShow = 10;
+              let start = 1;
+              let end = Math.max(minPagesToShow, totalPages);
+              
+              if (totalPages > minPagesToShow && currentPage > 6) {
+                start = Math.max(1, currentPage - 5);
+                end = Math.min(totalPages, start + 9);
+                if (end - start < 9) start = Math.max(1, end - 9);
+              } else if (totalPages > minPagesToShow) {
+                end = 10;
+              }
+
+              for (let i = start; i <= end; i++) {
+                pages.push(
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i)}
+                    style={{ 
+                      minWidth: '40px', height: '40px', borderRadius: '8px', border: '1px solid',
+                      borderColor: currentPage === i ? '#2563eb' : '#e2e8f0',
+                      background: currentPage === i ? '#2563eb' : 'white',
+                      color: currentPage === i ? 'white' : '#64748b',
+                      fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                    }}
+                  >
+                    {i}
+                  </button>
+                );
+              }
+              return pages;
+            })()}
 
             <button 
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-              className={`p-btn ${currentPage === totalPages ? 'disabled' : ''}`}
-              style={{
-                width: '36px', height: '36px', borderRadius: '10px', border: '1px solid #e2e8f0',
-                background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1
-              }}
+              onClick={() => setCurrentPage(p => Math.min(Math.max(10, totalPages), p + 1))}
+              disabled={currentPage >= Math.max(10, totalPages)}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage >= Math.max(10, totalPages) ? '#f8fafc' : 'white', cursor: currentPage >= Math.max(10, totalPages) ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
             >
-              <ChevronRight size={18} />
+              Sau
             </button>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Notification Modal */}

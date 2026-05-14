@@ -17,6 +17,10 @@ const HashtagManagement = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingHashtag, setEditingHashtag] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const [hashtags, setHashtags] = useState([
     { id: 1, name: 'iPhone15', usageCount: 245, trend: '+12%', products: ['iPhone 15 Pro Max', 'iPhone 15 Plus'], date: '22/04/2026' },
@@ -58,7 +62,7 @@ const HashtagManagement = () => {
   };
 
   const handleDelete = (id) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa hashtag này? Các sản phẩm sẽ không còn liên kết với hashtag này nữa.')) {
+    if (window.confirm('Xóa hashtag này khỏi giao diện? (Dữ liệu gốc vẫn còn)')) {
       setHashtags(hashtags.filter(h => h.id !== id));
     }
   };
@@ -123,48 +127,138 @@ const HashtagManagement = () => {
               </tr>
             </thead>
             <tbody>
-              {hashtags.filter(h => h.name.toLowerCase().includes(searchTerm.toLowerCase())).map((h) => (
-                <tr key={h.id}>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700', color: primaryColor }}>
-                      <Hash size={16} />
-                      {h.name}
-                    </div>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ flex: 1, height: '6px', background: '#f1f5f9', borderRadius: '3px', maxWidth: '100px' }}>
-                        <div style={{ width: `${Math.min((h.usageCount / 1000) * 100, 100)}%`, height: '100%', background: primaryColor, borderRadius: '3px' }}></div>
+              {(() => {
+                const filtered = hashtags.filter(h => h.name.toLowerCase().includes(searchTerm.toLowerCase()));
+                const totalPages = Math.ceil(filtered.length / itemsPerPage);
+                const displayed = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+                if (displayed.length === 0) {
+                  return (
+                    <tr>
+                      <td colSpan="5" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                        Không tìm thấy hashtag nào.
+                      </td>
+                    </tr>
+                  );
+                }
+
+                return displayed.map((h) => (
+                  <tr key={h.id}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '700', color: primaryColor }}>
+                        <Hash size={16} />
+                        {h.name}
                       </div>
-                      <span style={{ fontSize: '13px', color: '#64748b' }}>{h.usageCount}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span style={{ color: h.trend.startsWith('+') ? '#10b981' : '#64748b', fontWeight: '700', fontSize: '13px' }}>
-                      {h.trend}
-                    </span>
-                  </td>
-                  <td><span style={{ fontSize: '13px', color: '#64748b' }}>{h.date}</span></td>
-                  <td>
-                    <div className="actions-cell">
-                      <button className="action-btn edit" onClick={() => handleOpenModal(h)} title="Sửa tên"><Edit size={16} /></button>
-                      <button className="action-btn delete" onClick={() => handleDelete(h.id)} title="Xóa"><Trash2 size={16} /></button>
-                      <button 
-                        className="btn-primary" 
-                        style={{ padding: '5px 12px', fontSize: '12px', background: `${primaryColor}15`, color: primaryColor, boxShadow: 'none' }}
-                        onClick={() => {
-                          alert(`Hashtag #${h.name} đang được sử dụng cho:\n${h.products.length > 0 ? h.products.join('\n') : 'Chưa có sản phẩm nào'}`);
-                        }}
-                      >
-                        Xem sản phẩm
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{ flex: 1, height: '6px', background: '#f1f5f9', borderRadius: '3px', maxWidth: '100px' }}>
+                          <div style={{ width: `${Math.min((h.usageCount / 1000) * 100, 100)}%`, height: '100%', background: primaryColor, borderRadius: '3px' }}></div>
+                        </div>
+                        <span style={{ fontSize: '13px', color: '#64748b' }}>{h.usageCount}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span style={{ color: h.trend.startsWith('+') ? '#10b981' : '#64748b', fontWeight: '700', fontSize: '13px' }}>
+                        {h.trend}
+                      </span>
+                    </td>
+                    <td><span style={{ fontSize: '13px', color: '#64748b' }}>{h.date}</span></td>
+                    <td>
+                      <div className="actions-cell">
+                        <button className="action-btn edit" onClick={() => handleOpenModal(h)} title="Sửa tên"><Edit size={16} /></button>
+                        <button className="action-btn delete" onClick={() => handleDelete(h.id)} title="Xóa"><Trash2 size={16} /></button>
+                        <button 
+                          className="btn-primary" 
+                          style={{ padding: '5px 12px', fontSize: '12px', background: `${primaryColor}15`, color: primaryColor, boxShadow: 'none' }}
+                          onClick={() => {
+                            alert(`Hashtag #${h.name} đang được sử dụng cho:\n${h.products.length > 0 ? h.products.join('\n') : 'Chưa có sản phẩm nào'}`);
+                          }}
+                        >
+                          Xem sản phẩm
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ));
+              })()}
             </tbody>
           </table>
         </div>
+
+        {/* Smart Pagination Bar */}
+        {(() => {
+          const filtered = hashtags.filter(h => h.name.toLowerCase().includes(searchTerm.toLowerCase()));
+          const totalPages = Math.ceil(filtered.length / itemsPerPage);
+
+          return (
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              padding: '15px 25px', 
+              borderTop: '1px solid #f1f5f9',
+              background: 'white',
+              borderBottomLeftRadius: '16px',
+              borderBottomRightRadius: '16px'
+            }}>
+              <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
+                Hiển thị {Math.min((currentPage - 1) * itemsPerPage + 1, filtered.length)} - {Math.min(currentPage * itemsPerPage, filtered.length)} trên {filtered.length} hashtag
+              </span>
+              <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f8fafc' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
+                >
+                  Trước
+                </button>
+                
+                {(() => {
+                  const pages = [];
+                  const minPagesToShow = 10;
+                  let start = 1;
+                  let end = Math.max(minPagesToShow, totalPages);
+                  
+                  if (totalPages > minPagesToShow && currentPage > 6) {
+                    start = Math.max(1, currentPage - 5);
+                    end = Math.min(totalPages, start + 9);
+                    if (end - start < 9) start = Math.max(1, end - 9);
+                  } else if (totalPages > minPagesToShow) {
+                    end = 10;
+                  }
+
+                  for (let i = start; i <= end; i++) {
+                    pages.push(
+                      <button
+                        key={i}
+                        onClick={() => setCurrentPage(i)}
+                        style={{ 
+                          minWidth: '40px', height: '40px', borderRadius: '8px', border: '1px solid',
+                          borderColor: currentPage === i ? primaryColor : '#e2e8f0',
+                          background: currentPage === i ? primaryColor : 'white',
+                          color: currentPage === i ? 'white' : '#64748b',
+                          fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                        }}
+                      >
+                        {i}
+                      </button>
+                    );
+                  }
+                  return pages;
+                })()}
+
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(Math.max(10, totalPages), p + 1))}
+                  disabled={currentPage >= Math.max(10, totalPages)}
+                  style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage >= Math.max(10, totalPages) ? '#f8fafc' : 'white', cursor: currentPage >= Math.max(10, totalPages) ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
+                >
+                  Sau
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Hashtag Modal */}

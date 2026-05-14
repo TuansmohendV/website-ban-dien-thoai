@@ -359,7 +359,7 @@ export const createAdminProduct = asyncHandler(async (req, res, next) => {
   const { 
     name, description, brand, categoryId, price, countInStock, image, images,
     tags, features, colors, screen, battery, camera, ram, storage, isHot, specifications,
-    isFeatured, isBestSeller, isRecommended
+    isFeatured, isBestSeller, isRecommended, videoUrl
   } = req.body;
 
   if (!name || !brand || !categoryId || !price || !description || !image) {
@@ -387,6 +387,7 @@ export const createAdminProduct = asyncHandler(async (req, res, next) => {
     isFeatured: isFeatured || false,
     isBestSeller: isBestSeller || false,
     isRecommended: isRecommended || false,
+    videoUrl: videoUrl || [],
     specifications: specifications || {},
     status: 'active',
   });
@@ -450,7 +451,7 @@ export const updateAdminProduct = asyncHandler(async (req, res, next) => {
   const { 
     name, description, brand, categoryId, price, countInStock, image, images, status,
     tags, features, colors, screen, battery, camera, ram, storage, isHot, specifications,
-    isFeatured, isBestSeller, isRecommended
+    isFeatured, isBestSeller, isRecommended, videoUrl
   } = req.body;
 
   let product = await Product.findById(req.params.id);
@@ -480,6 +481,7 @@ export const updateAdminProduct = asyncHandler(async (req, res, next) => {
   if (isFeatured !== undefined) product.isFeatured = isFeatured;
   if (isBestSeller !== undefined) product.isBestSeller = isBestSeller;
   if (isRecommended !== undefined) product.isRecommended = isRecommended;
+  if (videoUrl !== undefined) product.videoUrl = videoUrl;
   if (specifications !== undefined) product.specifications = specifications;
 
   product = await product.save();

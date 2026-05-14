@@ -23,12 +23,27 @@ import {
   Flame,
   ThumbsUp,
   TrendingUp,
-  Download
+  Download,
+  Bold,
+  Italic,
+  Underline,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  List as ListIcon,
+  Video,
+  Link2,
+  Undo,
+  Redo,
+  Heading1,
+  Heading2,
+  Type
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import HashtagManagement from './HashtagManagement';
 import api, { getApiErrorMessage } from '../../lib/api';
 import { normalizeProduct } from '../../lib/products';
+import { useRef } from 'react';
 
 const mapProductForAdmin = (product) => {
   const normalized = normalizeProduct(product);
@@ -43,6 +58,7 @@ const mapProductForAdmin = (product) => {
     isFeatured: Boolean(product.isFeatured),
     isBestSeller: Boolean(product.isBestSeller),
     isRecommended: Boolean(product.isRecommended),
+    videoUrl: Array.isArray(product.videoUrl) ? product.videoUrl : (product.videoUrl ? [product.videoUrl] : []),
   };
 };
 
@@ -60,6 +76,9 @@ const ProductManagement = () => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const productsPerPage = 10;
+  
+  const editorRef = useRef(null);
+  const contentImageInputRef = useRef(null);
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -79,6 +98,55 @@ const ProductManagement = () => {
 
     loadProducts();
   }, []);
+
+  // Sync editor content when form opens for editing
+  useEffect(() => {
+    if (showForm && editorRef.current) {
+      editorRef.current.innerHTML = formData.description || '';
+    }
+  }, [showForm, editingProduct?.id]);
+
+  const execCommand = (e, command, value = null) => {
+    if (e) e.preventDefault();
+    document.execCommand(command, false, value);
+    if (editorRef.current) editorRef.current.focus();
+  };
+
+  const handleContentImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const html = `<img src="${reader.result}" style="max-width:100%; border-radius:12px; margin:15px 0;" alt="Image"><p><br></p>`;
+        execCommand(null, 'insertHTML', html);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const insertImage = (e) => {
+    e.preventDefault();
+    const mode = window.confirm('Tải ảnh từ máy (OK) hoặc Nhập link (Cancel)?');
+    if (mode) contentImageInputRef.current.click();
+    else {
+      const url = prompt('Nhập link ảnh:');
+      if (url) execCommand(e, 'insertImage', url);
+    }
+  };
+
+  const insertVideo = (e) => {
+    e.preventDefault();
+    const url = prompt('Nhập link YouTube:');
+    if (url) {
+      let embedId = '';
+      if (url.includes('v=')) embedId = url.split('v=')[1].split('&')[0];
+      else if (url.includes('be/')) embedId = url.split('be/')[1];
+      
+      const embedUrl = `https://www.youtube-nocookie.com/embed/${embedId}`;
+      const html = `<div class="video-wrapper" style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;margin:20px 0;border-radius:12px;"><iframe src="${embedUrl}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe></div><p><br></p>`;
+      execCommand(e, 'insertHTML', html);
+    }
+  };
 
   // Filter products based on all criteria
   const filteredProducts = localProducts.filter(p => {
@@ -115,27 +183,17 @@ const ProductManagement = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa sản phẩm này? Thao tác này không thể hoàn tác.')) {
-      try {
-        await api.delete(`/api/admin/products/${id}`);
-        setLocalProducts(localProducts.filter(p => p.id !== id));
-        setSelectedIds(selectedIds.filter(item => item !== id));
-      } catch (error) {
-        alert('Không thể xóa sản phẩm: ' + getApiErrorMessage(error));
-      }
+  const handleDelete = (id) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa sản phẩm này khỏi giao diện? (Dữ liệu trong database vẫn còn)')) {
+      setLocalProducts(localProducts.filter(p => p.id !== id));
+      setSelectedIds(selectedIds.filter(item => item !== id));
     }
   };
 
-  const handleBulkDelete = async () => {
-    if (window.confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.length} sản phẩm đã chọn? Thao tác này không thể hoàn tác.`)) {
-      try {
-        await Promise.all(selectedIds.map(id => api.delete(`/api/admin/products/${id}`)));
-        setLocalProducts(localProducts.filter(p => !selectedIds.includes(p.id)));
-        setSelectedIds([]);
-      } catch (error) {
-        alert('Có lỗi khi xóa hàng loạt: ' + getApiErrorMessage(error));
-      }
+  const handleBulkDelete = () => {
+    if (window.confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.length} sản phẩm đã chọn khỏi giao diện? (Dữ liệu trong database vẫn còn)`)) {
+      setLocalProducts(localProducts.filter(p => !selectedIds.includes(p.id)));
+      setSelectedIds([]);
     }
   };
 
@@ -220,7 +278,8 @@ const ProductManagement = () => {
     images: [],
     tags: [],
     specifications: {},
-    description: ''
+    description: '',
+    videoUrl: []
   });
   const [showTagModal, setShowTagModal] = useState(false);
   const [taggingProduct, setTaggingProduct] = useState(null);
@@ -251,7 +310,8 @@ const ProductManagement = () => {
           images: product.images || [],
           tags: product.tags || [],
           specifications: product.specifications || {},
-          description: product.description || ''
+          description: product.description || '',
+          videoUrl: Array.isArray(product.videoUrl) ? product.videoUrl : (product.videoUrl ? [product.videoUrl] : [])
         });
         setImagePreview(product.image || null);
         setGalleryPreviews(product.images || []);
@@ -275,7 +335,8 @@ const ProductManagement = () => {
           images: [], 
           tags: [], 
           specifications: {}, 
-          description: ''
+          description: '',
+          videoUrl: []
         });
         setImagePreview(null);
         setGalleryPreviews([]);
@@ -303,6 +364,24 @@ const ProductManagement = () => {
     }));
   };
 
+  const [newVideoUrl, setNewVideoUrl] = useState('');
+
+  const addVideoUrl = () => {
+    if (!newVideoUrl.trim()) return;
+    setFormData(prev => ({
+      ...prev,
+      videoUrl: [...(prev.videoUrl || []), newVideoUrl.trim()]
+    }));
+    setNewVideoUrl('');
+  };
+
+  const removeVideoUrl = (index) => {
+    setFormData(prev => ({
+      ...prev,
+      videoUrl: prev.videoUrl.filter((_, i) => i !== index)
+    }));
+  };
+
   const handleSave = async () => {
     if (!formData.name) {
       alert('Vui lòng nhập tên sản phẩm');
@@ -326,8 +405,11 @@ const ProductManagement = () => {
 
     setIsLoading(true);
     try {
+      const finalDescription = editorRef.current ? editorRef.current.innerHTML : formData.description;
+      
       const payload = {
         ...formData,
+        description: finalDescription,
         price: Number(formData.price),
         countInStock: Number(formData.stock),
         categoryId: formData.category, 
@@ -635,33 +717,61 @@ const ProductManagement = () => {
             </tbody>
           </table>
         </div>
-        <div className="table-footer">
-          <span className="pagination-info">
-            Hiển thị {(currentPage - 1) * productsPerPage + 1}-{Math.min(currentPage * productsPerPage, filteredProducts.length)} trên tổng số {filteredProducts.length} sản phẩm
+        <div className="table-footer" style={{ background: 'white', padding: '15px 25px', borderTop: '1px solid #f1f5f9' }}>
+          <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
+            Hiển thị {filteredProducts.length > 0 ? (currentPage - 1) * productsPerPage + 1 : 0}-{Math.min(currentPage * productsPerPage, filteredProducts.length)} trên tổng số {filteredProducts.length} sản phẩm
           </span>
-          <div className="pagination-btns">
+          <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
             <button 
-              className={`p-btn ${currentPage === 1 ? 'disabled' : ''}`}
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f8fafc' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
             >
-              <ChevronLeft size={18} />
+              Trước
             </button>
             
-            {[...Array(totalPages)].map((_, i) => (
-              <button 
-                key={i} 
-                className={`p-btn ${currentPage === i + 1 ? 'active' : ''}`}
-                onClick={() => setCurrentPage(i + 1)}
-              >
-                {i + 1}
-              </button>
-            ))}
+            {/* Luôn hiển thị ít nhất 10 trang đầu tiên */}
+            {(() => {
+              const pages = [];
+              const minPagesToShow = 10;
+              let start = 1;
+              let end = Math.max(minPagesToShow, totalPages);
+              
+              // Nếu số trang thực tế > 10 và đang ở các trang cuối cửa sổ, thực hiện trượt
+              if (totalPages > minPagesToShow && currentPage > 6) {
+                start = Math.max(1, currentPage - 5);
+                end = Math.min(totalPages, start + 9);
+                if (end - start < 9) start = Math.max(1, end - 9);
+              } else if (totalPages > minPagesToShow) {
+                end = 10;
+              }
+
+              for (let i = start; i <= end; i++) {
+                pages.push(
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i)}
+                    style={{ 
+                      minWidth: '40px', height: '40px', borderRadius: '8px', border: '1px solid',
+                      borderColor: currentPage === i ? '#2563eb' : '#e2e8f0',
+                      background: currentPage === i ? '#2563eb' : 'white',
+                      color: currentPage === i ? 'white' : '#64748b',
+                      fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                    }}
+                  >
+                    {i}
+                  </button>
+                );
+              }
+              return pages;
+            })()}
 
             <button 
-              className={`p-btn ${currentPage === totalPages ? 'disabled' : ''}`}
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              onClick={() => setCurrentPage(p => Math.min(Math.max(10, totalPages), p + 1))}
+              disabled={currentPage >= Math.max(10, totalPages)}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage >= Math.max(10, totalPages) ? '#f8fafc' : 'white', cursor: currentPage >= Math.max(10, totalPages) ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
             >
-              <ChevronRight size={18} />
+              Sau
             </button>
           </div>
         </div>
@@ -684,17 +794,35 @@ const ProductManagement = () => {
                     <input name="name" type="text" value={formData.name} onChange={handleInputChange} placeholder="Nhập tên sản phẩm" />
                   </div>
                   <div className="input-group">
-                    <label>Mô tả sản phẩm *</label>
-                    <textarea 
-                      name="description" 
-                      value={formData.description} 
-                      onChange={handleInputChange} 
-                      placeholder="Mô tả chi tiết về sản phẩm..."
-                      style={{ 
-                        padding: '10px 15px', border: '1px solid #e2e8f0', borderRadius: '10px', 
-                        outline: 'none', fontSize: '0.9rem', minHeight: '100px', resize: 'vertical' 
-                      }}
-                    />
+                    <label>Mô tả chi tiết sản phẩm (Hỗ trợ Ảnh/Video) *</label>
+                    <div className="rich-editor-container" style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden', background: 'white' }}>
+                      <div className="editor-toolbar" style={{ padding: '8px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
+                        <button className="tb-btn" onClick={(e) => execCommand(e, 'bold')} title="In đậm"><Bold size={16} /></button>
+                        <button className="tb-btn" onClick={(e) => execCommand(e, 'italic')} title="In nghiêng"><Italic size={16} /></button>
+                        <button className="tb-btn" onClick={(e) => execCommand(e, 'underline')} title="Gạch chân"><Underline size={16} /></button>
+                        <div style={{ width: '1px', height: '20px', background: '#e2e8f0', margin: '0 5px' }}></div>
+                        <button className="tb-btn" onClick={(e) => execCommand(e, 'justifyLeft')} title="Căn trái"><AlignLeft size={16} /></button>
+                        <button className="tb-btn" onClick={(e) => execCommand(e, 'justifyCenter')} title="Căn giữa"><AlignCenter size={16} /></button>
+                        <button className="tb-btn" onClick={(e) => execCommand(e, 'justifyRight')} title="Căn phải"><AlignRight size={16} /></button>
+                        <div style={{ width: '1px', height: '20px', background: '#e2e8f0', margin: '0 5px' }}></div>
+                        <button className="tb-btn" onClick={(e) => execCommand(e, 'insertUnorderedList')} title="Danh sách"><ListIcon size={16} /></button>
+                        <button className="tb-btn" onClick={(e) => execCommand(e, 'formatBlock', 'H2')} title="Tiêu đề lớn"><Heading1 size={16} /></button>
+                        <button className="tb-btn" onClick={(e) => execCommand(e, 'formatBlock', 'H3')} title="Tiêu đề nhỏ"><Heading2 size={16} /></button>
+                        <div style={{ width: '1px', height: '20px', background: '#e2e8f0', margin: '0 5px' }}></div>
+                        <button className="tb-btn" onClick={insertImage} title="Chèn ảnh"><ImageIcon size={16} /></button>
+                        <button className="tb-btn" onClick={insertVideo} title="Chèn Video Youtube" style={{ color: '#ef4444' }}><Video size={16} /></button>
+                        <input type="file" ref={contentImageInputRef} onChange={handleContentImageUpload} accept="image/*" style={{ display: 'none' }} />
+                      </div>
+                      <div 
+                        ref={editorRef}
+                        contentEditable 
+                        className="editor-content"
+                        style={{ 
+                          padding: '15px', minHeight: '250px', maxHeight: '500px', 
+                          overflowY: 'auto', outline: 'none', fontSize: '0.95rem', lineHeight: '1.6'
+                        }}
+                      ></div>
+                    </div>
                   </div>
                   <div className="input-row">
                     <div className="input-group">
@@ -718,6 +846,29 @@ const ProductManagement = () => {
                     <div className="input-group">
                       <label>Số lượng tồn kho</label>
                       <input name="stock" type="number" min="0" value={formData.stock} onChange={handleInputChange} placeholder="24" />
+                    </div>
+                  </div>
+                  <div className="input-group">
+                    <label><Video size={16} color="#ef4444" /> Danh sách Video Youtube</label>
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                      <input 
+                        type="text" 
+                        value={newVideoUrl} 
+                        onChange={(e) => setNewVideoUrl(e.target.value)} 
+                        placeholder="Dán link Youtube tại đây..." 
+                        style={{ flex: 1, padding: '10px', borderRadius: '10px', border: '1px solid #e2e8f0' }}
+                        onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addVideoUrl())}
+                      />
+                      <button className="btn-primary" onClick={(e) => { e.preventDefault(); addVideoUrl(); }} style={{ padding: '0 15px' }}>Thêm</button>
+                    </div>
+                    <div className="space-y-2">
+                       {(formData.videoUrl || []).map((url, idx) => (
+                         <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f8fafc', padding: '8px 12px', borderRadius: '10px', border: '1px solid #f1f5f9', fontSize: '13px' }}>
+                            <Video size={14} className="text-red-500" />
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{url}</span>
+                            <X size={14} style={{ cursor: 'pointer', color: '#ef4444' }} onClick={() => removeVideoUrl(idx)} />
+                         </div>
+                       ))}
                     </div>
                   </div>
                 </div>
@@ -980,6 +1131,58 @@ const ProductManagement = () => {
         }
 
         .filter-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: #f8fafc;
+          padding: 8px 12px;
+          border-radius: 8px;
+          border: 1px solid #e2e8f0;
+        }
+
+        /* Rich Editor Styles */
+        .rich-editor-container:focus-within {
+          border-color: #2563eb !important;
+          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .tb-btn {
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: none;
+          background: transparent;
+          border-radius: 6px;
+          color: #64748b;
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+
+        .tb-btn:hover {
+          background: #e2e8f0;
+          color: #1e293b;
+        }
+
+        .editor-content:empty:before {
+          content: "Viết mô tả chi tiết sản phẩm, chèn video youtube hoặc ảnh tại đây...";
+          color: #94a3b8;
+        }
+
+        .editor-content img {
+          max-width: 100%;
+          height: auto;
+          border-radius: 12px;
+          display: block;
+          margin: 15px 0;
+        }
+
+        .video-wrapper iframe {
+          border-radius: 12px;
+          box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
           display: flex;
           align-items: center;
           gap: 8px;
