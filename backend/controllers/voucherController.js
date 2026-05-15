@@ -15,6 +15,7 @@ const normalizeVoucherPayload = (body = {}) => {
   const maxDiscount = Math.max(0, Number(body.maxDiscount) || 0);
   const usageLimit = Math.max(0, Number(body.usageLimit) || 0);
   const usageLimitPerUser = Math.max(0, Number(body.usageLimitPerUser) || 1);
+  const huntLimit = Math.max(0, Number(body.huntLimit) || 0);
 
   return {
     code,
@@ -25,6 +26,7 @@ const normalizeVoucherPayload = (body = {}) => {
     maxDiscount,
     usageLimit,
     usageLimitPerUser,
+    huntLimit,
     expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
     startsAt: body.startsAt ? new Date(body.startsAt) : undefined,
     isActive: body.isActive !== false,
@@ -101,7 +103,9 @@ export const getHuntedVouchers = asyncHandler(async (req, res) => {
       maxDiscountValue: v.maxDiscount,
       expiresAt: v.expiresAt,
       missionTask: v.missionTask,
-      userStatus: userHuntStatuses[v._id.toString()] || 'none' // 'none', 'pending', 'approved', 'rejected'
+      huntLimit: v.huntLimit || 0,
+      huntedCount: v.huntedCount || 0,
+      userStatus: userHuntStatuses[v._id.toString()] || 'none'
     })),
   });
 });
@@ -114,29 +118,36 @@ export const huntVoucher = asyncHandler(async (req, res) => {
     throw new AppError(400, 'Voucher không khả dụng để săn.');
   }
 
-  const existing = await UserVoucher.findOne({ user: req.user._id, voucher: voucherId });
-  if (existing) {
-    if (existing.status === 'pending') throw new AppError(400, 'Bạn đã gửi minh chứng, vui lòng chờ Admin duyệt.');
-    if (existing.status === 'approved') throw new AppError(400, 'Bạn đã sở hữu voucher này rồi.');
-    // If rejected, let them try again
+  // Check hunt limit
+  if (voucher.huntLimit > 0 && voucher.huntedCount >= voucher.huntLimit) {
+    throw new AppError(400, 'Voucher này đã hết lượt săn. Hãy thử voucher khác!');
   }
 
+  const existing = await UserVoucher.findOne({ user: req.user._id, voucher: voucherId });
+  if (existing) {
+    if (existing.status === 'approved') throw new AppError(400, 'Bạn đã sở hữu voucher này rồi.');
+  }
+
+  // Auto-approve immediately (no admin review needed)
   if (existing && existing.status === 'rejected') {
-    existing.status = 'pending';
-    existing.proofImage = proofImage;
+    existing.status = 'approved';
+    existing.proofImage = proofImage || existing.proofImage;
     existing.huntedAt = new Date();
     await existing.save();
-  } else {
+  } else if (!existing) {
     await UserVoucher.create({
       user: req.user._id,
       voucher: voucherId,
-      proofImage,
-      status: 'pending'
+      proofImage: proofImage || '',
+      status: 'approved'
     });
   }
 
+  // Increment huntedCount
+  await Voucher.findByIdAndUpdate(voucherId, { $inc: { huntedCount: 1 } });
+
   res.status(201).json({
-    message: 'Gửi minh chứng thành công! Vui lòng chờ Admin duyệt để nhận mã.',
+    message: '🎉 Chúc mừng! Bạn đã nhận được voucher thành công! Vào Ví Voucher để sử dụng nhé.',
   });
 });
 

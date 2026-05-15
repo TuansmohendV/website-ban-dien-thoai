@@ -37,7 +37,12 @@ import {
   Redo,
   Heading1,
   Heading2,
-  Type
+  Type,
+  ShieldCheck,
+  Zap,
+  Layers,
+  User,
+  Package
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import HashtagManagement from './HashtagManagement';
@@ -72,6 +77,7 @@ const ProductManagement = () => {
   const [localProducts, setLocalProducts] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [dbCategories, setDbCategories] = useState([]);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -81,22 +87,29 @@ const ProductManagement = () => {
   const contentImageInputRef = useRef(null);
 
   useEffect(() => {
-    const loadProducts = async () => {
+    const loadInitialData = async () => {
       setIsLoading(true);
 
       try {
-        const response = await api.get('/api/products', {
-          params: { limit: 200, sort: 'newest', includeInactive: true },
-        });
-        setLocalProducts((response.data?.data || []).map(mapProductForAdmin));
-      } catch {
+        const [productsRes, categoriesRes] = await Promise.all([
+          api.get('/api/products', {
+            params: { limit: 200, sort: 'newest', includeInactive: true },
+          }),
+          api.get('/api/categories')
+        ]);
+        
+        setLocalProducts((productsRes.data?.data || []).map(mapProductForAdmin));
+        setDbCategories(categoriesRes.data?.data || []);
+      } catch (error) {
+        console.error('Failed to load initial data:', error);
         setLocalProducts([]);
+        setDbCategories([]);
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadProducts();
+    loadInitialData();
   }, []);
 
   // Sync editor content when form opens for editing
@@ -284,8 +297,6 @@ const ProductManagement = () => {
   const [showTagModal, setShowTagModal] = useState(false);
   const [taggingProduct, setTaggingProduct] = useState(null);
   const [newTag, setNewTag] = useState('');
-  const [newSpecKey, setNewSpecKey] = useState('');
-  const [newSpecValue, setNewSpecValue] = useState('');
   const [imagePreview, setImagePreview] = useState(null);
   const [galleryPreviews, setGalleryPreviews] = useState([]);
 
@@ -407,6 +418,31 @@ const ProductManagement = () => {
     try {
       const finalDescription = editorRef.current ? editorRef.current.innerHTML : formData.description;
       
+      // Collect dynamic specifications based on category
+      const specFields = {
+        'dien-thoai': ['screen', 'cpu', 'ram', 'storage'],
+        'laptop': ['screen', 'cpu', 'gpu', 'ram', 'storage'],
+        'tablet': ['screen', 'cpu', 'ram', 'storage'],
+        'tivi-dien-may': ['screen', 'resolution', 'power', 'feature'],
+        'man-hinh': ['screen', 'panel', 'refreshRate', 'ports'],
+        'dong-ho': [
+          'brand', 'gender', 'movement', 'strapType', 'strapColor', 
+          'glassType', 'waterproof', 'dialType', 'caseSize', 'dialColor', 
+          'handColor', 'caseMaterial', 'caseColor', 'warranty'
+        ],
+        'am-thanh': [
+          'includedItems', 'otherFeatures', 'audioTech', 'chargingPort', 
+          'chargingTime', 'earphoneTime', 'caseTime', 'connectionRange', 
+          'connectionTech', 'weight'
+        ]
+      };
+
+      const categoryFields = specFields[formData.category] || specFields['dien-thoai'];
+      const dynamicSpecs = {};
+      categoryFields.forEach(field => {
+        if (formData[field]) dynamicSpecs[field] = formData[field];
+      });
+
       const payload = {
         ...formData,
         description: finalDescription,
@@ -415,7 +451,7 @@ const ProductManagement = () => {
         categoryId: formData.category, 
         specifications: {
           ...formData.specifications,
-          cpu: formData.cpu
+          ...dynamicSpecs
         }
       };
 
@@ -438,27 +474,6 @@ const ProductManagement = () => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const addSpecification = () => {
-    if (!newSpecKey || !newSpecValue) return;
-    setFormData(prev => ({
-      ...prev,
-      specifications: {
-        ...prev.specifications,
-        [newSpecKey]: newSpecValue
-      }
-    }));
-    setNewSpecKey('');
-    setNewSpecValue('');
-  };
-
-  const removeSpecification = (key) => {
-    setFormData(prev => {
-      const newSpecs = { ...prev.specifications };
-      delete newSpecs[key];
-      return { ...prev, specifications: newSpecs };
-    });
   };
 
   const handleGalleryChange = (e) => {
@@ -580,11 +595,9 @@ const ProductManagement = () => {
             <Filter size={16} />
             <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
               <option>Tất cả danh mục</option>
-              <option>dien-thoai</option>
-              <option>iPhone</option>
-              <option>Samsung</option>
-              <option>Oppo</option>
-              <option>Phụ kiện</option>
+              {dbCategories.map(cat => (
+                <option key={cat.slug} value={cat.slug}>{cat.name}</option>
+              ))}
             </select>
           </div>
           <div className="filter-item">
@@ -828,9 +841,10 @@ const ProductManagement = () => {
                     <div className="input-group">
                       <label>Danh mục *</label>
                       <select name="category" value={formData.category} onChange={handleInputChange}>
-                        <option value="dien-thoai">dien-thoai</option>
-                        <option value="iPhone">iPhone</option>
-                        <option value="Samsung">Samsung</option>
+                        <option value="">-- Chọn danh mục --</option>
+                        {dbCategories.map(cat => (
+                          <option key={cat.slug} value={cat.slug}>{cat.name}</option>
+                        ))}
                       </select>
                     </div>
                     <div className="input-group">
@@ -876,61 +890,102 @@ const ProductManagement = () => {
                 {/* Technical Specs */}
                 <div className="form-section">
                   <h3><Cpu size={18} /> Thông số kỹ thuật</h3>
-                  <div className="specs-grid">
-                    <div className="input-group">
-                      <label><Monitor size={14} /> Màn hình</label>
-                      <input name="screen" type="text" value={formData.screen} onChange={handleInputChange} />
-                    </div>
-                    <div className="input-group">
-                      <label><Cpu size={14} /> CPU</label>
-                      <input name="cpu" type="text" value={formData.cpu} onChange={handleInputChange} />
-                    </div>
-                    <div className="input-group">
-                      <label><Dna size={14} /> RAM</label>
-                      <select name="ram" value={formData.ram} onChange={handleInputChange}>
-                        <option value="8GB">8GB</option>
-                        <option value="12GB">12GB</option>
-                        <option value="16GB">16GB</option>
-                      </select>
-                    </div>
-                    <div className="input-group">
-                      <label><HardDrive size={14} /> ROM</label>
-                      <select name="storage" value={formData.storage} onChange={handleInputChange}>
-                        <option value="128GB">128GB</option>
-                        <option value="256GB">256GB</option>
-                        <option value="512GB">512GB</option>
-                        <option value="1TB">1TB</option>
-                      </select>
-                    </div>
-                  </div>
+                  
+                  {(() => {
+                    const specFields = {
+                      'dien-thoai': [
+                        { key: 'screen', label: 'Màn hình', icon: <Monitor size={14} /> },
+                        { key: 'cpu', label: 'CPU', icon: <Cpu size={14} /> },
+                        { key: 'ram', label: 'RAM', icon: <Dna size={14} />, type: 'select', options: ['4GB', '8GB', '12GB', '16GB', '24GB'] },
+                        { key: 'storage', label: 'ROM', icon: <HardDrive size={14} />, type: 'select', options: ['64GB', '128GB', '256GB', '512GB', '1TB'] }
+                      ],
+                      'laptop': [
+                        { key: 'screen', label: 'Màn hình', icon: <Monitor size={14} /> },
+                        { key: 'cpu', label: 'CPU', icon: <Cpu size={14} /> },
+                        { key: 'gpu', label: 'GPU (Đồ họa)', icon: <TrendingUp size={14} /> },
+                        { key: 'ram', label: 'RAM', icon: <Dna size={14} /> },
+                        { key: 'storage', label: 'SSD/HDD', icon: <HardDrive size={14} /> }
+                      ],
+                      'tablet': [
+                        { key: 'screen', label: 'Màn hình', icon: <Monitor size={14} /> },
+                        { key: 'cpu', label: 'CPU', icon: <Cpu size={14} /> },
+                        { key: 'ram', label: 'RAM', icon: <Dna size={14} /> },
+                        { key: 'storage', label: 'Bộ nhớ', icon: <HardDrive size={14} /> }
+                      ],
+                      'tivi-dien-may': [
+                        { key: 'screen', label: 'Kích thước màn hình', icon: <Monitor size={14} /> },
+                        { key: 'resolution', label: 'Độ phân giải', icon: <Eye size={14} /> },
+                        { key: 'power', label: 'Công suất', icon: <Flame size={14} /> },
+                        { key: 'feature', label: 'Tính năng chính', icon: <Star size={14} /> }
+                      ],
+                      'man-hinh': [
+                        { key: 'screen', label: 'Kích thước', icon: <Monitor size={14} /> },
+                        { key: 'panel', label: 'Tấm nền', icon: <Layers size={14} /> },
+                        { key: 'refreshRate', label: 'Tần số quét', icon: <Zap size={14} /> },
+                        { key: 'ports', label: 'Cổng kết nối', icon: <Link2 size={14} /> }
+                      ],
+                      'dong-ho': [
+                        { key: 'brand', label: 'Hãng', icon: <Star size={14} /> },
+                        { key: 'gender', label: 'Giới tính', icon: <User size={14} />, type: 'select', options: ['Nam', 'Nữ', 'Unisex'] },
+                        { key: 'movement', label: 'Loại máy', icon: <Cpu size={14} />, type: 'select', options: ['Pin (Quartz)', 'Cơ (Automatic)', 'Eco-Drive', 'Năng lượng MT'] },
+                        { key: 'strapType', label: 'Loại dây', icon: <Layers size={14} /> },
+                        { key: 'strapColor', label: 'Màu dây', icon: <Type size={14} /> },
+                        { key: 'glassType', label: 'Loại kính', icon: <ShieldCheck size={14} /> },
+                        { key: 'waterproof', label: 'Chống nước', icon: <Flame size={14} /> },
+                        { key: 'dialType', label: 'Dạng mặt số', icon: <Monitor size={14} /> },
+                        { key: 'caseSize', label: 'Size mặt số', icon: <TrendingUp size={14} /> },
+                        { key: 'dialColor', label: 'Màu mặt số', icon: <Type size={14} /> },
+                        { key: 'handColor', label: 'Màu Kim', icon: <Edit size={14} /> },
+                        { key: 'caseMaterial', label: 'Chất liệu vỏ', icon: <HardDrive size={14} /> },
+                        { key: 'caseColor', label: 'Màu vỏ', icon: <Type size={14} /> },
+                        { key: 'warranty', label: 'Bảo hành chính hãng', icon: <ShieldCheck size={14} /> }
+                      ],
+                      'am-thanh': [
+                        { key: 'includedItems', label: 'Sản phẩm bao gồm', icon: <Package size={14} /> },
+                        { key: 'otherFeatures', label: 'Tính năng khác', icon: <Star size={14} /> },
+                        { key: 'audioTech', label: 'Công nghệ âm thanh', icon: <Cpu size={14} /> },
+                        { key: 'chargingPort', label: 'Cổng sạc', icon: <HardDrive size={14} /> },
+                        { key: 'chargingTime', label: 'Thời gian sạc đầy', icon: <Zap size={14} /> },
+                        { key: 'earphoneTime', label: 'Thời gian sử dụng tai nghe', icon: <Flame size={14} /> },
+                        { key: 'caseTime', label: 'Thời gian sử dụng hộp sạc', icon: <HardDrive size={14} /> },
+                        { key: 'connectionRange', label: 'Phạm vi kết nối', icon: <TrendingUp size={14} /> },
+                        { key: 'connectionTech', label: 'Công nghệ kết nối', icon: <Link2 size={14} /> },
+                        { key: 'weight', label: 'Trọng lượng', icon: <Layers size={14} /> }
+                      ]
+                    };
 
-                  {/* Dynamic Additional Specs */}
-                  <div style={{ marginTop: '20px', borderTop: '1px solid #e2e8f0', paddingTop: '15px' }}>
-                    <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#475569', marginBottom: '10px', display: 'block' }}>Thông số bổ sung (Pin, Camera, Trọng lượng...)</label>
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
-                       <input 
-                         placeholder="Tên (VD: Pin)" value={newSpecKey} 
-                         onChange={e => setNewSpecKey(e.target.value)} 
-                         style={{ flex: 1, padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
-                       />
-                       <input 
-                         placeholder="Giá trị (VD: 5000mAh)" value={newSpecValue} 
-                         onChange={e => setNewSpecValue(e.target.value)}
-                         style={{ flex: 2, padding: '8px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
-                       />
-                       <button className="btn-primary" onClick={addSpecification} style={{ padding: '0 12px' }}><Plus size={14} /></button>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                       {Object.entries(formData.specifications || {}).map(([key, value]) => (
-                         <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '6px 12px', borderRadius: '8px', border: '1px solid #f1f5f9', fontSize: '13px' }}>
-                           <span><strong>{key}:</strong> {value}</span>
-                           <X size={14} style={{ cursor: 'pointer', color: '#ef4444' }} onClick={() => removeSpecification(key)} />
-                         </div>
-                       ))}
-                    </div>
-                  </div>
-                </div>
+                    const currentFields = specFields[formData.category] || specFields['dien-thoai'];
 
+                    return (
+                      <div className="specs-grid">
+                        {currentFields.map(field => (
+                          <div className="input-group" key={field.key}>
+                            <label>{field.icon} {field.label}</label>
+                            {field.type === 'select' ? (
+                              <select 
+                                name={field.key} 
+                                value={formData[field.key] || ''} 
+                                onChange={handleInputChange}
+                              >
+                                <option value="">-- Chọn --</option>
+                                {field.options.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                              </select>
+                            ) : (
+                              <input 
+                                name={field.key} 
+                                type="text" 
+                                value={formData[field.key] || ''} 
+                                onChange={handleInputChange} 
+                                placeholder={`Nhập ${field.label.toLowerCase()}`}
+                              />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                  </div>
+                
                 <div className="form-section">
                    <h3><ImageIcon size={18} /> Hình ảnh sản phẩm</h3>
                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>

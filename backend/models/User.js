@@ -87,7 +87,20 @@ const userSchema = new mongoose.Schema(
         accountName: String,
         createdAt: { type: Date, default: Date.now }
       }]
-    }
+    },
+    referralCode: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+    referredBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    referralPoints: {
+      type: Number,
+      default: 0,
+    },
   },
   {
     timestamps: true,
@@ -102,12 +115,17 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-userSchema.pre('save', async function savePassword() {
+userSchema.pre('save', async function (next) {
+  if (this.isNew && !this.referralCode) {
+    this.referralCode = 'PHONESIN' + Math.random().toString(36).substring(2, 8).toUpperCase();
+  }
+  
   if (!this.isModified('password')) {
-    return;
+    return next();
   }
 
   this.password = await bcrypt.hash(this.password, 10);
+  next();
 });
 
 userSchema.methods.comparePassword = function comparePassword(candidatePassword) {

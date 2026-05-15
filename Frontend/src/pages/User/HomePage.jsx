@@ -46,11 +46,13 @@ const HomePage = () => {
 
     // Helper to generate slug consistently
     const toSlug = (text) => text.toLowerCase()
-        .replace(/ /g, '-')
+        .trim()
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .replace(/đ/g, "d")
-        .replace(/[^a-z0-z-]/g, '');
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-');
 
     // Merged categories: Static ones + Dynamic ones from DB that aren't in static list
     const categories = useMemo(() => {
@@ -167,7 +169,7 @@ const HomePage = () => {
         };
 
         const filtered = backendProducts.filter(tabs[activeTab] || tabs['Tất cả']);
-        return filtered.length > 0 ? filtered : backendProducts;
+        return filtered;
     }, [activeTab, backendProducts]);
 
     const flashSaleProducts = React.useMemo(
@@ -275,7 +277,7 @@ const HomePage = () => {
                             {oldMarket.map((cat, i) => (
                                 <Link 
                                     key={i} 
-                                    to={`/category/${cat.name.toLowerCase().replace(/ /g, '-').normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d")}`}
+                                    to={`/category/${toSlug(cat.name)}`}
                                     className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl cursor-pointer transition-colors group"
                                 >
                                     <div className="flex items-center gap-3.5">
@@ -293,7 +295,7 @@ const HomePage = () => {
                             {news.map((cat, i) => (
                                 <Link 
                                     key={i} 
-                                    to={`/category/${cat.name.toLowerCase().replace(/ /g, '-').normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d")}`}
+                                    to={`/category/${toSlug(cat.name)}`}
                                     className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl cursor-pointer transition-colors group"
                                 >
                                     <div className="flex items-center gap-3.5">
@@ -405,11 +407,18 @@ const HomePage = () => {
                                         WebkitOverflowScrolling: 'touch'
                                     }}
                                 >
-                                    {flashSaleProducts.map((item, i) => (
-                                        <div key={item.uiKey || item.id || i} className="min-w-[178px] sm:min-w-[210px] md:min-w-[240px] flex-shrink-0 snap-start">
-                                            <ProductCard product={item} />
+                                    {flashSaleProducts.length > 0 ? (
+                                        flashSaleProducts.map((item, i) => (
+                                            <div key={item.uiKey || item.id || i} className="min-w-[178px] sm:min-w-[210px] md:min-w-[240px] flex-shrink-0 snap-start">
+                                                <ProductCard product={item} />
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="w-full py-20 flex flex-col items-center justify-center text-gray-400 gap-3">
+                                            <Box size={48} strokeWidth={1} />
+                                            <p className="font-bold text-lg">Không có sản phẩm nào trong mục này</p>
                                         </div>
-                                    ))}
+                                    )}
                                 </div>
                                 
                                 {/* Carousel Navigation - Fixed Precision and Visibility */}

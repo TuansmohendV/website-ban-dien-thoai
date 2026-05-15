@@ -102,15 +102,18 @@ export const updateAdminBrand = asyncHandler(async (req, res, next) => {
 
 // Admin: Delete brand
 export const deleteAdminBrand = asyncHandler(async (req, res, next) => {
-  const brand = await Brand.findByIdAndDelete(req.params.id);
+  const brand = await Brand.findById(req.params.id);
 
   if (!brand) {
     return next(new AppError('Không tìm thấy thương hiệu', 404));
   }
 
+  brand.isActive = false;
+  await brand.save();
+
   res.json({
     status: 'success',
-    message: 'Xóa thương hiệu thành công',
+    message: 'Chuyển thương hiệu vào trạng thái đã tắt (xoá mềm) thành công',
   });
 });
 

@@ -18,20 +18,28 @@ const AdminDashboard = () => {
   const navigate = useNavigate();
   const { orders } = useOrders();
   const [products, setProducts] = useState([]);
+  const [dashboardData, setDashboardData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const loadProducts = async () => {
+    const loadData = async () => {
       try {
-        const response = await api.get('/api/products', {
-          params: { limit: 200, sort: 'popular', includeInactive: true },
-        });
-        setProducts((response.data?.data || []).map(normalizeProduct));
-      } catch {
-        setProducts([]);
+        const [productsRes, statsRes] = await Promise.all([
+          api.get('/api/products', {
+            params: { limit: 200, sort: 'popular', includeInactive: true },
+          }),
+          api.get('/api/dashboard')
+        ]);
+        setProducts((productsRes.data?.data || []).map(normalizeProduct));
+        setDashboardData(statsRes.data.data);
+      } catch (err) {
+        console.error('Failed to load dashboard data:', err);
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    loadProducts();
+    loadData();
   }, []);
   
   const totalRevenue = orders.reduce((sum, order) => {
@@ -82,9 +90,9 @@ const AdminDashboard = () => {
     .slice(0, 3);
   
   const stats = [
-    { label: 'Doanh thu', value: `${totalRevenue.toLocaleString()} ₫`, icon: <DollarSign />, trend: '+12.5%', isPositive: true, color: '#3b82f6' },
-    { label: 'Đơn hàng', value: orders.length.toString(), icon: <ShoppingBag />, trend: '+5.2%', isPositive: true, color: '#10b981' },
-    { label: 'Khách hàng mới', value: '42', icon: <Users />, trend: '+14%', isPositive: true, color: '#f59e0b' },
+    { label: 'Doanh thu', value: `${(dashboardData?.revenue?.total || totalRevenue).toLocaleString()} ₫`, icon: <DollarSign />, trend: '+12.5%', isPositive: true, color: '#3b82f6' },
+    { label: 'Đơn hàng', value: (dashboardData?.orders?.total || orders.length).toString(), icon: <ShoppingBag />, trend: '+5.2%', isPositive: true, color: '#10b981' },
+    { label: 'Khách hàng mới', value: (dashboardData?.users?.newThisMonth || 0).toString(), icon: <Users />, trend: '+14%', isPositive: true, color: '#f59e0b' },
     { label: 'Tồn kho thấp', value: products.filter(p => (p.stock || 0) < 5).length.toString(), icon: <AlertTriangle />, trend: 'Cần nhập', isPositive: false, color: '#ef4444' },
   ];
 
@@ -239,7 +247,7 @@ const AdminDashboard = () => {
                    <div style={{ width: '5%', height: '100%', background: '#ef4444' }}></div>
                 </div>
               </div>
-              <p style={{ fontSize: '12px', color: '#64748b', marginTop: '10px' }}>* Dựa trên 1,240 đánh giá mới nhất từ website.</p>
+              <p style={{ fontSize: '12px', color: '#64748b', marginTop: '10px' }}>* Điểm trung bình: {dashboardData?.reviews?.averageRating?.toFixed(1) || '0.0'} / 5.0 dựa trên {dashboardData?.reviews?.total || 0} đánh giá.</p>
            </div>
         </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Zap, Ticket, Check, Camera, Loader2, ChevronRight, ChevronLeft, Clock, X, ShieldCheck } from 'lucide-react';
+import { Zap, Ticket, Check, Loader2, ChevronRight, ChevronLeft, Clock, ShieldCheck, Users, AlertTriangle, Gift, Camera, X } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -11,8 +11,8 @@ const VoucherHuntingPage = () => {
     const [huntedList, setHuntedList] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [activeMission, setActiveMission] = useState(null);
-    const [missionStep, setMissionStep] = useState('idle');
-    const [missionProgress, setMissionProgress] = useState(0);
+    const [missionStep, setMissionStep] = useState('idle'); // 'idle' | 'upload' | 'success'
+    const [isClaiming, setIsClaiming] = useState(false);
     const [proofImage, setProofImage] = useState('');
     const [isUploadingProof, setIsUploadingProof] = useState(false);
 
@@ -63,41 +63,22 @@ const VoucherHuntingPage = () => {
         }
         setActiveMission(voucher);
         setMissionStep('idle');
-        setMissionProgress(0);
         setProofImage('');
-    };
-
-    const startMissionProgress = () => {
-        setMissionStep('progress');
-        let progress = 0;
-        const interval = setInterval(() => {
-            progress += 5;
-            setMissionProgress(progress);
-            if (progress >= 100) {
-                clearInterval(interval);
-                setMissionStep('success');
-            }
-        }, 150);
     };
 
     const handleUploadProof = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-
-        console.log('Starting upload for file:', file.name, file.size, file.type);
         setIsUploadingProof(true);
         const formData = new FormData();
         formData.append('file', file);
-
         try {
             const response = await api.post('/api/upload/image', formData, {
                 headers: { 'Content-Type': undefined }
             });
-            console.log('Upload response:', response.data);
             setProofImage(response.data.url);
         } catch (err) {
-            console.error('Upload error:', err);
-            alert('Lỗi tải ảnh lên: ' + getApiErrorMessage(err));
+            alert('Lỗi tải ảnh: ' + getApiErrorMessage(err));
         } finally {
             setIsUploadingProof(false);
         }
@@ -105,33 +86,40 @@ const VoucherHuntingPage = () => {
 
     const handleClaimVoucher = async () => {
         if (!proofImage) {
-            alert('Vui lòng tải lên minh chứng hoàn thành nhiệm vụ!');
+            alert('Vui lòng tải lên ảnh minh chứng hoàn thành nhiệm vụ!');
             return;
         }
+        setIsClaiming(true);
         try {
-            const response = await api.post('/api/voucher/hunt', { 
+            await api.post('/api/voucher/hunt', {
                 voucherId: activeMission._id,
-                proofImage: proofImage
+                proofImage,
             });
-            alert(response.data.message);
-            setActiveMission(null);
-            setProofImage('');
-            loadHuntedVouchers();
+            setMissionStep('success');
+            setTimeout(() => loadHuntedVouchers(), 500);
         } catch (err) {
             alert(getApiErrorMessage(err));
+            setActiveMission(null);
+        } finally {
+            setIsClaiming(false);
         }
+    };
+
+    const getRemainingSlots = (v) => {
+        if (!v.huntLimit || v.huntLimit === 0) return null;
+        return Math.max(0, v.huntLimit - (v.huntedCount || 0));
     };
 
     return (
         <div className="min-h-screen bg-[#f8fafc] pt-12 pb-20 selection:bg-emerald-500 selection:text-white">
             <div className="max-w-[1450px] mx-auto px-4">
-                {/* Banner Carousel - Premium Version */}
+                {/* Banner Carousel */}
                 {banners.length > 0 && (
                     <div className="mb-14 relative w-full overflow-hidden rounded-[48px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.1)] group" style={{ height: '540px' }}>
                         {banners.map((banner, idx) => (
                             <div
                                 key={banner._id}
-                                className={`absolute inset-0 transition-all duration-1000 cubic-bezier(0.4, 0, 0.2, 1) ${
+                                className={`absolute inset-0 transition-all duration-1000 ${
                                     idx === activeBanner ? 'opacity-100 scale-100' : 'opacity-0 scale-110 pointer-events-none'
                                 }`}
                                 style={{ backgroundColor: banner.bgColor || '#1e293b' }}
@@ -140,13 +128,11 @@ const VoucherHuntingPage = () => {
                                     <img
                                         src={banner.imageUrl}
                                         alt={banner.title}
-                                        className="absolute inset-0 w-full h-full object-cover transform transition-transform duration-[10000ms] ease-linear"
-                                        style={{ transform: idx === activeBanner ? 'scale(1.1)' : 'scale(1)' }}
+                                        className="absolute inset-0 w-full h-full object-cover"
                                     />
                                 ) : (
                                     <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
                                 )}
-                                
                                 <div className="absolute inset-0 bg-gradient-to-r from-white/10 via-transparent to-transparent flex flex-col justify-center px-12 md:px-24"
                                      style={{ 
                                         alignItems: banner.titleAlign === 'center' ? 'center' : banner.titleAlign === 'right' ? 'flex-end' : 'flex-start',
@@ -181,7 +167,6 @@ const VoucherHuntingPage = () => {
                             </div>
                         ))}
 
-                        {/* Indicators (Dots) */}
                         {banners.length > 1 && (
                             <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex gap-3 z-30">
                                 {banners.map((_, dotIdx) => (
@@ -198,7 +183,6 @@ const VoucherHuntingPage = () => {
                             </div>
                         )}
 
-                        {/* Navigation Arrows */}
                         {banners.length > 1 && (
                             <>
                                 <button 
@@ -258,6 +242,7 @@ const VoucherHuntingPage = () => {
                                         <th className="py-8 px-8 font-black text-slate-400 uppercase tracking-widest text-[10px]">Ưu Đãi</th>
                                         <th className="py-8 px-8 font-black text-slate-400 uppercase tracking-widest text-[10px]">Nhiệm Vụ</th>
                                         <th className="py-8 px-8 font-black text-slate-400 uppercase tracking-widest text-[10px]">Yêu Cầu</th>
+                                        <th className="py-8 px-8 font-black text-slate-400 uppercase tracking-widest text-[10px]">Số Lượng</th>
                                         <th className="py-8 px-8 font-black text-slate-400 uppercase tracking-widest text-[10px]">Thời Hạn</th>
                                         <th className="py-8 px-8 font-black text-slate-400 uppercase tracking-widest text-[10px] text-right">Thao Tác</th>
                                     </tr>
@@ -267,72 +252,82 @@ const VoucherHuntingPage = () => {
                                         const valA = a.discountType === 'percentage' ? a.discountValue * 1000 : a.discountValue;
                                         const valB = b.discountType === 'percentage' ? b.discountValue * 1000 : b.discountValue;
                                         return valB - valA;
-                                    }).filter(v => v.userStatus !== 'approved').map((v, idx) => (
-                                        <tr key={v._id} className="group hover:bg-slate-50/80 transition-all duration-300">
-                                            <td className="py-8 px-8">
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 ${idx === 0 ? 'bg-red-500 text-white shadow-xl shadow-red-500/20' : 'bg-blue-500 text-white'}`}>
-                                                        <Ticket size={24} />
+                                    }).filter(v => v.userStatus !== 'approved').map((v, idx) => {
+                                        const remaining = getRemainingSlots(v);
+                                        const isSoldOut = remaining !== null && remaining <= 0;
+                                        return (
+                                            <tr key={v._id} className={`group transition-all duration-300 ${isSoldOut ? 'opacity-50 bg-slate-50' : 'hover:bg-slate-50/80'}`}>
+                                                <td className="py-8 px-8">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 ${isSoldOut ? 'bg-slate-300 text-white' : idx === 0 ? 'bg-red-500 text-white shadow-xl shadow-red-500/20' : 'bg-blue-500 text-white'}`}>
+                                                            <Ticket size={24} />
+                                                        </div>
+                                                        <div>
+                                                            <p className={`text-3xl font-black tracking-tighter ${isSoldOut ? 'text-slate-400' : idx === 0 ? 'text-red-600' : 'text-slate-900'}`}>
+                                                                {v.discountType === 'percentage' ? `${v.discountValue}%` : formatPrice(v.discountValue)}
+                                                            </p>
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">GIẢM TỐI ĐA {formatPrice(v.maxDiscountValue || 0)}</p>
+                                                        </div>
                                                     </div>
+                                                </td>
+                                                <td className="py-8 px-8">
+                                                    <div className="max-w-xs">
+                                                        <p className="font-bold text-slate-800 text-base leading-tight group-hover:text-emerald-600 transition-colors">{v.missionTask || 'Thử thách bí ẩn'}</p>
+                                                    </div>
+                                                </td>
+                                                <td className="py-8 px-8">
                                                     <div>
-                                                        <p className={`text-3xl font-black tracking-tighter ${idx === 0 ? 'text-red-600' : 'text-slate-900'}`}>
-                                                            {v.discountType === 'percentage' ? `${v.discountValue}%` : formatPrice(v.discountValue)}
-                                                        </p>
-                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">GIẢM TỐI ĐA {formatPrice(v.maxDiscountValue || 0)}</p>
+                                                        <p className="font-black text-slate-900 text-lg">{formatPrice(v.minOrderValue)}</p>
+                                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ĐƠN TỐI THIỂU</p>
                                                     </div>
-                                                </div>
-                                            </td>
-                                            <td className="py-8 px-8">
-                                                <div className="max-w-xs">
-                                                    <p className="font-bold text-slate-800 text-base leading-tight group-hover:text-emerald-600 transition-colors">{v.missionTask || 'Thử thách bí ẩn'}</p>
-                                                </div>
-                                            </td>
-                                            <td className="py-8 px-8">
-                                                <div>
-                                                    <p className="font-black text-slate-900 text-lg">{formatPrice(v.minOrderValue)}</p>
-                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ĐƠN TỐI THIỂU</p>
-                                                </div>
-                                            </td>
-                                            <td className="py-8 px-8">
-                                                <div className="flex items-center gap-2 text-slate-500">
-                                                    <Clock size={16} />
-                                                    <span className="text-sm font-bold">{v.expiresAt ? new Date(v.expiresAt).toLocaleDateString('vi-VN') : 'Sắp tới'}</span>
-                                                </div>
-                                            </td>
-                                            <td className="py-8 px-8 text-right">
-                                                {v.userStatus === 'approved' ? (
-                                                    <Link 
-                                                        to="/my-vouchers"
-                                                        className="px-8 py-3.5 bg-emerald-100 text-emerald-600 font-black rounded-2xl text-[11px] uppercase tracking-widest inline-flex items-center justify-center gap-3 border border-emerald-200 shadow-sm"
-                                                    >
-                                                        Đã nhận mã
-                                                        <ShieldCheck size={16} />
-                                                    </Link>
-                                                ) : v.userStatus === 'pending' ? (
-                                                    <button 
-                                                        disabled
-                                                        className="px-8 py-3.5 bg-amber-50 text-amber-600 font-black rounded-2xl text-[11px] uppercase tracking-widest inline-flex items-center justify-center gap-3 border border-amber-200 cursor-not-allowed"
-                                                    >
-                                                        Chờ duyệt...
-                                                        <Clock size={16} className="animate-pulse" />
-                                                    </button>
-                                                ) : (
-                                                    <button 
-                                                        onClick={() => handleStartHunt(v)}
-                                                        className={`px-8 py-3.5 font-black rounded-2xl text-[11px] uppercase tracking-widest transition-all active:scale-95 inline-flex items-center justify-center gap-3 shadow-lg ${
-                                                            v.userStatus === 'rejected' ? 'bg-red-600 text-white hover:bg-blue-700 shadow-red-500/10' :
-                                                            idx === 0 
-                                                            ? 'bg-red-600 text-white hover:bg-blue-700 shadow-red-500/10' 
-                                                            : 'bg-blue-600 text-white hover:bg-amber-500 shadow-blue-500/10'
-                                                        }`}
-                                                    >
-                                                        {v.userStatus === 'rejected' ? 'Thử lại ngay' : 'Săn Ngay'}
-                                                        <ChevronRight size={16} />
-                                                    </button>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
+                                                </td>
+                                                <td className="py-8 px-8">
+                                                    {v.huntLimit > 0 ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <Users size={14} className={remaining <= 5 ? 'text-red-500' : 'text-emerald-500'} />
+                                                            <div>
+                                                                <p className={`font-black text-sm ${isSoldOut ? 'text-red-500' : remaining <= 5 ? 'text-red-500' : 'text-emerald-600'}`}>
+                                                                    {isSoldOut ? 'Hết lượt' : `Còn ${remaining} suất`}
+                                                                </p>
+                                                                <p className="text-[10px] text-slate-400 font-bold">/ {v.huntLimit} tổng</p>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-2 text-emerald-500">
+                                                            <Gift size={14} />
+                                                            <span className="font-bold text-sm">Không giới hạn</span>
+                                                        </div>
+                                                    )}
+                                                </td>
+                                                <td className="py-8 px-8">
+                                                    <div className="flex items-center gap-2 text-slate-500">
+                                                        <Clock size={16} />
+                                                        <span className="text-sm font-bold">{v.expiresAt ? new Date(v.expiresAt).toLocaleDateString('vi-VN') : 'Sắp tới'}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="py-8 px-8 text-right">
+                                                    {isSoldOut ? (
+                                                        <button disabled className="px-8 py-3.5 bg-slate-100 text-slate-400 font-black rounded-2xl text-[11px] uppercase tracking-widest inline-flex items-center justify-center gap-3 cursor-not-allowed">
+                                                            Hết lượt
+                                                            <AlertTriangle size={16} />
+                                                        </button>
+                                                    ) : (
+                                                        <button 
+                                                            onClick={() => handleStartHunt(v)}
+                                                            className={`px-8 py-3.5 font-black rounded-2xl text-[11px] uppercase tracking-widest transition-all active:scale-95 inline-flex items-center justify-center gap-3 shadow-lg ${
+                                                                idx === 0 
+                                                                ? 'bg-red-600 text-white hover:bg-blue-700 shadow-red-500/10' 
+                                                                : 'bg-blue-600 text-white hover:bg-amber-500 shadow-blue-500/10'
+                                                            }`}
+                                                        >
+                                                            Săn Ngay
+                                                            <ChevronRight size={16} />
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -348,128 +343,152 @@ const VoucherHuntingPage = () => {
                 )}
             </div>
 
-            {/* Mission Modal - Solid Yellow BG with Blue Elements */}
+            {/* Mission Modal */}
             {activeMission && (
-                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-fadeIn">
-                    <div className="bg-amber-400 rounded-[40px] w-full max-w-2xl relative overflow-hidden shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] animate-modalSlideIn border border-white/40">
-                        {/* Blue Glow for contrast */}
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
+                    <div className="bg-amber-400 rounded-[40px] w-full max-w-lg relative overflow-hidden shadow-[0_32px_64px_-16px_rgba(0,0,0,0.3)] border border-white/40">
                         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[400px] bg-blue-500/20 blur-[100px] rounded-full -z-0 pointer-events-none" />
                         
-                        <div className="relative z-10 px-6 pt-8 pb-6 flex flex-col items-center">
-                            {/* Icon - Blue on Yellow BG */}
-                            <div className="relative mb-6 group">
-                                <div className="absolute inset-0 bg-blue-500/30 blur-2xl rounded-full scale-150 animate-pulse" />
-                                <div className="relative w-16 h-16 bg-white rounded-[24px] flex items-center justify-center border-2 border-blue-500/30 rotate-12 transition-all duration-500 shadow-xl">
-                                    <Zap size={32} className="text-blue-600 fill-blue-600/20 -rotate-12" />
-                                </div>
-                            </div>
-
-                            <div className="text-center mb-6">
-                                <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mb-1">
-                                    Thử thách thợ săn
-                                </h3>
-                                <div className="h-1.5 w-16 bg-blue-600 mx-auto rounded-full" />
-                            </div>
-                            
-                            <div className="w-full bg-white/20 backdrop-blur-sm border border-white/30 rounded-[24px] p-5 mb-6 text-center shadow-inner">
-                                <p className="text-slate-900 text-base font-black leading-relaxed">
-                                    "{activeMission.missionTask}"
-                                </p>
-                            </div>
-
-                            {/* Steps */}
-                            {missionStep === 'idle' && (
-                                <button 
-                                    onClick={() => startMissionProgress()}
-                                    className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl shadow-xl hover:bg-blue-700 active:scale-95 transition-all uppercase tracking-[0.2em] text-sm flex items-center justify-center gap-4 group"
-                                >
-                                    Chấp nhận thử thách
-                                    <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
-                                </button>
-                            )}
-
-                            {missionStep === 'progress' && (
-                                <div className="w-full space-y-4">
-                                    <div className="relative h-4 bg-white/30 rounded-full overflow-hidden p-1">
-                                        <div 
-                                            className="h-full bg-blue-600 transition-all duration-150 ease-out rounded-full shadow-[0_0_20px_rgba(37,99,235,0.4)] relative"
-                                            style={{ width: `${missionProgress}%` }}
-                                        >
-                                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
+                        <div className="relative z-10 px-6 pt-8 pb-8 flex flex-col items-center">
+                            {missionStep === 'idle' ? (
+                                <>
+                                    {/* Icon */}
+                                    <div className="relative mb-5">
+                                        <div className="absolute inset-0 bg-blue-500/30 blur-2xl rounded-full scale-150 animate-pulse" />
+                                        <div className="relative w-16 h-16 bg-white rounded-[24px] flex items-center justify-center border-2 border-blue-500/30 rotate-12 shadow-xl">
+                                            <Zap size={32} className="text-blue-600 fill-blue-600/20 -rotate-12" />
                                         </div>
                                     </div>
-                                    <div className="flex justify-between items-center px-2">
-                                        <div className="flex items-center gap-2">
-                                            <Loader2 size={12} className="text-blue-600 animate-spin" />
-                                            <span className="text-[9px] font-black text-blue-700 uppercase tracking-widest">Đang tải...</span>
-                                        </div>
-                                        <span className="text-slate-900 font-black text-base">{missionProgress}%</span>
+                                    <div className="text-center mb-5">
+                                        <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tighter mb-1">Nhiệm vụ săn voucher</h3>
+                                        <div className="h-1.5 w-16 bg-blue-600 mx-auto rounded-full" />
                                     </div>
-                                </div>
-                            )}
-
-                            {missionStep === 'success' && (
-                                <div className="w-full animate-scaleIn space-y-6 flex flex-col items-center">
-                                    <div className="flex flex-col items-center gap-2">
-                                        <div className="w-14 h-14 bg-blue-600 rounded-full flex items-center justify-center shadow-lg animate-bounce">
-                                            <Check size={28} className="text-white" strokeWidth={4} />
-                                        </div>
-                                        <p className="text-slate-900 text-lg font-black uppercase tracking-tight">Nhiệm vụ hoàn tất!</p>
+                                    <div className="mb-4 flex items-center gap-3 bg-white/30 backdrop-blur-sm rounded-2xl px-6 py-3 border border-white/40">
+                                        <Ticket size={20} className="text-blue-700" />
+                                        <p className="text-xl font-black text-slate-900">
+                                            {activeMission.discountType === 'percentage'
+                                                ? `Giảm ${activeMission.discountValue}%`
+                                                : `Giảm ${formatPrice(activeMission.discountValue)}`}
+                                        </p>
                                     </div>
-                                    
-                                    <div className="w-full bg-white/20 backdrop-blur-sm border border-white/30 rounded-[32px] p-8">
-                                        <p className="text-[10px] font-black text-blue-700 uppercase tracking-[0.2em] mb-6 text-center">Gửi minh chứng hoàn thành</p>
-                                        
+                                    <div className="w-full bg-white/20 backdrop-blur-sm border border-white/30 rounded-[24px] p-5 mb-4 text-center shadow-inner">
+                                        <p className="text-[10px] font-black text-blue-700 uppercase tracking-[0.2em] mb-2">Nhiệm vụ cần hoàn thành</p>
+                                        <p className="text-slate-900 text-base font-black leading-relaxed">"{activeMission.missionTask}"</p>
+                                    </div>
+                                    {activeMission.huntLimit > 0 && (
+                                        <div className={`w-full mb-4 flex items-center justify-center gap-2 py-2 px-4 rounded-xl text-sm font-black ${
+                                            getRemainingSlots(activeMission) <= 5 ? 'bg-red-100 text-red-600 border border-red-200' : 'bg-white/30 text-blue-800 border border-white/40'
+                                        }`}>
+                                            <Users size={14} />
+                                            Còn <strong>{getRemainingSlots(activeMission)}</strong> / {activeMission.huntLimit} suất
+                                        </div>
+                                    )}
+                                    <button
+                                        onClick={() => setMissionStep('upload')}
+                                        className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl shadow-xl hover:bg-blue-700 active:scale-95 transition-all uppercase tracking-[0.1em] text-sm flex items-center justify-center gap-3 group"
+                                    >
+                                        Chấp nhận thử thách
+                                        <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                                    </button>
+                                    <button onClick={() => setActiveMission(null)} className="mt-4 text-blue-800 text-[10px] font-black uppercase tracking-[0.2em] hover:text-red-600 transition-all py-2 px-6 rounded-full hover:bg-white/20">
+                                        Hủy bỏ
+                                    </button>
+                                </>
+                            ) : missionStep === 'upload' ? (
+                                <>
+                                    <div className="relative mb-4">
+                                        <div className="absolute inset-0 bg-blue-500/30 blur-2xl rounded-full scale-150 animate-pulse" />
+                                        <div className="relative w-14 h-14 bg-white rounded-[20px] flex items-center justify-center border-2 border-blue-500/30 rotate-12 shadow-xl">
+                                            <Camera size={28} className="text-blue-600 -rotate-12" />
+                                        </div>
+                                    </div>
+                                    <div className="text-center mb-4">
+                                        <h3 className="text-xl font-black text-slate-900 uppercase tracking-tighter mb-1">Gửi minh chứng</h3>
+                                        <p className="text-blue-800 text-xs font-bold">Chụp màn hình hoặc ảnh bằng chứng hoàn thành nhiệm vụ</p>
+                                        <div className="h-1.5 w-16 bg-blue-600 mx-auto rounded-full mt-2" />
+                                    </div>
+                                    {/* Upload area */}
+                                    <div className="w-full mb-4">
                                         {!proofImage ? (
-                                            <label className="flex flex-col items-center justify-center gap-6 py-12 border-2 border-dashed border-white/50 rounded-[24px] cursor-pointer hover:border-blue-600 hover:bg-white/40 transition-all group relative overflow-hidden">
+                                            <label className={`flex flex-col items-center justify-center gap-4 py-8 border-2 border-dashed rounded-[20px] cursor-pointer transition-all ${
+                                                isUploadingProof ? 'border-blue-400 bg-white/20' : 'border-white/50 hover:border-blue-600 hover:bg-white/40'
+                                            }`}>
                                                 {isUploadingProof ? (
-                                                    <Loader2 size={48} className="text-blue-600 animate-spin" />
+                                                    <Loader2 size={40} className="text-blue-600 animate-spin" />
                                                 ) : (
                                                     <>
-                                                        <div className="w-16 h-16 bg-white rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                                                            <Camera size={32} className="text-blue-600 transition-colors" />
+                                                        <div className="w-14 h-14 bg-white rounded-xl flex items-center justify-center shadow-lg">
+                                                            <Camera size={28} className="text-blue-600" />
                                                         </div>
                                                         <div className="text-center">
-                                                            <p className="text-slate-900 font-black text-base">Tải ảnh minh chứng</p>
-                                                            <p className="text-blue-700 text-[10px] font-bold uppercase tracking-widest mt-1">SCREENSHOT, ẢNH CHỤP...</p>
+                                                            <p className="text-slate-900 font-black text-sm">Nhấn để tải ảnh lên</p>
+                                                            <p className="text-blue-700 text-[10px] font-bold uppercase tracking-widest mt-1">Screenshot, ảnh chụp...</p>
                                                         </div>
                                                     </>
                                                 )}
                                                 <input type="file" className="hidden" accept="image/*" onChange={handleUploadProof} disabled={isUploadingProof} />
                                             </label>
                                         ) : (
-                                            <div className="relative rounded-[24px] overflow-hidden border-2 border-blue-600 shadow-xl animate-scaleIn">
-                                                <img src={proofImage} alt="Minh chứng" className="w-full h-80 object-cover" />
-                                                <button 
+                                            <div className="relative rounded-[20px] overflow-hidden border-2 border-blue-600 shadow-xl">
+                                                <img src={proofImage} alt="Minh chứng" className="w-full h-52 object-cover" />
+                                                <button
                                                     onClick={() => setProofImage('')}
-                                                    className="absolute top-4 right-4 w-10 h-10 bg-white text-red-500 rounded-full flex items-center justify-center shadow-lg hover:bg-red-500 hover:text-white transition-all z-20"
+                                                    className="absolute top-3 right-3 w-9 h-9 bg-white text-red-500 rounded-full flex items-center justify-center shadow-lg hover:bg-red-500 hover:text-white transition-all"
                                                 >
-                                                    <X size={20} />
+                                                    <X size={18} />
                                                 </button>
-                                                <div className="absolute inset-x-0 bottom-0 bg-blue-600/90 backdrop-blur-sm py-3 text-center">
-                                                    <p className="text-[10px] font-black text-white uppercase tracking-widest">Ảnh đã sẵn sàng</p>
+                                                <div className="absolute inset-x-0 bottom-0 bg-blue-600/90 py-2 text-center">
+                                                    <p className="text-[10px] font-black text-white uppercase tracking-widest">Ảnh đã sẵn sàng ✓</p>
                                                 </div>
                                             </div>
                                         )}
                                     </div>
-
-                                    <button 
-                                        onClick={() => handleClaimVoucher()}
-                                        disabled={!proofImage || isUploadingProof}
-                                        className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl shadow-xl active:scale-95 transition-all uppercase tracking-[0.1em] text-sm flex items-center justify-center gap-3 disabled:opacity-50 disabled:grayscale group hover:bg-blue-700"
+                                    <button
+                                        onClick={handleClaimVoucher}
+                                        disabled={!proofImage || isClaiming}
+                                        className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl shadow-xl hover:bg-blue-700 active:scale-95 transition-all uppercase tracking-[0.1em] text-sm flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed group"
                                     >
-                                        Nhận mã Voucher Ngay
-                                        <Ticket size={20} className="group-hover:rotate-12 transition-transform" />
+                                        {isClaiming ? (
+                                            <><Loader2 size={20} className="animate-spin" />Đang xác nhận...</>
+                                        ) : (
+                                            <><Ticket size={20} className="group-hover:rotate-12 transition-transform" />Nhận Voucher Ngay</>
+                                        )}
                                     </button>
+                                    <button onClick={() => { setMissionStep('idle'); setProofImage(''); }} className="mt-4 text-blue-800 text-[10px] font-black uppercase tracking-[0.2em] hover:text-red-600 transition-all py-2 px-6 rounded-full hover:bg-white/20">
+                                        ← Quay lại
+                                    </button>
+                                </>
+                            ) : (
+                                /* Success State */
+                                <div className="flex flex-col items-center gap-6 py-4">
+                                    <div className="w-24 h-24 bg-blue-600 rounded-full flex items-center justify-center shadow-2xl shadow-blue-600/30 animate-bounce">
+                                        <Check size={48} className="text-white" strokeWidth={3} />
+                                    </div>
+                                    <div className="text-center">
+                                        <h3 className="text-2xl font-black text-slate-900 uppercase tracking-tight mb-2">🎉 Nhận Voucher Thành Công!</h3>
+                                        <p className="text-slate-800 font-medium">Voucher đã được thêm vào ví của bạn ngay lập tức.</p>
+                                    </div>
+                                    <div className="w-full bg-white/30 rounded-2xl p-4 text-center border border-white/40">
+                                        <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest mb-1">Mã voucher</p>
+                                        <p className="text-2xl font-black text-slate-900 tracking-widest">{activeMission.code}</p>
+                                    </div>
+                                    <div className="flex flex-col gap-3 w-full">
+                                        <Link
+                                            to="/my-vouchers"
+                                            className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl shadow-xl flex items-center justify-center gap-3 hover:bg-blue-700 active:scale-95 transition-all uppercase tracking-[0.1em] text-sm"
+                                        >
+                                            <ShieldCheck size={20} />
+                                            Xem Ví Voucher
+                                        </Link>
+                                        <button
+                                            onClick={() => setActiveMission(null)}
+                                            className="w-full py-3 bg-white/30 text-slate-900 font-black rounded-2xl text-sm hover:bg-white/50 transition-all border border-white/40"
+                                        >
+                                            Tiếp tục săn
+                                        </button>
+                                    </div>
                                 </div>
                             )}
-
-                            <button 
-                                onClick={() => setActiveMission(null)}
-                                className="mt-6 text-blue-800 text-[10px] font-black uppercase tracking-[0.2em] hover:text-red-600 transition-all py-2 px-6 rounded-full hover:bg-white/20"
-                            >
-                                Hủy bỏ thử thách
-                            </button>
                         </div>
                     </div>
                 </div>

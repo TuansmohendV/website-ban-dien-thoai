@@ -207,7 +207,7 @@ const ProductDetailPage = () => {
             filtered = relatedProducts.filter((item) => item.category === 'dong-ho');
         }
 
-        const source = filtered.length > 0 ? filtered : relatedProducts;
+        const source = filtered;
         return inflateProducts(source, 4, `detail-cross-sell-${crossSellTab}`);
     }, [crossSellTab, relatedProducts]);
 

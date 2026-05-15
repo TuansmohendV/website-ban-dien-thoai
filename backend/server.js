@@ -34,6 +34,8 @@ import adminProductRoutes from './routes/adminProductRoutes.js';
 import adminOrderRoutes from './routes/adminOrderRoutes.js';
 import adminReviewRoutes from './routes/adminReviewRoutes.js';
 import bannerRoutes from './routes/bannerRoutes.js';
+import referralRoutes from './routes/referralRoutes.js';
+import tradeInRoutes from './routes/tradeInRoutes.js';
 import { startWeeklyVoucherJob } from './jobs/weeklyVoucherJob.js';
 
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
@@ -138,6 +140,7 @@ app.use('/api/user/search-history', searchHistoryRoutes);
 // ─── User profile & admin user management ────────
 app.use('/api/user', userRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/referral', referralRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 
 // ─── Address ─────────────────────────────────────
@@ -157,6 +160,7 @@ app.use('/api/admin/brands', brandRoutes);
 
 // ─── Reviews ─────────────────────────────────────
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/trade-in', tradeInRoutes);
 app.use('/api/admin/reviews', adminReviewRoutes);
 
 // ─── Cart ────────────────────────────────────────

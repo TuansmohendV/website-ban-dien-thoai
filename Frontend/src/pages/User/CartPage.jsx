@@ -21,8 +21,12 @@ import {
   Zap,
   Wallet,
   CreditCard,
-  Coins
+  Coins,
+  Tag,
+  ChevronRight,
+  Ticket
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 const VIETNAM_PROVINCES = [
   "Hà Nội", "TP. Hồ Chí Minh", "Đà Nẵng", "Hải Phòng", "Cần Thơ", 
@@ -95,6 +99,7 @@ const CartPage = () => {
     refreshCart,
   } = useCart();
   const { createOrder } = useOrders();
+  const { user } = useAuth();
   const [isOrdered, setIsOrdered] = useState(false);
   const [orderId, setOrderId] = useState('');
 
@@ -137,6 +142,31 @@ const CartPage = () => {
   const availableStores = STORE_BRANCHES_BY_CITY[customerInfo.city] || [];
   const isStorePickup = customerInfo.deliveryMode === 'store';
   const isHomeDelivery = customerInfo.deliveryMode === 'home';
+
+  const [availableVouchers, setAvailableVouchers] = useState([]);
+  const [showVoucherList, setShowVoucherList] = useState(false);
+
+  const fetchVouchers = async () => {
+    try {
+        const [publicRes, myRes] = await Promise.all([
+            api.get('/api/voucher'),
+            user ? api.get('/api/voucher/my-vouchers') : Promise.resolve({ data: { data: [] } })
+        ]);
+        
+        const publicVouchers = publicRes.data?.data || [];
+        const myVouchers = myRes.data?.data || [];
+        const combined = [...publicVouchers, ...myVouchers].filter((v, index, self) => 
+            index === self.findIndex((t) => t.code === v.code)
+        );
+        setAvailableVouchers(combined);
+    } catch (error) {
+        console.error('Failed to fetch vouchers:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchVouchers();
+  }, [user]);
 
   useEffect(() => {
     setAppliedCoupon(voucherCode || '');
@@ -762,218 +792,142 @@ const CartPage = () => {
 
                                 {customerInfo.paymentMethod === 'BANK_TRANSFER' && (
                                     <div className="px-4 pb-6 pt-2 space-y-4 animate-in slide-in-from-top-2 duration-300">
-                                        {isVerifying ? (
-                                            /* OTP VERIFICATION VIEW */
-                                            <div className="p-6 bg-white rounded-2xl border-2 border-[#008d71] shadow-xl space-y-6 text-center">
-                                                <div className="w-16 h-16 bg-[#e5f9e0] rounded-full flex items-center justify-center mx-auto mb-2">
-                                                    <Check size={32} className="text-[#008d71]" strokeWidth={3} />
-                                                </div>
-                                                <h4 className="text-lg font-black text-gray-900 uppercase">Xác thực OTP</h4>
-                                                <p className="text-[12px] text-gray-500 font-medium px-4">Vui lòng nhập mã xác thực 6 chữ số được gửi tới số điện thoại của bạn.</p>
-                                                
-                                                <input 
-                                                    type="text" 
-                                                    maxLength={6}
-                                                    value={otpCode}
-                                                    onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
-                                                    className="w-full h-14 text-center text-3xl font-black tracking-[0.4em] bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-[#008d71] outline-none transition-all"
-                                                    placeholder="000000"
-                                                />
-                                                
-                                                <button 
-                                                    type="button"
-                                                    onClick={confirmVerification}
-                                                    disabled={isLinking}
-                                                    className="w-full h-12 bg-[#008d71] text-white font-black rounded-xl shadow-lg hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2"
-                                                >
-                                                    {isLinking ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : "XÁC NHẬN LIÊN KẾT"}
-                                                </button>
-                                                <button type="button" onClick={() => setIsVerifying(false)} className="text-[11px] font-bold text-gray-400 uppercase hover:text-gray-600 transition-colors">Hủy và quay lại</button>
+                                       <div className="flex gap-2 mb-4">
+                                         <button 
+                                           type="button"
+                                           onClick={() => setSelectedBank('sacombank')}
+                                           className={`flex-1 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all border-2 ${selectedBank === 'sacombank' ? 'bg-[#008d71] text-white border-[#008d71] shadow-lg' : 'bg-white text-gray-400 border-gray-100'}`}
+                                         >
+                                           Sacombank
+                                         </button>
+                                         <button 
+                                           type="button"
+                                           onClick={() => setSelectedBank('momo')}
+                                           className={`flex-1 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all border-2 ${selectedBank === 'momo' ? 'bg-[#A50064] text-white border-[#A50064] shadow-lg' : 'bg-white text-gray-400 border-gray-100'}`}
+                                         >
+                                           Ví Momo
+                                         </button>
+                                       </div>
+
+                                       <div className="flex flex-col items-center">
+                                         <div className="w-full aspect-square bg-white rounded-2xl border-2 border-gray-50 p-1 flex flex-col items-center justify-center relative overflow-hidden shadow-inner">
+                                            <img 
+                                              src={selectedBank === 'momo' ? '/payment/momo_qr.jpg' : '/payment/sacombank_qr.jpg'} 
+                                              alt="QR Code" 
+                                              className="w-full h-full object-cover scale-[1.7] transition-all duration-500" 
+                                              style={{ objectPosition: selectedBank === 'momo' ? 'center 55%' : 'center 45%' }}
+                                              onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                                            />
+                                            <div style={{ display: 'none' }} className="flex-col items-center text-center text-gray-200">
+                                               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M7 7h.01M17 7h.01M7 17h.01M17 17h.01M12 12h.01" /></svg>
+                                               <span className="text-[10px] font-bold mt-2">Vui lòng quét mã QR</span>
                                             </div>
-                                        ) : (
-                                            /* BANK GRID & INPUTS */
-                                            <>
-                                                <div className="grid grid-cols-4 gap-2">
-                                                    {BANKS.slice(0, 8).map(bank => (
-                                                        <button 
-                                                            key={bank.id}
-                                                            type="button"
-                                                            onClick={() => setSelectedBank(bank.id)}
-                                                            className={`aspect-square p-2 rounded-xl border-2 transition-all flex items-center justify-center bg-white ${selectedBank === bank.id ? 'border-[#008d71] shadow-md scale-105' : 'border-gray-100 hover:border-gray-200'}`}
-                                                        >
-                                                            <img src={bank.logo} alt={bank.name} className="max-h-full object-contain" />
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                                <div className="space-y-3">
-                                                    <input 
-                                                        type="text" 
-                                                        placeholder="Số tài khoản ngân hàng" 
-                                                        value={bankAccountNumber}
-                                                        onChange={(e) => setBankAccountNumber(e.target.value)}
-                                                        className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl outline-none font-bold text-[14px] focus:border-[#008d71]"
-                                                    />
-                                                    <div className="relative">
-                                                        <input 
-                                                            type="text" 
-                                                            placeholder={isLookingUp ? "Đang tra cứu chủ tài khoản..." : "Tên chủ tài khoản (NGUYEN VAN A)"} 
-                                                            value={bankAccountName}
-                                                            onChange={(e) => setBankAccountName(e.target.value)}
-                                                            className={`w-full h-12 px-4 bg-gray-50 border border-gray-100 rounded-xl outline-none font-bold text-[14px] uppercase ${isLookingUp ? 'animate-pulse' : ''}`}
-                                                            readOnly={isLookingUp}
-                                                        />
-                                                        {isLookingUp && <div className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-[#008d71] border-t-transparent rounded-full animate-spin" />}
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-3">
-                                                        <input type="text" placeholder="Số CCCD" value={bankIDNumber} onChange={(e) => setBankIDNumber(e.target.value)} className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none font-bold text-[14px] focus:border-[#008d71]" />
-                                                        <input type="text" placeholder="Số ĐT đăng ký Bank" value={bankPhone} onChange={(e) => setBankPhone(e.target.value)} className="w-full h-12 px-4 border border-gray-200 rounded-xl outline-none font-bold text-[14px] focus:border-[#008d71]" />
-                                                    </div>
-                                                </div>
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => handleLinkAccount('bank')}
-                                                    className="w-full h-12 bg-[#008d71] text-white font-black rounded-xl shadow-lg shadow-[#008d71]/20 hover:opacity-90 active:scale-95 transition-all"
-                                                >
-                                                    LIÊN KẾT TÀI KHOẢN NGAY
-                                                </button>
-                                            </>
-                                        )}
+                                         </div>
+
+                                         <div className="mt-6 w-full space-y-3">
+                                            <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                               <div className="flex justify-between items-center mb-1.5">
+                                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Chủ tài khoản:</span>
+                                                  <span className="text-[13px] font-black text-gray-900">MAI THANH TUAN</span>
+                                               </div>
+                                               <div className="flex justify-between items-center">
+                                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Số tài khoản:</span>
+                                                  <span className="text-[14px] font-black text-[#008d71] tracking-wider">070131723553</span>
+                                               </div>
+                                            </div>
+                                            <p className="text-[10px] text-center text-gray-400 font-medium italic">Vui lòng nhập đúng nội dung chuyển khoản là Mã đơn hàng của bạn.</p>
+                                         </div>
+                                       </div>
                                     </div>
                                 )}
                             </div>
 
-                            {/* WALLET OPTION */}
-                            <div className={`rounded-2xl border-2 transition-all overflow-hidden ${(customerInfo.paymentMethod === 'MOMO' || customerInfo.paymentMethod === 'VNPAY') ? 'border-[#008d71] bg-[#e5f9e0]/10' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
-                                <button 
-                                    type="button"
-                                    onClick={() => setCustomerInfo({...customerInfo, paymentMethod: 'MOMO'})}
-                                    className="w-full flex items-center gap-4 p-4"
-                                >
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${(customerInfo.paymentMethod === 'MOMO' || customerInfo.paymentMethod === 'VNPAY') ? 'bg-[#008d71] text-white' : 'bg-gray-50 text-gray-400'}`}>
-                                        <Wallet size={24} />
-                                    </div>
-                                    <div className="flex-1 text-left">
-                                        <p className={`text-[14px] font-black leading-tight ${(customerInfo.paymentMethod === 'MOMO' || customerInfo.paymentMethod === 'VNPAY') ? 'text-gray-900' : 'text-gray-600'}`}>Ví điện tử</p>
-                                        <p className="text-[11px] font-bold text-gray-400">Thanh toán MoMo / VNPay</p>
-                                    </div>
-                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${(customerInfo.paymentMethod === 'MOMO' || customerInfo.paymentMethod === 'VNPAY') ? 'border-[#008d71]' : 'border-gray-200'}`}>
-                                        {(customerInfo.paymentMethod === 'MOMO' || customerInfo.paymentMethod === 'VNPAY') && <div className="w-2.5 h-2.5 rounded-full bg-[#008d71]"></div>}
-                                    </div>
-                                </button>
 
-                                {(customerInfo.paymentMethod === 'MOMO' || customerInfo.paymentMethod === 'VNPAY') && (
-                                    <div className="px-4 pb-6 pt-2 space-y-4 animate-in slide-in-from-top-2 duration-300">
-                                        {isVerifying ? (
-                                            /* WALLET OTP VIEW */
-                                            <div className="p-6 bg-white rounded-2xl border-2 border-[#008d71] shadow-xl space-y-6 text-center">
-                                                <div className="w-16 h-16 bg-[#e5f9e0] rounded-full flex items-center justify-center mx-auto mb-2">
-                                                    <Wallet size={32} className="text-[#008d71]" />
-                                                </div>
-                                                <h4 className="text-lg font-black text-gray-900 uppercase">Xác thực Ví Điện Tử</h4>
-                                                <input 
-                                                    type="text" 
-                                                    maxLength={6}
-                                                    value={otpCode}
-                                                    onChange={(e) => setOtpCode(e.target.value.replace(/[^0-9]/g, ''))}
-                                                    className="w-full h-14 text-center text-3xl font-black tracking-[0.4em] bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-[#008d71] outline-none transition-all"
-                                                    placeholder="000000"
-                                                />
-                                                <button 
-                                                    type="button"
-                                                    onClick={confirmVerification}
-                                                    disabled={isLinking}
-                                                    className="w-full h-12 bg-[#008d71] text-white font-black rounded-xl shadow-lg hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2"
-                                                >
-                                                    {isLinking ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : "XÁC NHẬN VÍ"}
-                                                </button>
-                                                <button type="button" onClick={() => setIsVerifying(false)} className="text-[11px] font-bold text-gray-400 uppercase hover:text-gray-600 transition-colors">Hủy và quay lại</button>
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <div className="grid grid-cols-2 gap-3">
-                                                    <button 
-                                                        type="button"
-                                                        onClick={() => setCustomerInfo({...customerInfo, paymentMethod: 'MOMO'})}
-                                                        className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${customerInfo.paymentMethod === 'MOMO' ? 'border-[#008d71] bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50 opacity-60 hover:opacity-100'}`}
-                                                    >
-                                                        <img src="https://cdn.haitrieu.com/wp-content/uploads/2022/10/Logo-MoMo-Square.png" className="w-8 h-8 rounded-lg" alt="MoMo" />
-                                                        <span className="text-[12px] font-black uppercase text-gray-900">MoMo</span>
-                                                    </button>
-                                                    <button 
-                                                        type="button"
-                                                        onClick={() => setCustomerInfo({...customerInfo, paymentMethod: 'VNPAY'})}
-                                                        className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all ${customerInfo.paymentMethod === 'VNPAY' ? 'border-[#008d71] bg-white shadow-sm' : 'border-gray-100 bg-gray-50/50 opacity-60 hover:opacity-100'}`}
-                                                    >
-                                                        <img src="https://inkythuatso.com/uploads/thumbnails/800/2021/12/vnpay-logo-inkythuatso-01-13-16-29-51.jpg" className="w-8 h-8 rounded-lg object-contain" alt="VNPay" />
-                                                        <span className="text-[12px] font-black uppercase text-gray-900">VNPay</span>
-                                                    </button>
-                                                </div>
-                                                <div className="space-y-3">
-                                                    <input 
-                                                        type="text" 
-                                                        placeholder="Số điện thoại đăng ký ví" 
-                                                        value={bankPhone}
-                                                        onChange={(e) => setBankPhone(e.target.value)}
-                                                        className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl outline-none font-bold text-[14px] focus:border-[#008d71]"
-                                                    />
-                                                    <input 
-                                                        type="text" 
-                                                        placeholder="Tên chủ ví (NGUYEN VAN A)" 
-                                                        value={bankAccountName}
-                                                        onChange={(e) => setBankAccountName(e.target.value)}
-                                                        className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl outline-none font-bold text-[14px] focus:border-[#008d71] uppercase"
-                                                    />
-                                                </div>
-                                                <button 
-                                                    type="button"
-                                                    onClick={() => handleLinkAccount('wallet')}
-                                                    className="w-full h-12 bg-[#008d71] text-white font-black rounded-xl shadow-lg shadow-[#008d71]/20 hover:opacity-90 active:scale-95 transition-all"
-                                                >
-                                                    LIÊN KẾT VÍ NGAY
-                                                </button>
-                                            </>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
                         </div>
                     </div>
 
-                    <div className="flex gap-2">
-                        <input 
-                            type="text" 
-                            value={couponCode}
-                            onChange={(e) => {
-                                setCouponCode(e.target.value.toUpperCase());
-                                setCouponStatus(null);
-                            }}
-                            placeholder="Mã giảm giá (Nếu có)"
-                            className="flex-1 bg-white border border-gray-200 rounded-xl h-[52px] px-6 text-[14px] font-bold text-gray-800 focus:ring-2 focus:ring-[#008d71]/20 transition-all uppercase disabled:bg-gray-50 disabled:text-gray-400"
-                            disabled={!!appliedCoupon}
-                        />
-                        {appliedCoupon ? (
-                            <button
+                    <div className="space-y-4">
+                        <div className="flex gap-2">
+                            <input 
+                                type="text" 
+                                value={couponCode}
+                                onChange={(e) => {
+                                    setCouponCode(e.target.value.toUpperCase());
+                                    setCouponStatus(null);
+                                }}
+                                placeholder="Mã giảm giá (Nếu có)"
+                                className="flex-1 bg-white border border-gray-200 rounded-xl h-[52px] px-6 text-[14px] font-bold text-gray-800 focus:ring-2 focus:ring-[#008d71]/20 transition-all uppercase disabled:bg-gray-50 disabled:text-gray-400"
+                                disabled={!!appliedCoupon}
+                            />
+                            {appliedCoupon ? (
+                                <button
+                                    type="button"
+                                    onClick={handleRemoveCoupon}
+                                    disabled={isApplyingCoupon}
+                                    className="bg-red-100 text-red-700 px-8 rounded-xl font-bold text-[13px] uppercase tracking-widest hover:bg-red-200 transition-all disabled:opacity-50"
+                                >
+                                    {isApplyingCoupon ? '...' : 'Gỡ mã'}
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={handleApplyCoupon}
+                                    disabled={isApplyingCoupon || !couponCode}
+                                    className="bg-[#444] text-white px-8 rounded-xl font-bold text-[13px] uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50"
+                                >
+                                    {isApplyingCoupon ? '...' : 'Sử dụng'}
+                                </button>
+                            )}
+                        </div>
+
+                        {!appliedCoupon && (
+                            <button 
                                 type="button"
-                                onClick={handleRemoveCoupon}
-                                disabled={isApplyingCoupon}
-                                className="bg-red-100 text-red-700 px-8 rounded-xl font-bold text-[13px] uppercase tracking-widest hover:bg-red-200 transition-all disabled:opacity-50"
+                                onClick={() => setShowVoucherList(!showVoucherList)}
+                                className="w-full flex items-center justify-between px-6 py-3 bg-[#e5f9e0]/50 border border-[#008d71]/20 rounded-xl group hover:bg-[#e5f9e0] transition-all"
                             >
-                                {isApplyingCoupon ? '...' : 'Gỡ mã'}
-                            </button>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={handleApplyCoupon}
-                                disabled={isApplyingCoupon}
-                                className="bg-[#444] text-white px-8 rounded-xl font-bold text-[13px] uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50"
-                            >
-                                {isApplyingCoupon ? '...' : 'Sử dụng'}
+                                <div className="flex items-center gap-2">
+                                    <Tag size={16} className="text-[#008d71]" />
+                                    <span className="text-[12px] font-black text-[#008d71] uppercase tracking-wider">Xem danh sách mã giảm giá</span>
+                                </div>
+                                <ChevronRight size={16} className={`text-[#008d71] transition-transform ${showVoucherList ? 'rotate-90' : ''}`} />
                             </button>
                         )}
+
+                        {showVoucherList && !appliedCoupon && (
+                            <div className="grid grid-cols-1 gap-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar animate-in slide-in-from-top-2">
+                                {availableVouchers.length > 0 ? (
+                                    availableVouchers.map(v => (
+                                        <button
+                                            key={v.code}
+                                            type="button"
+                                            onClick={() => {
+                                                setCouponCode(v.code);
+                                                handleApplyCoupon(v.code);
+                                                setShowVoucherList(false);
+                                            }}
+                                            className="flex items-center gap-3 p-3 bg-white border border-gray-100 rounded-xl hover:border-[#008d71] hover:shadow-md transition-all text-left"
+                                        >
+                                            <div className="w-10 h-10 bg-[#e5f9e0] rounded-lg flex items-center justify-center shrink-0">
+                                                <Ticket size={20} className="text-[#008d71]" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-[12px] font-black text-gray-900 truncate uppercase">{v.code}</p>
+                                                <p className="text-[10px] font-bold text-gray-400 line-clamp-1">{v.description || `Giảm ${formatPrice(v.discountValue)}`}</p>
+                                            </div>
+                                            <span className="text-[10px] font-black text-[#008d71] uppercase">Dùng ngay</span>
+                                        </button>
+                                    ))
+                                ) : (
+                                    <div className="py-4 text-center text-[11px] font-bold text-gray-400 uppercase tracking-widest">Không có mã khả dụng</div>
+                                )}
+                            </div>
+                        )}
                     </div>
+
                     {couponStatus && (
                         <p
-                            className={`text-[12px] font-bold -mt-3 ${
+                            className={`text-[12px] font-bold -mt-1 ${
                                 couponStatus.type === 'success'
                                     ? 'text-emerald-600'
                                     : 'text-red-500'

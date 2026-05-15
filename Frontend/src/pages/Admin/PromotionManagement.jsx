@@ -45,6 +45,8 @@ const mapVoucherForAdmin = (voucher = {}) => ({
   used: Number(voucher.usedCount || 0),
   total: Number(voucher.usageLimit || 0),
   usageLimitPerUser: Number(voucher.usageLimitPerUser || 1),
+  huntLimit: Number(voucher.huntLimit || 0),
+  huntedCount: Number(voucher.huntedCount || 0),
   expiry: toDateInput(voucher.expiresAt),
   status: voucher.status || (voucher.isActive === false ? 'Tạm tắt' : 'Hoạt động'),
   isActive: voucher.isActive !== false,
@@ -72,7 +74,7 @@ const PromotionManagement = () => {
   
   const [formData, setFormData] = useState({
     code: '', type: 'Giảm tiền', value: '', minSpend: '', total: '', expiry: '', isActive: true,
-    isHuntedOnly: false, missionTask: ''
+    isHuntedOnly: false, missionTask: '', huntLimit: 0
   });
 
   const loadPromos = useCallback(async () => {
@@ -148,12 +150,13 @@ const PromotionManagement = () => {
         isActive: promo.isActive,
         isHuntedOnly: promo.isHuntedOnly,
         missionTask: promo.missionTask,
+        huntLimit: promo.huntLimit || 0,
       });
     } else {
       setEditingPromo(null);
       setFormData({ 
         code: '', type: 'Giảm tiền', value: '', minSpend: 0, total: 0, expiry: '', isActive: true,
-        isHuntedOnly: false, missionTask: ''
+        isHuntedOnly: false, missionTask: '', huntLimit: 0
       });
     }
     setShowModal(true);
@@ -182,6 +185,7 @@ const PromotionManagement = () => {
       isActive: cleanData.isActive,
       isHuntedOnly: cleanData.isHuntedOnly,
       missionTask: cleanData.missionTask,
+      huntLimit: Math.max(0, Number(cleanData.huntLimit) || 0),
     };
 
     setIsSaving(true);
@@ -235,10 +239,6 @@ const PromotionManagement = () => {
           <p className="page-subtitle">Tạo mã giảm giá, chương trình ưu đãi và voucher cho khách hàng.</p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <button className="btn-primary" onClick={() => setShowReviewModal(true)} style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', position: 'relative' }}>
-            <Zap size={20} />
-            Duyệt Voucher {pendingProofs.length > 0 && <span style={{ position: 'absolute', top: '-8px', right: '-8px', background: '#ef4444', color: 'white', fontSize: '10px', minWidth: '18px', height: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, borderRadius: '50%', border: '2px solid white', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{pendingProofs.length}</span>}
-          </button>
           <button className="btn-primary" onClick={() => handleOpenModal()}>
             <Plus size={20} />
             Tạo mã mới
@@ -511,15 +511,32 @@ const PromotionManagement = () => {
                 </div>
 
                 {formData.isHuntedOnly && (
-                  <div className="input-group" style={{ gridColumn: 'span 2' }}>
-                    <label style={{ color: '#ef4444' }}>Mô tả nhiệm vụ (Dành cho thợ săn)</label>
-                    <textarea 
-                      placeholder="VD: Chia sẻ sản phẩm lên Facebook hoặc Chờ đợi hệ thống xác thực..." 
-                      value={formData.missionTask}
-                      onChange={e => setFormData({...formData, missionTask: e.target.value})}
-                      style={{ width: '100%', height: '80px', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', outline: 'none' }}
-                    />
-                  </div>
+                  <>
+                    <div className="input-group" style={{ gridColumn: 'span 2' }}>
+                      <label style={{ color: '#ef4444' }}>Mô tả nhiệm vụ (Dành cho thợ săn)</label>
+                      <textarea 
+                        placeholder="VD: Chia sẻ sản phẩm lên Facebook và tag bạn bè để nhận voucher..." 
+                        value={formData.missionTask}
+                        onChange={e => setFormData({...formData, missionTask: e.target.value})}
+                        style={{ width: '100%', height: '80px', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', outline: 'none' }}
+                      />
+                    </div>
+                    <div className="input-group">
+                      <label style={{ color: '#ef4444' }}>Giới hạn số lượt săn (0 = không giới hạn)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="VD: 100"
+                        value={formData.huntLimit}
+                        onChange={e => setFormData({...formData, huntLimit: e.target.value})}
+                      />
+                      {formData.huntLimit > 0 && (
+                        <p style={{ fontSize: '11px', color: '#64748b', marginTop: '6px', fontWeight: 600 }}>
+                          ⚡ Chỉ {formData.huntLimit} người đầu tiên hoàn thành nhiệm vụ sẽ nhận được voucher này.
+                        </p>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
             </div>
@@ -532,117 +549,7 @@ const PromotionManagement = () => {
           </div>
         </div>
       )}
-      {/* Review Proof Modal */}
-      {showReviewModal && (
-        <div className="modal-overlay" onClick={() => setShowReviewModal(false)}>
-          <div className="modal-content" style={{ maxWidth: '1000px' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Phê duyệt minh chứng Săn Voucher</h2>
-              <button className="close-btn" onClick={() => setShowReviewModal(false)}><X size={24} /></button>
-            </div>
-            <div className="modal-body">
-              {isLoadingProofs ? (
-                <p>Đang tải danh sách chờ duyệt...</p>
-              ) : pendingProofs.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '40px' }}>
-                  <Ticket size={48} style={{ margin: '0 auto 15px', color: '#cbd5e1' }} />
-                  <p style={{ color: '#64748b', fontWeight: 600 }}>Không có minh chứng nào đang chờ duyệt.</p>
-                </div>
-              ) : (
-                <div className="table-responsive">
-                  <table className="admin-table">
-                    <thead>
-                      <tr>
-                        <th>Khách hàng</th>
-                        <th>Voucher</th>
-                        <th>Minh chứng</th>
-                        <th>Ghi chú Admin</th>
-                        <th>Hành động</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pendingProofs.map((p) => (
-                        <tr key={p._id}>
-                          <td>
-                            <div style={{ fontSize: '13px' }}>
-                              <p style={{ fontWeight: 800 }}>{p.user?.fullName}</p>
-                              <p style={{ color: '#64748b', fontSize: '11px' }}>{p.user?.phone}</p>
-                            </div>
-                          </td>
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <Tag size={14} className="text-emerald-500" />
-                              <span style={{ fontWeight: 800 }}>{p.voucher?.code}</span>
-                            </div>
-                          </td>
-                          <td>
-                            <a href={p.proofImage} target="_blank" rel="noreferrer" style={{ display: 'block', width: '150px', height: '100px', borderRadius: '12px', overflow: 'hidden', border: '2px solid #e2e8f0', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-                              <img src={p.proofImage} alt="Proof" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            </a>
-                          </td>
-                          <td>
-                            <input 
-                              type="text" 
-                              placeholder="Nhập lý do nếu từ chối..." 
-                              value={reviewNote}
-                              onChange={(e) => setReviewNote(e.target.value)}
-                              style={{ width: '100%', padding: '12px 16px', fontSize: '16px', border: '2px solid #e2e8f0', borderRadius: '10px', outline: 'none' }}
-                            />
-                          </td>
-                          <td>
-                            <div style={{ display: 'flex', gap: '12px' }}>
-                              <button 
-                                onClick={() => handleReview(p._id, 'approved')}
-                                disabled={isProcessingReview}
-                                style={{ 
-                                  padding: '12px 24px', 
-                                  background: '#10b981', 
-                                  color: 'white', 
-                                  fontSize: '16px', 
-                                  fontWeight: '800', 
-                                  borderRadius: '12px',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.2s',
-                                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
-                                }}
-                                onMouseOver={(e) => e.target.style.background = '#059669'}
-                                onMouseOut={(e) => e.target.style.background = '#10b981'}
-                              >
-                                Duyệt
-                              </button>
-                              <button 
-                                onClick={() => handleReview(p._id, 'rejected')}
-                                disabled={isProcessingReview}
-                                style={{ 
-                                  padding: '12px 24px', 
-                                  background: '#ef4444', 
-                                  color: 'white', 
-                                  fontSize: '16px', 
-                                  fontWeight: '800', 
-                                  borderRadius: '12px',
-                                  border: 'none',
-                                  cursor: 'pointer',
-                                  transition: 'all 0.2s',
-                                  boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)'
-                                }}
-                                onMouseOver={(e) => e.target.style.background = '#dc2626'}
-                                onMouseOut={(e) => e.target.style.background = '#ef4444'}
-                              >
-                                Từ chối
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 };

@@ -13,6 +13,8 @@ import {
   User, 
   MessageSquare, 
   Star, 
+  Users,
+  Loader2,
   LogOut,
   ChevronRight,
   Info,
@@ -70,6 +72,9 @@ const ProfilePage = () => {
         isDefault: false,
     });
     const [isSavingAddress, setIsSavingAddress] = useState(false);
+    const [referralStats, setReferralStats] = useState(null);
+    const [referralHistory, setReferralHistory] = useState([]);
+    const [myVouchers, setMyVouchers] = useState([]);
     const fileInputRef = React.useRef(null);
 
     const [profileData, setProfileData] = useState({
@@ -112,10 +117,11 @@ const ProfilePage = () => {
     const sidebarItems = [
         { id: 'overview', label: 'Tổng quan', icon: <BarChart3 size={20} /> },
         { id: 'orders', label: 'Đơn hàng của bạn', icon: <ShoppingBag size={20} /> },
-        { id: 'vouchers', label: 'Trung tâm voucher', icon: <Ticket size={20} /> },
+        { id: 'vouchers', label: 'Ví Voucher', icon: <Ticket size={20} /> },
+        { id: 'addresses', label: 'Sổ địa chỉ', icon: <MapPin size={20} /> },
         { id: 'history', label: 'Lịch sử mua hàng', icon: <History size={20} /> },
         { id: 'info', label: 'Thông tin cá nhân', icon: <User size={20} /> },
-        { id: 'referral', label: 'Giới thiệu bạn bè', icon: <Ticket size={20} className="text-red-500" /> },
+        { id: 'referral', label: 'Giới thiệu bạn bè', icon: <Users size={20} /> },
         { id: 'comments', label: 'Quản lý bình luận', icon: <MessageSquare size={20} /> },
         { id: 'ratings', label: 'Quản lý đánh giá', icon: <Star size={20} /> },
         {
@@ -239,7 +245,7 @@ const ProfilePage = () => {
                 setReviewStats({ total, average });
             }
 
-            if (tabId === 'vouchers') {
+            if (tabId === 'addresses') {
                 const response = await api.get('/api/address');
                 const nextAddresses = response.data?.data || [];
                 setAddresses(nextAddresses);
@@ -250,6 +256,18 @@ const ProfilePage = () => {
                         phone: prev.phone || nextAddresses[0].phone || '',
                     }));
                 }
+            }
+            if (tabId === 'vouchers') {
+                const response = await api.get('/api/voucher/my-vouchers');
+                setMyVouchers(response.data?.data || []);
+            }
+            if (tabId === 'referral') {
+                const [statsRes, historyRes] = await Promise.all([
+                    api.get('/api/referral/stats'),
+                    api.get('/api/referral/history')
+                ]);
+                setReferralStats(statsRes.data?.data || null);
+                setReferralHistory(historyRes.data?.data || []);
             }
         } catch (error) {
             setTabNotice(getApiErrorMessage(error, 'Khong tai du lieu cho tab nay.'));
@@ -1230,6 +1248,39 @@ const ProfilePage = () => {
 
                         {activeTab === 'vouchers' && (
                             <div className="space-y-6 animate-in fade-in duration-300">
+                                <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Ví Voucher của bạn</h2>
+                                {tabLoading ? (
+                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center flex flex-col items-center gap-4">
+                                        <Loader2 className="animate-spin text-red-600" size={32} />
+                                        <p className="font-bold text-gray-400">Đang tải voucher...</p>
+                                    </div>
+                                ) : myVouchers.length === 0 ? (
+                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">
+                                        <Ticket className="mx-auto text-gray-200 mb-4" size={48} />
+                                        <p className="font-bold text-gray-400 uppercase italic">Bạn chưa có voucher nào.</p>
+                                        <Link to="/vouchers" className="text-red-600 font-black text-xs uppercase tracking-widest mt-4 inline-block hover:underline">Săn voucher ngay</Link>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {myVouchers.map((v) => (
+                                            <div key={v._id} className="bg-white rounded-2xl p-5 border border-gray-100 flex items-center gap-4 relative overflow-hidden group hover:border-red-200 transition-all">
+                                                <div className="w-16 h-16 bg-red-50 rounded-xl flex items-center justify-center text-red-600 shrink-0">
+                                                    <Ticket size={24} />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className="font-black text-slate-900 truncate uppercase tracking-tight">{v.code}</h4>
+                                                    <p className="text-xs font-bold text-red-600 mb-1">{v.discountType === 'percentage' ? `${v.discountValue}% OFF` : `-${formatPrice(v.discountValue)}`}</p>
+                                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">HSD: {new Date(v.expiryDate).toLocaleDateString('vi-VN')}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'addresses' && (
+                            <div className="space-y-6 animate-in fade-in duration-300">
                                 <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Sổ địa chỉ giao hàng</h2>
                                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                                     <form onSubmit={handleCreateAddress} className="bg-white rounded-2xl p-5 border border-gray-100 space-y-3">
@@ -1245,7 +1296,9 @@ const ProfilePage = () => {
                                     </form>
                                     <div className="space-y-3">
                                         {tabLoading ? (
-                                            <div className="bg-white rounded-2xl p-6 border border-gray-100 text-center">Dang tai du lieu...</div>
+                                            <div className="bg-white rounded-2xl p-6 border border-gray-100 text-center flex justify-center">
+                                                <Loader2 className="animate-spin text-gray-300" />
+                                            </div>
                                         ) : addresses.length === 0 ? (
                                             <div className="bg-white rounded-2xl p-6 border border-gray-100 text-center">Chua co dia chi nao.</div>
                                         ) : (
@@ -1276,6 +1329,73 @@ const ProfilePage = () => {
                                         )}
                                     </div>
                                 </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'referral' && (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Giới thiệu bạn bè</h2>
+                                    <Link to="/referral" className="text-xs font-black text-red-600 uppercase tracking-widest hover:underline flex items-center gap-2">
+                                        Chi tiết chương trình <ChevronRight size={14} />
+                                    </Link>
+                                </div>
+                                
+                                {tabLoading ? (
+                                     <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center flex justify-center">
+                                        <Loader2 className="animate-spin text-red-600" size={32} />
+                                    </div>
+                                ) : (
+                                    <div className="space-y-8">
+                                        {/* Stats Grid */}
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                            <div className="bg-white rounded-2xl p-5 border border-gray-100">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Mã của bạn</p>
+                                                <p className="text-lg font-black text-slate-900 italic tracking-widest">{referralStats?.referralCode || 'PHONESIN...'}</p>
+                                            </div>
+                                            <div className="bg-white rounded-2xl p-5 border border-gray-100 text-center">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Đã giới thiệu</p>
+                                                <p className="text-2xl font-black text-red-600">{referralStats?.completedCount || 0}</p>
+                                            </div>
+                                            <div className="bg-white rounded-2xl p-5 border border-gray-100 text-center hidden sm:block">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Tổng hoa hồng</p>
+                                                <p className="text-2xl font-black text-green-600">{formatPrice(referralStats?.totalEarned || 0)}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* History List */}
+                                        <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden">
+                                            <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between bg-gray-50/50">
+                                                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">Lịch sử mời</h3>
+                                                <span className="text-[10px] font-bold text-gray-400">{referralHistory.length} người</span>
+                                            </div>
+                                            {referralHistory.length === 0 ? (
+                                                <div className="py-12 text-center text-gray-300 font-bold italic text-sm">Bạn chưa mời ai. Hãy bắt đầu ngay!</div>
+                                            ) : (
+                                                <div className="divide-y divide-gray-50">
+                                                    {referralHistory.map((item) => (
+                                                        <div key={item._id} className="p-4 flex items-center justify-between">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center font-black text-slate-400">
+                                                                    {(item.referee?.fullName || 'U').charAt(0)}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-sm font-black text-slate-900">{item.referee?.fullName || 'Người dùng ẩn'}</p>
+                                                                    <p className="text-[10px] font-bold text-gray-400">{new Date(item.createdAt).toLocaleDateString('vi-VN')}</p>
+                                                                </div>
+                                                            </div>
+                                                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                                                                item.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                                                            }`}>
+                                                                {item.status === 'completed' ? `+${formatPrice(item.rewardAmount)}` : 'Chờ xác nhận'}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 

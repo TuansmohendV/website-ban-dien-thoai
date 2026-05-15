@@ -88,8 +88,8 @@ export const getReviewsByProductId = asyncHandler(async (req, res) => {
   }
 
   const [total, reviews] = await Promise.all([
-    Review.countDocuments({ product: req.params.productId }),
-    Review.find({ product: req.params.productId })
+    Review.countDocuments({ product: req.params.productId, isActive: true }),
+    Review.find({ product: req.params.productId, isActive: true })
       .populate('user', 'fullName avatar')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -114,8 +114,9 @@ export const getAdminReviews = asyncHandler(async (req, res) => {
   const skip = (page - 1) * limit;
 
   const [total, reviews] = await Promise.all([
-    Review.countDocuments({}),
+    Review.countDocuments({ isActive: true }),
     Review.aggregate([
+      { $match: { isActive: true } },
       { $sort: { createdAt: -1 } },
       { $skip: skip },
       { $limit: limit },
@@ -181,7 +182,7 @@ export const getAdminReviews = asyncHandler(async (req, res) => {
 });
 
 export const getMyReviews = asyncHandler(async (req, res) => {
-  const reviews = await Review.find({ user: req.user._id })
+  const reviews = await Review.find({ user: req.user._id, isActive: true })
     .populate('product', 'name slug image')
     .sort({ createdAt: -1 })
     .lean();
@@ -240,11 +241,12 @@ export const deleteMyReview = asyncHandler(async (req, res) => {
   }
 
   const productId = review.product;
-  await Review.findByIdAndDelete(review._id);
+  review.isActive = false;
+  await review.save();
   await syncProductReviewStats(productId);
 
   res.json({
-    message: 'Xóa đánh giá thành công.',
+    message: 'Đã ẩn đánh giá của bạn (xoá mềm) thành công.',
   });
 });
 
@@ -272,15 +274,17 @@ export const updateAdminReview = asyncHandler(async (req, res) => {
 });
 
 export const deleteAdminReview = asyncHandler(async (req, res) => {
-  const review = await Review.findByIdAndDelete(req.params.id);
+  const review = await Review.findById(req.params.id);
 
   if (!review) {
     throw new AppError(404, 'Không tìm thấy đánh giá.');
   }
 
+  review.isActive = false;
+  await review.save();
   await syncProductReviewStats(review.product);
 
   res.json({
-    message: 'Xóa đánh giá thành công.',
+    message: 'Chuyển đánh giá vào trạng thái đã ẩn (xoá mềm) thành công.',
   });
 });

@@ -37,15 +37,29 @@ const buildVariantSummaryMap = (variants) => {
 export const getProducts = asyncHandler(async (req, res) => {
   const page = Math.max(Number(req.query.page) || 1, 1);
   const isAdminRequest = req.user?.role === 'admin' || req.user?.isAdmin === true;
-  const maxLimit = isAdminRequest ? 200 : 50;
+  const maxLimit = isAdminRequest ? 500 : 200;
   const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), maxLimit);
   const skip = (page - 1) * limit;
 
   const keyword = req.query.keyword || req.query.search || '';
-  const brands = parseList(req.query.brand);
-  const categories = parseList(req.query.category);
+  const brands = parseList(req.query.brand || req.query.brands);
+  const categories = parseList(req.query.category || req.query.categories);
   const features = parseList(req.query.features || req.query.feature);
-  const storage = req.query.storage || '';
+  
+  // New Filter Fields
+  const ram = req.query.ram || '';
+  const rom = req.query.rom || req.query.storage || '';
+  const network = req.query.network || '';
+  const battery = req.query.battery || '';
+  const nfc = req.query.nfc || '';
+  const refreshRate = req.query.refreshRate || '';
+  const screenSize = req.query.screenSize || '';
+  const os = req.query.os || '';
+  const camera = req.query.camera || '';
+  const screenStandard = req.query.screenStandard || '';
+  const memoryCard = req.query.memoryCard || '';
+  const specialFeatures = req.query.specialFeatures || '';
+  
   const minPrice = Number(req.query.minPrice);
   const maxPrice = Number(req.query.maxPrice);
 
@@ -76,9 +90,31 @@ export const getProducts = asyncHandler(async (req, res) => {
   }
 
   if (categories.length) {
+    const categoryMapping = {
+      'dien-thoai': ['Smartphone', 'Điện thoại', 'Dien thoai', 'Mobile', 'dien-thoai'],
+      'laptop': ['Laptop', 'Máy tính xách tay', 'Notebook', 'laptop'],
+      'tablet': ['Tablet', 'Máy tính bảng', 'iPad', 'tablet'],
+      'dong-ho': ['Watch', 'Đồng hồ', 'Smartwatch', 'dong-ho'],
+      'am-thanh': ['Audio', 'Sound', 'Earphone', 'Speaker', 'Loa', 'Tai nghe', 'am-thanh'],
+      'man-hinh': ['Monitor', 'Màn hình', 'Screen', 'man-hinh'],
+      'linh-kien-may-tinh': ['Component', 'Linh kiện', 'Linh kien', 'PC Component', 'linh-kien-may-tinh'],
+      'phu-kien': ['Accessory', 'Phụ kiện', 'Phu kien', 'phu-kien'],
+      'smart-home': ['Smart Home', 'Gia dụng', 'Gia dung', 'Camera', 'Robot', 'smart-home'],
+      'tivi-dien-may': ['TV', 'Tivi', 'TiVi', 'Điện máy', 'Appliance', 'Gia dụng', 'tivi-dien-may'],
+      'tivi,-dien-may': ['TV', 'Tivi', 'TiVi', 'Điện máy', 'Appliance', 'Gia dụng', 'tivi-dien-may'],
+    };
+
+    const expandedCategories = [];
+    categories.forEach(cat => {
+      expandedCategories.push(cat);
+      if (categoryMapping[cat.toLowerCase()]) {
+        expandedCategories.push(...categoryMapping[cat.toLowerCase()]);
+      }
+    });
+
     filters.push({
       category: {
-        $in: categories.map(
+        $in: [...new Set(expandedCategories)].map(
           (category) => new RegExp(`^${escapeRegex(category)}$`, 'i')
         ),
       },
@@ -93,15 +129,168 @@ export const getProducts = asyncHandler(async (req, res) => {
     });
   }
 
-  if (storage) {
-    const storageRegex = buildRegex(storage);
+  // Spec-specific filters with multi-value support
+  if (ram && ram !== 'Tất cả') {
+    const rams = parseList(ram);
+    const ramRegexes = rams.map((r) => buildRegex(r));
+    filters.push({
+      $or: [
+        { ram: { $in: ramRegexes } },
+        { 'specifications.ram': { $in: ramRegexes } },
+      ],
+    });
+  }
+
+  if (rom && rom !== 'Tất cả') {
+    const roms = parseList(rom);
+    const romRegexes = roms.map((r) => buildRegex(r));
     const variantMatchedIds = await ProductVariant.distinct('product', {
-      storage: storageRegex,
+      storage: { $in: romRegexes },
       isActive: true,
     });
-
     filters.push({
-      $or: [{ storage: storageRegex }, { _id: { $in: variantMatchedIds } }],
+      $or: [
+        { storage: { $in: romRegexes } },
+        { 'specifications.storage': { $in: romRegexes } },
+        { 'specifications.rom': { $in: romRegexes } },
+        { _id: { $in: variantMatchedIds } },
+      ],
+    });
+  }
+
+  if (network && network !== 'Tất cả') {
+    const networks = parseList(network);
+    const networkRegexes = networks.map((n) => buildRegex(n));
+    filters.push({
+      $or: [
+        { features: { $in: networkRegexes } },
+        { specifications: { $in: networkRegexes } },
+        { 'specifications.network': { $in: networkRegexes } },
+        { 'specifications.sim': { $in: networkRegexes } },
+        { 'specifications.connectivity': { $in: networkRegexes } },
+        { name: { $in: networkRegexes } },
+      ],
+    });
+  }
+
+  if (battery && battery !== 'Tất cả') {
+    const batteryOptions = parseList(battery);
+    const batteryFilters = [];
+
+    batteryOptions.forEach((opt) => {
+      if (opt.includes('Dưới')) {
+        // Matches 0000-3999
+        batteryFilters.push({ battery: { $regex: new RegExp(`[0-3]\\d{3}`, 'i') } });
+      } else if (opt.includes('Trên')) {
+        // Matches 5000-9999
+        batteryFilters.push({ battery: { $regex: new RegExp(`[5-9]\\d{3}`, 'i') } });
+      } else if (opt.includes('-')) {
+        // Matches ranges like 4000mAh - 5000mAh (heuristic for 4xxx)
+        const digits = opt.match(/\d+/);
+        if (digits) {
+          const firstDigit = digits[0][0];
+          batteryFilters.push({ battery: { $regex: new RegExp(`${firstDigit}\\d{3}`, 'i') } });
+        }
+      } else {
+        batteryFilters.push({ battery: buildRegex(opt) });
+      }
+    });
+
+    if (batteryFilters.length > 0) {
+      filters.push({ $or: batteryFilters });
+    }
+  }
+
+  if (nfc && nfc !== 'Tất cả') {
+    if (nfc.includes('Có')) {
+      filters.push({
+        $or: [
+          { features: buildRegex('nfc') },
+          { specifications: buildRegex('nfc') },
+        ],
+      });
+    }
+  }
+
+  if (refreshRate && refreshRate !== 'Tất cả') {
+    const rates = parseList(refreshRate);
+    const rateRegexes = rates.map((r) => buildRegex(r));
+    filters.push({
+      $or: [
+        { screen: { $in: rateRegexes } },
+        { specifications: { $in: rateRegexes } },
+      ],
+    });
+  }
+
+  if (screenSize && screenSize !== 'Tất cả') {
+    const sizes = parseList(screenSize);
+    const sizeRegexes = sizes.map((s) => buildRegex(s));
+    filters.push({
+      $or: [
+        { screen: { $in: sizeRegexes } },
+        { 'specifications.screen': { $in: sizeRegexes } },
+        { 'specifications.screenSize': { $in: sizeRegexes } },
+      ],
+    });
+  }
+
+  if (os && os !== 'Tất cả') {
+    const osList = parseList(os);
+    const osRegexes = osList.map((o) => buildRegex(o));
+    filters.push({
+      $or: [
+        { 'specifications.os': { $in: osRegexes } },
+        { 'specifications.operatingSystem': { $in: osRegexes } },
+        { description: { $in: osRegexes } },
+      ],
+    });
+  }
+
+  if (camera && camera !== 'Tất cả') {
+    const cameras = parseList(camera);
+    const cameraRegexes = cameras.map((c) => buildRegex(c));
+    filters.push({
+      $or: [
+        { camera: { $in: cameraRegexes } },
+        { 'specifications.camera': { $in: cameraRegexes } },
+        { 'specifications.rearCamera': { $in: cameraRegexes } },
+        { 'specifications.frontCamera': { $in: cameraRegexes } },
+      ],
+    });
+  }
+
+  if (screenStandard && screenStandard !== 'Tất cả') {
+    const standards = parseList(screenStandard);
+    const standardRegexes = standards.map((s) => buildRegex(s));
+    filters.push({
+      $or: [
+        { screen: { $in: standardRegexes } },
+        { 'specifications.screen': { $in: standardRegexes } },
+        { 'specifications.resolution': { $in: standardRegexes } },
+      ],
+    });
+  }
+
+  if (memoryCard && memoryCard !== 'Tất cả') {
+    const cards = parseList(memoryCard);
+    const cardRegexes = cards.map((c) => buildRegex(c));
+    filters.push({
+      $or: [
+        { 'specifications.memoryCard': { $in: cardRegexes } },
+        { features: { $in: cardRegexes } },
+      ],
+    });
+  }
+
+  if (specialFeatures && specialFeatures !== 'Tất cả') {
+    const specFeatures = parseList(specialFeatures);
+    const specFeatureRegexes = specFeatures.map((f) => buildRegex(f));
+    filters.push({
+      $or: [
+        { features: { $in: specFeatureRegexes } },
+        { 'specifications.specialFeatures': { $in: specFeatureRegexes } },
+      ],
     });
   }
 
@@ -135,9 +324,12 @@ export const getProducts = asyncHandler(async (req, res) => {
     priceDesc: { isFeatured: -1, price: -1 },
     rating: { isFeatured: -1, rating: -1, numReviews: -1 },
     popular: { isFeatured: -1, soldCount: -1, rating: -1 },
+    bestseller: { isFeatured: -1, soldCount: -1 },
   };
 
-  const sort = sortMap[req.query.sort] || { isFeatured: -1, createdAt: -1 };
+  const sort = sortMap[req.query.sort] || sortMap[req.query.sortBy] || { isFeatured: -1, createdAt: -1 };
+
+
 
   const total = await Product.countDocuments(query);
   const products = await Product.find(query)

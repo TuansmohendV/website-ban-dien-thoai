@@ -28,15 +28,20 @@ export const createAdminBroadcast = asyncHandler(async (req, res, next) => {
 
 // Admin: Get broadcasts
 export const getAdminBroadcasts = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10 } = req.query;
+  const { page = 1, limit = 10, includeInactive } = req.query;
   const skip = (page - 1) * limit;
 
-  const broadcasts = await Broadcast.find()
+  const query = {};
+  if (String(includeInactive) !== 'true') {
+    query.isActive = true;
+  }
+
+  const broadcasts = await Broadcast.find(query)
     .limit(limit * 1)
     .skip(skip)
     .sort({ createdAt: -1 });
 
-  const total = await Broadcast.countDocuments();
+  const total = await Broadcast.countDocuments(query);
 
   res.json({
     status: 'success',
@@ -47,15 +52,18 @@ export const getAdminBroadcasts = asyncHandler(async (req, res) => {
 
 // Admin: Delete broadcast
 export const deleteAdminBroadcast = asyncHandler(async (req, res, next) => {
-  const broadcast = await Broadcast.findByIdAndDelete(req.params.id);
+  const broadcast = await Broadcast.findById(req.params.id);
 
   if (!broadcast) {
     return next(new AppError('Không tìm thấy broadcast', 404));
   }
 
+  broadcast.isActive = false;
+  await broadcast.save();
+
   res.json({
     status: 'success',
-    message: 'Xóa broadcast thành công',
+    message: 'Chuyển broadcast vào trạng thái đã ẩn (xoá mềm) thành công',
   });
 });
 

@@ -561,19 +561,72 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
                <div className="mb-8 p-6 bg-slate-50 rounded-3xl border border-gray-100">
                   <p className="text-[11px] font-black text-slate-400 mb-5 uppercase tracking-widest text-center">Hình thức thanh toán</p>
                   <div className="flex flex-col gap-4">
-                     <div className="grid grid-cols-2 gap-4">
-                        <button onClick={() => setPaymentMethod('COD')} className={`relative flex flex-col items-center justify-center p-5 rounded-2xl border-2 transition-all duration-300 ${paymentMethod === 'COD' ? 'border-emerald-500 bg-white shadow-lg' : 'border-transparent bg-white/50 text-slate-400 hover:bg-white'}`}>
-                           <span className="text-3xl mb-2">🚚</span>
-                           <span className="text-[11px] font-black uppercase">Tiền mặt</span>
-                           {paymentMethod === 'COD' && <div className="absolute top-2 right-2 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></div>}
-                        </button>
-                        <button onClick={() => { if (paymentMethod === 'COD') setPaymentMethod('BANK_TRANSFER'); }} className={`relative flex flex-col items-center justify-center p-5 rounded-2xl border-2 transition-all duration-300 ${paymentMethod !== 'COD' ? 'border-emerald-500 bg-white shadow-lg' : 'border-transparent bg-white/50 text-slate-400 hover:bg-white'}`}>
-                           <span className="text-3xl mb-2">💳</span>
-                           <span className="text-[11px] font-black uppercase text-center leading-tight">Chuyển khoản<br/>Ví điện tử</span>
-                           {paymentMethod !== 'COD' && <div className="absolute top-2 right-2 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></div>}
-                        </button>
-                     </div>
-                  </div>
+                      <div className="grid grid-cols-2 gap-4">
+                         <button onClick={() => setPaymentMethod('COD')} className={`relative flex flex-col items-center justify-center p-5 rounded-2xl border-2 transition-all duration-300 ${paymentMethod === 'COD' ? 'border-emerald-500 bg-white shadow-lg' : 'border-transparent bg-white/50 text-slate-400 hover:bg-white'}`}>
+                            <span className="text-3xl mb-2">🚚</span>
+                            <span className="text-[11px] font-black uppercase">Tiền mặt</span>
+                            {paymentMethod === 'COD' && <div className="absolute top-2 right-2 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></div>}
+                         </button>
+                         <button onClick={() => { setPaymentMethod('BANK_TRANSFER'); if(!selectedBank) setSelectedBank('sacombank'); }} className={`relative flex flex-col items-center justify-center p-5 rounded-2xl border-2 transition-all duration-300 ${paymentMethod !== 'COD' ? 'border-emerald-500 bg-white shadow-lg' : 'border-transparent bg-white/50 text-slate-400 hover:bg-white'}`}>
+                            <span className="text-3xl mb-2">💳</span>
+                            <span className="text-[11px] font-black uppercase text-center leading-tight">Chuyển khoản<br/>Ví điện tử</span>
+                            {paymentMethod !== 'COD' && <div className="absolute top-2 right-2 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></div>}
+                         </button>
+                      </div>
+
+                      {paymentMethod !== 'COD' && (
+                        <div className="mt-4 p-6 bg-white rounded-2xl border-2 border-emerald-500/20 shadow-xl animate-fadeIn">
+                          <div className="flex gap-2 mb-6">
+                            <button 
+                              onClick={() => setSelectedBank('sacombank')}
+                              className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all border-2 ${selectedBank === 'sacombank' ? 'bg-slate-900 text-white border-slate-900 shadow-lg' : 'bg-white text-slate-400 border-gray-100'}`}
+                            >
+                              Sacombank
+                            </button>
+                            <button 
+                              onClick={() => setSelectedBank('momo')}
+                              className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all border-2 ${selectedBank === 'momo' ? 'bg-[#A50064] text-white border-[#A50064] shadow-lg' : 'bg-white text-slate-400 border-gray-100'}`}
+                            >
+                              Ví Momo
+                            </button>
+                          </div>
+
+                          <div className="flex flex-col items-center animate-scaleIn">
+                            <div className="w-full max-w-[320px] aspect-square bg-white rounded-3xl border-2 border-emerald-500/10 p-2 flex flex-col items-center justify-center relative overflow-hidden shadow-2xl">
+                               <img 
+                                 src={selectedBank === 'momo' ? '/payment/momo_qr.jpg' : '/payment/sacombank_qr.jpg'} 
+                                 alt="QR Code" 
+                                 className="w-full h-full object-cover transition-all duration-500 scale-[1.8]" 
+                                 style={{ objectPosition: selectedBank === 'momo' ? 'center 55%' : 'center 45%' }}
+                                 onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                               />
+                               <div style={{ display: 'none' }} className="flex-col items-center text-center text-gray-400">
+                                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M7 7h.01M17 7h.01M7 17h.01M17 17h.01M12 12h.01" /></svg>
+                                  <span className="text-[10px] font-bold mt-2">Vui lòng quét mã QR<br/>để thanh toán</span>
+                               </div>
+                            </div>
+
+                            <div className="mt-6 w-full space-y-3">
+                               <div className="p-4 bg-slate-50 rounded-xl border border-gray-100">
+                                  <div className="flex justify-between items-center mb-2">
+                                     <span className="text-[10px] font-bold text-gray-400 uppercase">Chủ tài khoản:</span>
+                                     <span className="text-sm font-black text-slate-800">MAI THANH TUAN</span>
+                                  </div>
+                                  <div className="flex justify-between items-center mb-2">
+                                     <span className="text-[10px] font-bold text-gray-400 uppercase">Số tài khoản:</span>
+                                     <span className="text-sm font-black text-emerald-600">{selectedBank === 'momo' ? '070131723553' : '070131723553'}</span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                     <span className="text-[10px] font-bold text-gray-400 uppercase">Nội dung:</span>
+                                     <span className="text-sm font-black text-slate-800 uppercase tracking-tighter">THANH TOAN DON HANG #{Math.floor(100000 + Math.random() * 900000)}</span>
+                                  </div>
+                               </div>
+                               <p className="text-[9px] text-center text-gray-400 italic">Hệ thống sẽ tự động xác nhận sau khi nhận được tiền</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                   </div>
                </div>
 
                <div className="p-6 bg-slate-900 rounded-3xl mb-8">
