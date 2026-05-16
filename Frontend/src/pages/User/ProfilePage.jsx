@@ -57,6 +57,7 @@ const ProfilePage = () => {
     const [notifications, setNotifications] = useState([]);
     const [addresses, setAddresses] = useState([]);
     const [orderHistoryYears, setOrderHistoryYears] = useState([]); // Summary of years from DB
+    const totalSpentAllTime = orderHistoryYears.reduce((sum, item) => sum + (item.totalSpent || 0), 0);
     const [orderHistoryItemsByYear, setOrderHistoryItemsByYear] = useState({}); // Detailed orders per year
     const [loadingYears, setLoadingYears] = useState({}); // Loading state for each year's details
     const [expandedYears, setExpandedYears] = useState({}); // Track which years are expanded
@@ -112,6 +113,7 @@ const ProfilePage = () => {
                         ? 'Nam'
                         : 'Khác',
         }));
+        loadTabData('history');
     }, [user]);
 
     const sidebarItems = [
@@ -137,8 +139,10 @@ const ProfilePage = () => {
 
     const membershipTiers = [
         { id: 'edu', label: 'Edu', color: 'from-[#60a5fa] to-[#3b82f6]', unlocked: false, desc: 'Dành cho Học sinh - Sinh viên' },
-        { id: 'new', label: 'New', color: 'from-[#059669] to-[#10b981]', unlocked: true, status: 'Đã mua 00đ/01đ', update: '11/04/2026', next: '01đ để lên hạng', isCurrent: true },
-        { id: 'silver', label: 'Silver', color: 'from-[#4b5563] to-[#374151]', unlocked: false, desc: 'Hạng Bạc' }
+        { id: 'new', label: 'New', color: 'from-[#059669] to-[#10b981]', unlocked: true, status: `Đã mua ${formatPrice(totalSpentAllTime)}`, update: new Date().toLocaleDateString('vi-VN'), next: totalSpentAllTime < 10000000 ? `${formatPrice(10000000 - totalSpentAllTime)} để lên hạng` : 'Đã đạt hạng cao', isCurrent: totalSpentAllTime < 50000000 },
+        { id: 'silver', label: 'Silver', color: 'from-[#4b5563] to-[#374151]', unlocked: totalSpentAllTime >= 10000000, status: `Đã mua ${formatPrice(totalSpentAllTime)}`, update: new Date().toLocaleDateString('vi-VN'), next: totalSpentAllTime < 50000000 ? `${formatPrice(50000000 - totalSpentAllTime)} để lên hạng` : 'Đã đạt hạng cao', isCurrent: totalSpentAllTime >= 10000000 && totalSpentAllTime < 100000000 },
+        { id: 'gold', label: 'Gold', color: 'from-amber-400 to-amber-600', unlocked: totalSpentAllTime >= 50000000, status: `Đã mua ${formatPrice(totalSpentAllTime)}`, update: new Date().toLocaleDateString('vi-VN'), next: totalSpentAllTime < 100000000 ? `${formatPrice(100000000 - totalSpentAllTime)} để lên hạng` : 'Đã đạt hạng cao', isCurrent: totalSpentAllTime >= 50000000 && totalSpentAllTime < 100000000 },
+        { id: 'vip', label: 'VIP', color: 'from-slate-900 to-black', unlocked: totalSpentAllTime >= 100000000, status: `Đã mua ${formatPrice(totalSpentAllTime)}`, update: new Date().toLocaleDateString('vi-VN'), next: 'Hạng cao nhất', isCurrent: totalSpentAllTime >= 100000000 }
     ];
 
     const perkCards = [
@@ -208,7 +212,7 @@ const ProfilePage = () => {
     };
 
     const loadTabData = async (tabId) => {
-        if (!['vouchers', 'history', 'comments', 'ratings'].includes(tabId)) {
+        if (!['vouchers', 'history', 'comments', 'ratings', 'addresses', 'referral'].includes(tabId)) {
             return;
         }
 
@@ -464,15 +468,15 @@ const ProfilePage = () => {
                                 <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Tổng quan</h2>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {/* Spending Card */}
-                                    <div className={`rounded-3xl p-8 border shadow-sm flex items-center gap-6 transition-all duration-500 ${isVip ? 'bg-gradient-to-br from-slate-900 to-black border-yellow-500/50 shadow-yellow-500/20' : 'bg-white border-gray-100'}`}>
-                                        <div className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transform rotate-12 shrink-0 transition-all duration-700 ${isVip ? 'bg-gradient-to-tr from-yellow-600 to-yellow-200 scale-110' : 'bg-gradient-to-tr from-yellow-400 to-yellow-200'}`}>
-                                            <span className="text-white text-3xl">{isVip ? '💎' : '🪙'}</span>
+                                    <div className={`rounded-3xl p-8 border shadow-sm flex items-center gap-6 transition-all duration-500 ${isVip || totalSpentAllTime >= 100000000 ? 'bg-gradient-to-br from-slate-900 to-black border-yellow-500/50 shadow-yellow-500/20' : 'bg-white border-gray-100'}`}>
+                                        <div className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transform rotate-12 shrink-0 transition-all duration-700 ${isVip || totalSpentAllTime >= 100000000 ? 'bg-gradient-to-tr from-yellow-600 to-yellow-200 scale-110' : 'bg-gradient-to-tr from-yellow-400 to-yellow-200'}`}>
+                                            <span className="text-white text-3xl">{isVip || totalSpentAllTime >= 100000000 ? '💎' : '🪙'}</span>
                                         </div>
                                         <div className="space-y-1">
-                                            <p className={`font-bold text-sm uppercase tracking-wider ${isVip ? 'text-yellow-500' : 'text-gray-500'}`}>Tổng chi tiêu</p>
-                                            <p className={`text-[32px] font-black leading-none ${isVip ? 'text-white' : 'text-gray-900'}`}>{isVip ? '150.000.000đ' : '00đ'}</p>
-                                            <p className={`text-xs font-bold mt-2 italic ${isVip ? 'text-yellow-200/60' : 'text-gray-400'}`}>
-                                                {isVip ? 'Bạn đang ở hạng thẻ cao nhất' : <>Cần chi tiêu thêm <span className="text-[#008d71]">01đ</span> để lên hạng <span className="text-[#3b82f6]">SILVER</span></>}
+                                            <p className={`font-bold text-sm uppercase tracking-wider ${isVip || totalSpentAllTime >= 100000000 ? 'text-yellow-500' : 'text-gray-500'}`}>Tổng chi tiêu</p>
+                                            <p className={`text-[32px] font-black leading-none ${isVip || totalSpentAllTime >= 100000000 ? 'text-white' : 'text-gray-900'}`}>{formatPrice(totalSpentAllTime)}</p>
+                                            <p className={`text-xs font-bold mt-2 italic ${isVip || totalSpentAllTime >= 100000000 ? 'text-yellow-200/60' : 'text-gray-400'}`}>
+                                                {totalSpentAllTime >= 100000000 ? 'Bạn đang ở hạng thẻ cao nhất (VIP)' : totalSpentAllTime >= 50000000 ? 'Hạng thành viên: SILVER' : <>Cần chi tiêu thêm <span className="text-[#008d71]">{formatPrice(Math.max(0, 10000000 - totalSpentAllTime))}</span> để lên hạng <span className="text-[#3b82f6]">SILVER</span></>}
                                             </p>
                                         </div>
                                     </div>

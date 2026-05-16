@@ -3,15 +3,16 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { Search, MapPin, User, ShoppingCart, Ticket, Zap } from 'lucide-react';
+import { Search, MapPin, User, Ticket, Zap } from 'lucide-react';
 import api from '../lib/api';
 import { normalizeProduct } from '../lib/products';
+import NotificationBell from './NotificationBell';
 
 const Navbar = () => {
     const { t } = useLanguage();
     const { user } = useAuth();
     const { cartCount } = useCart();
-    const [unreadCount, setUnreadCount] = useState(0);
+
     const [searchQuery, setSearchQuery] = useState('');
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -72,23 +73,7 @@ const Navbar = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    useEffect(() => {
-        const loadUnreadCount = async () => {
-            if (!user?.id) {
-                setUnreadCount(0);
-                return;
-            }
 
-            try {
-                const response = await api.get('/api/notifications/unread-count');
-                setUnreadCount(Number(response.data?.data?.count || 0));
-            } catch {
-                setUnreadCount(0);
-            }
-        };
-
-        loadUnreadCount();
-    }, [user?.id]);
 
     useEffect(() => {
         const loadCategories = async () => {
@@ -243,59 +228,60 @@ const Navbar = () => {
                         </div>
 
                         {/* Right Actions */}
-                        <div className="flex items-center justify-end gap-2 sm:gap-4 lg:gap-4 shrink-0 h-9 sm:h-11 lg:h-full min-w-0">
-                            {/* Location */}
-                            <Link to="/store-locator" className="flex items-center gap-1.5 cursor-pointer group h-full focus-within:ring-2 ring-[#008d71] rounded-md transition-shadow">
-                                <MapPin size={20} className="text-[#008d71]" strokeWidth={1.5} />
-                                <span className="hidden md:inline text-[15px] font-semibold text-[#008d71] whitespace-nowrap">Tìm siêu thị</span>
+                        <div className="flex items-center justify-end gap-1 sm:gap-2 shrink-0 h-9 sm:h-11 lg:h-full min-w-0">
+
+                            {/* 1. Location */}
+                            <Link to="/store-locator" className="hidden md:flex items-center gap-1.5 px-2 py-1.5 hover:bg-gray-100 rounded-lg transition-all group">
+                                <MapPin size={18} className="text-[#008d71]" strokeWidth={1.5} />
+                                <span className="text-[14px] font-semibold text-[#008d71] whitespace-nowrap">Tìm siêu thị</span>
                             </Link>
 
+                            <div className="hidden md:block w-px h-5 bg-gray-200 mx-1" />
 
+                            {/* 2. Notification Bell */}
+                            <NotificationBell />
 
-                            {/* User Profile */}
-                            <Link to={user ? "/profile" : "/login"} className="flex items-center gap-1.5 cursor-pointer group h-full">
-                                <div className="relative">
-                                    <User size={20} className="text-[#008d71]" strokeWidth={1.5} />
-                                    {unreadCount > 0 && (
-                                        <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 bg-[#ff424e] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                                            {unreadCount > 99 ? '99+' : unreadCount}
-                                        </span>
-                                    )}
-                                </div>
-                                <span className="hidden md:inline text-[15px] font-semibold text-[#008d71] whitespace-nowrap">
-                                    {user ? `Chào, ${user.name.split(' ')[0]}` : 'Tài khoản'}
+                            {/* 3. User Profile */}
+                            <Link to={user ? "/profile" : "/login"} className="flex items-center gap-1.5 px-2 py-1.5 hover:bg-gray-100 rounded-lg transition-all group">
+                                <User size={18} className="text-[#008d71]" strokeWidth={1.5} />
+                                <span className="hidden md:inline text-[14px] font-semibold text-[#008d71] whitespace-nowrap">
+                                    {user ? `Chào, ${user.name?.split(' ')[0]}` : 'Tài khoản'}
                                 </span>
                             </Link>
 
-                            {/* My Vouchers Wallet */}
+                            <div className="w-px h-5 bg-gray-200 mx-1" />
+
+                            {/* 4. Voucher group: Ví + Săn */}
                             {user && (
-                                <Link to="/my-vouchers" className="flex items-center gap-1.5 cursor-pointer group h-full px-2 hover:bg-slate-100 rounded-lg transition-all" title="Ví Voucher của tôi">
-                                    <Ticket size={20} className="text-slate-700" strokeWidth={1.5} />
+                                <Link to="/my-vouchers" className="flex items-center gap-1 px-2 py-1.5 hover:bg-gray-100 rounded-lg transition-all" title="Ví Voucher">
+                                    <Ticket size={18} className="text-slate-600" strokeWidth={1.5} />
+                                    <span className="hidden lg:inline text-[13px] font-semibold text-slate-600">Ví</span>
                                 </Link>
                             )}
 
-                            {/* Admin Shortcut (Temporary for testing) */}
-                            {(user?.role === 'admin' || user?.isAdmin) && (
-                                <Link to="/admin" className="hidden xl:flex items-center gap-1.5 px-3 py-1 bg-[#008d71]/10 rounded-full hover:bg-[#008d71]/20 transition-all">
-                                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                                    <span className="text-[13px] font-bold text-[#008d71]">Admin Panel</span>
-                                </Link>
-                            )}
-
-                            {/* Voucher Hunting - next to Cart */}
-                            <Link to="/hunt-vouchers" className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-400 hover:bg-amber-500 rounded-full transition-all shadow-sm border border-amber-400 group" title="Săn Voucher">
-                                <Zap size={16} className="text-white" fill="white" />
-                                <span className="text-[12px] font-black text-white whitespace-nowrap uppercase tracking-tight hidden sm:inline">Săn</span>
+                            <Link to="/hunt-vouchers" className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-400 hover:bg-amber-500 rounded-full transition-all shadow-sm group" title="Săn Voucher">
+                                <Zap size={14} className="text-white" fill="white" />
+                                <span className="text-[11px] font-black text-white whitespace-nowrap uppercase hidden sm:inline">Săn</span>
                             </Link>
 
-                            {/* Simple Cart Bag */}
-                            <Link to="/cart" className="flex items-center gap-1.5 p-1 group">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:stroke-[#008d71] transition-colors">
+                            {/* Admin Shortcut */}
+                            {(user?.role === 'admin' || user?.isAdmin) && (
+                                <Link to="/admin" className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 bg-[#008d71]/10 rounded-full hover:bg-[#008d71]/20 transition-all ml-1">
+                                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                                    <span className="text-[12px] font-bold text-[#008d71]">Admin</span>
+                                </Link>
+                            )}
+
+                            <div className="w-px h-5 bg-gray-200 mx-1" />
+
+                            {/* 5. Cart */}
+                            <Link to="/cart" className="relative flex items-center p-2 hover:bg-gray-100 rounded-lg transition-all group">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="group-hover:stroke-[#008d71] transition-colors">
                                     <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>
                                 </svg>
-                                <div className="bg-[#ff424e] text-white text-[12px] font-semibold w-[20px] h-[20px] rounded-full flex items-center justify-center">
+                                <span className="absolute -top-0.5 -right-0.5 bg-[#ff424e] text-white text-[10px] font-bold min-w-[17px] h-[17px] px-0.5 rounded-full flex items-center justify-center leading-none">
                                     {cartCount}
-                                </div>
+                                </span>
                             </Link>
 
                         </div>

@@ -13,6 +13,7 @@ import {
   Image as ImageIcon,
   ChevronLeft,
   ChevronRight,
+  RefreshCcw,
   Monitor,
   Cpu,
   HardDrive,
@@ -42,8 +43,10 @@ import {
   Zap,
   Layers,
   User,
-  Package
+  Package,
+  ExternalLink
 } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import HashtagManagement from './HashtagManagement';
 import api, { getApiErrorMessage } from '../../lib/api';
@@ -85,6 +88,16 @@ const ProductManagement = () => {
   
   const editorRef = useRef(null);
   const contentImageInputRef = useRef(null);
+  const location = useLocation();
+
+  // Handle direct links from other pages (e.g., Inventory)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const search = params.get('search');
+    if (search) {
+      setSearchTerm(decodeURIComponent(search));
+    }
+  }, [location.search]);
 
   useEffect(() => {
     const loadInitialData = async () => {
@@ -172,9 +185,12 @@ const ProductManagement = () => {
     const isHidden = p.isHidden || false;
     
     let matchesStatus = true;
-    if (statusFilter === 'Đang hiển thị') matchesStatus = !isHidden && !isOutOfStock;
-    if (statusFilter === 'Đang ẩn') matchesStatus = isHidden;
-    if (statusFilter === 'Hết hàng') matchesStatus = isOutOfStock;
+    if (statusFilter === 'Đang hiển thị') matchesStatus = !p.isHidden && p.stock > 0 && p.status !== 'inactive';
+    if (statusFilter === 'Đang ẩn') matchesStatus = p.isHidden && p.status !== 'inactive';
+    if (statusFilter === 'Hết hàng') matchesStatus = p.stock <= 0 && p.status !== 'inactive';
+    if (statusFilter === 'Đã xóa') matchesStatus = p.status === 'inactive';
+    // Mặc định "Tất cả" thì hiện mọi thứ trừ hàng đã xóa (để cho gọn)
+    if (statusFilter === 'Trạng thái: Tất cả') matchesStatus = p.status !== 'inactive';
 
     return matchesSearch && matchesCategory && matchesStatus;
   });
@@ -196,17 +212,40 @@ const ProductManagement = () => {
     }
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa sản phẩm này khỏi giao diện? (Dữ liệu trong database vẫn còn)')) {
-      setLocalProducts(localProducts.filter(p => p.id !== id));
-      setSelectedIds(selectedIds.filter(item => item !== id));
+  const handleDelete = async (id) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa sản phẩm này? (Sản phẩm sẽ bị ẩn khỏi cửa hàng nhưng vẫn lưu trong DB)')) {
+      try {
+        setIsLoading(true);
+        await api.delete(`/api/admin/products/${id}`);
+        // Cập nhật lại trạng thái trong local state thành inactive thay vì xóa hẳn khỏi mảng
+        setLocalProducts(localProducts.map(p => p.id === id ? { ...p, status: 'inactive', isHidden: true } : p));
+        setSelectedIds(selectedIds.filter(item => item !== id));
+        alert('Đã xóa mềm sản phẩm thành công!');
+      } catch (error) {
+        alert('Lỗi khi xóa sản phẩm: ' + getApiErrorMessage(error));
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
-  const handleBulkDelete = () => {
-    if (window.confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.length} sản phẩm đã chọn khỏi giao diện? (Dữ liệu trong database vẫn còn)`)) {
-      setLocalProducts(localProducts.filter(p => !selectedIds.includes(p.id)));
-      setSelectedIds([]);
+  const handleBulkDelete = async () => {
+    if (window.confirm(`Bạn có chắc chắn muốn xóa ${selectedIds.length} sản phẩm đã chọn?`)) {
+      try {
+        setIsLoading(true);
+        // Xóa lần lượt (hoặc có thể viết API xóa hàng loạt nếu cần)
+        await Promise.all(selectedIds.map(id => api.delete(`/api/admin/products/${id}`)));
+        
+        setLocalProducts(localProducts.map(p => 
+          selectedIds.includes(p.id) ? { ...p, status: 'inactive', isHidden: true } : p
+        ));
+        setSelectedIds([]);
+        alert(`Đã xóa mềm ${selectedIds.length} sản phẩm thành công!`);
+      } catch (error) {
+        alert('Lỗi khi xóa hàng loạt: ' + getApiErrorMessage(error));
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -263,6 +302,20 @@ const ProductManagement = () => {
       setLocalProducts(localProducts.map(p => p.id === id ? updated : p));
     } catch (error) {
       alert('Không thể cập nhật trạng thái đề xuất: ' + getApiErrorMessage(error));
+    }
+  };
+
+  const handleRestore = async (id) => {
+    try {
+      setIsLoading(true);
+      const response = await api.put(`/api/admin/products/${id}`, { status: 'active' });
+      const updated = mapProductForAdmin(response.data?.data?.product);
+      setLocalProducts(localProducts.map(p => p.id === id ? updated : p));
+      alert('Đã khôi phục sản phẩm thành công!');
+    } catch (error) {
+      alert('Không thể khôi phục sản phẩm: ' + getApiErrorMessage(error));
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -606,6 +659,7 @@ const ProductManagement = () => {
               <option>Đang hiển thị</option>
               <option>Đang ẩn</option>
               <option>Hết hàng</option>
+              <option>Đã xóa</option>
             </select>
           </div>
           <button className="btn-outline" onClick={() => {
@@ -705,14 +759,25 @@ const ProductManagement = () => {
                         <div className="relative group">
                           <button className="action-btn more"><MoreVertical size={16} /></button>
                           <div className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-lg shadow-xl border border-gray-100 py-2 hidden group-hover:block z-50">
+                            {product.status === 'inactive' && (
+                              <button 
+                                onClick={() => handleRestore(product.id)}
+                                className="w-full text-left px-4 py-2 text-sm text-green-600 hover:bg-green-50 flex items-center gap-2 border-b border-gray-100"
+                              >
+                                <RefreshCcw size={14} /> Khôi phục sản phẩm
+                              </button>
+                            )}
                             <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                               <Eye size={14} /> Xem trên web
                             </button>
                             <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                               <Tag size={14} /> Sao chép SKU
                             </button>
-                            <button className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-gray-100 mt-1">
-                              <Trash2 size={14} /> Lưu trữ
+                            <button 
+                              onClick={() => handleDelete(product.id)}
+                              className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-gray-100 mt-1"
+                            >
+                              <Trash2 size={14} /> Xóa vĩnh viễn (Xóa mềm)
                             </button>
                           </div>
                         </div>

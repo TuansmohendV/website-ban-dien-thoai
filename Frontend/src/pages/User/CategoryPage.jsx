@@ -229,6 +229,7 @@ const CategoryPage = () => {
     refreshRate: null,
     camera: 'Tất cả',
     specialFeatures: 'Tất cả',
+    category: null,
     sortBy: 'highlight'
   });
 
@@ -296,11 +297,12 @@ const CategoryPage = () => {
         }
 
         // 2. Category context
-        const meta = categoryMetadata[slug];
+        const selectedCat = filters.category || slug;
+        const meta = categoryMetadata[selectedCat];
         if (meta && meta.backendCategories) {
           params.category = meta.backendCategories.join(',');
-        } else if (slug && !slugBrand) {
-           params.category = slug;
+        } else if (selectedCat && !slugBrand) {
+           params.category = selectedCat;
         }
 
         // 3. Price range
@@ -412,12 +414,20 @@ const CategoryPage = () => {
     setFilters({
       brand: null,
       priceRange: 'Tất cả',
+      os: null,
       ram: null,
       rom: null,
-      cpu: null,
+      batteryTier: 'Tất cả',
+      network: null,
+      nfc: false,
+      memoryCard: 'Tất cả',
       screenSize: 'Tất cả',
+      screenStandard: null,
       refreshRate: null,
-      sortBy: 'relate'
+      camera: 'Tất cả',
+      specialFeatures: 'Tất cả',
+      category: null,
+      sortBy: 'highlight'
     });
   };
 
@@ -625,6 +635,59 @@ const CategoryPage = () => {
 
             {/* 3. Product Area */}
             <div className="flex-1 w-full overflow-hidden">
+              {/* Quick Filter Pills (Modern E-commerce style) */}
+              <div className="flex flex-wrap gap-2 mb-6 pb-2 overflow-x-auto no-scrollbar">
+                <span className="text-[13px] font-bold text-gray-400 self-center mr-2 uppercase tracking-tighter">Lọc nhanh:</span>
+                {[
+                  { label: 'Dưới 2 triệu', key: 'priceRange', value: 'Dưới 2 triệu' },
+                  { label: '2 - 5 triệu', key: 'priceRange', value: '2 đến 5 triệu' },
+                  { label: '5 - 10 triệu', key: 'priceRange', value: '5 đến 10 triệu' },
+                  { label: '10 - 20 triệu', key: 'priceRange', value: '10 đến 20 triệu' },
+                  { label: 'Apple', key: 'brand', value: 'Apple' },
+                  { label: 'Samsung', key: 'brand', value: 'Samsung' },
+                  { label: 'Xiaomi', key: 'brand', value: 'Xiaomi' }
+                ].map((pill, i) => (
+                  <button
+                    key={i}
+                    onClick={() => toggleFilter(pill.key, pill.value)}
+                    className={`px-4 py-2 rounded-full text-[13px] font-bold transition-all whitespace-nowrap border ${
+                      filters[pill.key] === pill.value 
+                        ? 'bg-[#008d71] text-white border-[#008d71] shadow-md' 
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-[#008d71] hover:text-[#008d71]'
+                    }`}
+                  >
+                    {pill.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Active Filter Chips */}
+              {Object.entries(filters).some(([k, v]) => v !== null && v !== 'Tất cả' && k !== 'sortBy' && v !== false) && (
+                <div className="flex flex-wrap items-center gap-2 mb-6 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                  <span className="text-[13px] font-bold text-gray-400 mr-2 uppercase tracking-tighter">Đang chọn:</span>
+                  {Object.entries(filters).map(([key, value]) => {
+                    if (value === null || value === 'Tất cả' || key === 'sortBy' || value === false) return null;
+                    return (
+                      <div key={key} className="flex items-center gap-2 bg-[#008d71]/10 text-[#008d71] px-3 py-1.5 rounded-full text-[13px] font-bold border border-[#008d71]/20 group">
+                        <span>{String(value)}</span>
+                        <button 
+                          onClick={() => toggleFilter(key, value)}
+                          className="w-4 h-4 rounded-full bg-[#008d71] text-white flex items-center justify-center text-[10px] hover:bg-red-500 transition-colors"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <button 
+                    onClick={clearFilters}
+                    className="text-[12px] font-bold text-red-500 hover:underline ml-2"
+                  >
+                    Xóa tất cả
+                  </button>
+                </div>
+              )}
+
               {/* Sort Bar */}
               <div className="bg-white/60 backdrop-blur-md rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 mb-6 shadow-sm border border-white/40">
                 <div className="flex items-center gap-3">

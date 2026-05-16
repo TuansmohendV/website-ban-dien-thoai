@@ -13,8 +13,10 @@ import {
   RefreshCcw,
   TrendingDown,
   TrendingUp,
-  BarChart3
+  BarChart3,
+  ExternalLink
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import api from '../../lib/api';
 import { normalizeProduct } from '../../lib/products';
@@ -61,6 +63,7 @@ const InventoryManagement = () => {
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const [sortConfig, setSortConfig] = useState({ key: 'stock', direction: 'asc' });
+  const navigate = useNavigate();
   const itemsPerPage = 10;
 
   const primaryColor = localStorage.getItem('primaryColor') || '#2563eb';
@@ -251,6 +254,7 @@ const InventoryManagement = () => {
                   Số lượng tồn <ArrowUpDown size={14} style={{ opacity: 0.5, marginLeft: '4px' }} />
                 </th>
                 <th>Trạng thái</th>
+                <th style={{ textAlign: 'right', paddingRight: '25px' }}>Thao tác</th>
               </tr>
             </thead>
             <tbody>
@@ -287,6 +291,23 @@ const InventoryManagement = () => {
                         {p.status === 'In Stock' ? <CheckCircle2 size={14} /> : p.status === 'Low Stock' ? <AlertTriangle size={14} /> : <XCircle size={14} />}
                         {p.status === 'In Stock' ? 'Còn hàng' : p.status === 'Low Stock' ? 'Sắp hết' : 'Hết hàng'}
                       </span>
+                    </td>
+                    <td style={{ textAlign: 'right', paddingRight: '25px' }}>
+                      <button 
+                        onClick={() => navigate(`/admin/products?search=${encodeURIComponent(p.name)}`)}
+                        className="btn-icon"
+                        title="Xem chi tiết tại Quản lý sản phẩm"
+                        style={{ 
+                          width: '32px', height: '32px', borderRadius: '8px', 
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          border: '1px solid #e2e8f0', background: 'white', color: '#64748b',
+                          transition: 'all 0.2s', cursor: 'pointer'
+                        }}
+                        onMouseOver={(e) => { e.currentTarget.style.borderColor = primaryColor; e.currentTarget.style.color = primaryColor; }}
+                        onMouseOut={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#64748b'; }}
+                      >
+                        <ExternalLink size={16} />
+                      </button>
                     </td>
                   </tr>
                 ))

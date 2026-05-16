@@ -35,6 +35,7 @@ import CustomerSupportPage from './pages/User/CustomerSupportPage';
 import ChangePasswordPage from './pages/User/ChangePasswordPage';
 import VoucherHuntingPage from './pages/User/VoucherHuntingPage';
 import MyVouchersPage from './pages/User/MyVouchersPage';
+import NotificationsPage from './pages/User/NotificationsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import ScrollToTop from './components/ScrollToTop';
 
@@ -128,6 +129,7 @@ function App() {
               <Route path="customer-support" element={<ProtectedRoute><CustomerSupportPage /></ProtectedRoute>} />
               <Route path="hunt-vouchers" element={<VoucherHuntingPage />} />
               <Route path="my-vouchers" element={<ProtectedRoute><MyVouchersPage /></ProtectedRoute>} />
+              <Route path="notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
             </Route>
 
             {/* Các trang không dùng chung Layout (Trang đăng nhập/đăng ký/giỏ hàng) */}

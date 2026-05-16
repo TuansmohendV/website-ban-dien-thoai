@@ -112,7 +112,11 @@ const LoginPage = () => {
                 await loginWithEmailOTP({ email: email.trim() });
                 navigate(redirectTo, { replace: true });
             } catch (error) {
-                setErrorMessage(error.response?.data?.message || 'Mã xác thực không đúng hoặc đã hết hạn.');
+                if (error.response?.status === 500) {
+                    setErrorMessage('Lỗi hệ thống khi đăng nhập. Vui lòng thử lại sau.');
+                } else {
+                    setErrorMessage(error.response?.data?.message || 'Mã xác thực không đúng hoặc đã hết hạn.');
+                }
             } finally {
                 setIsSubmitting(false);
             }

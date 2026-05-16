@@ -103,11 +103,16 @@ const buildEstimatedDelivery = (createdAt, shippingAddress = {}) => {
   }
 
   const province = String(shippingAddress.province || '').toLowerCase();
+  const addressStr = String(shippingAddress.address || '').toLowerCase();
+  
   let daysToAdd = 3;
 
-  if (/(ha noi|hcm|ho chi minh)/.test(province)) {
+  // Near regions (1-2 days)
+  if (/(ha noi|hanoi|h\.n|tp hcm|ho chi minh|hcm|sai gon|saigon)/.test(province) || 
+      /(ha noi|hanoi|h\.n|tp hcm|ho chi minh|hcm|sai gon|saigon)/.test(addressStr)) {
     daysToAdd = 1;
-  } else if (/da nang/.test(province)) {
+  } else if (/(da nang|danang|binh duong|dong nai|long an|hai phong|bac ninh)/.test(province) ||
+             /(da nang|danang|binh duong|dong nai|long an|hai phong|bac ninh)/.test(addressStr)) {
     daysToAdd = 2;
   }
 
@@ -314,7 +319,7 @@ export const normalizeOrder = (order = {}) => {
     },
     estimatedDelivery:
       order.estimatedDelivery ||
-      buildEstimatedDelivery(createdAt, order.shippingAddress || {}),
+      buildEstimatedDelivery(createdAt, { ...(order.shippingAddress || {}), address: addressLabel }),
     note: order.notes || order.note || '',
     notes: order.notes || order.note || '',
     timeline,

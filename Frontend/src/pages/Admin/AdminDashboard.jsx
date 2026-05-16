@@ -20,6 +20,7 @@ const AdminDashboard = () => {
   const [products, setProducts] = useState([]);
   const [dashboardData, setDashboardData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [timeFrame, setTimeFrame] = useState('Theo ngày');
 
   useEffect(() => {
     const loadData = async () => {
@@ -49,27 +50,55 @@ const AdminDashboard = () => {
   const totalProducts = products.length;
 
   const chartValues = useMemo(() => {
-    const formatter = new Intl.DateTimeFormat('vi-VN', { weekday: 'short' });
-    const dayBuckets = Array.from({ length: 7 }, (_, index) => {
-      const date = new Date();
-      date.setDate(date.getDate() - (6 - index));
-      const key = date.toISOString().slice(0, 10);
+    const now = new Date();
+    let dayBuckets = [];
 
-      return {
-        key,
-        day: formatter.format(date),
-        rawTotal: 0,
-      };
-    });
+    if (timeFrame === 'Theo ngày') {
+      const formatter = new Intl.DateTimeFormat('vi-VN', { weekday: 'short' });
+      dayBuckets = Array.from({ length: 7 }, (_, index) => {
+        const date = new Date();
+        date.setDate(date.getDate() - (6 - index));
+        return {
+          key: date.toISOString().slice(0, 10),
+          label: formatter.format(date),
+          rawTotal: 0,
+        };
+      });
+    } else if (timeFrame === 'Theo tháng') {
+      dayBuckets = Array.from({ length: 6 }, (_, index) => {
+        const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
+        return {
+          key: `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`,
+          label: `Tháng ${date.getMonth() + 1}`,
+          rawTotal: 0,
+        };
+      });
+    } else { // Theo năm
+      dayBuckets = Array.from({ length: 5 }, (_, index) => {
+        const year = now.getFullYear() - (4 - index);
+        return {
+          key: `${year}`,
+          label: `${year}`,
+          rawTotal: 0,
+        };
+      });
+    }
 
     const bucketMap = new Map(dayBuckets.map((bucket) => [bucket.key, bucket]));
 
     orders.forEach((order) => {
-      const dateKey = new Date(order.createdAt || order.date || Date.now())
-        .toISOString()
-        .slice(0, 10);
-      const targetBucket = bucketMap.get(dateKey);
+      const createdAt = new Date(order.createdAt || order.date || Date.now());
+      let dateKey = '';
+      
+      if (timeFrame === 'Theo ngày') {
+        dateKey = createdAt.toISOString().slice(0, 10);
+      } else if (timeFrame === 'Theo tháng') {
+        dateKey = `${createdAt.getFullYear()}-${(createdAt.getMonth() + 1).toString().padStart(2, '0')}`;
+      } else {
+        dateKey = `${createdAt.getFullYear()}`;
+      }
 
+      const targetBucket = bucketMap.get(dateKey);
       if (targetBucket) {
         targetBucket.rawTotal += Number(order.totalAmount || order.total || 0);
       }
@@ -78,16 +107,19 @@ const AdminDashboard = () => {
     const maxTotal = Math.max(...dayBuckets.map((bucket) => bucket.rawTotal), 1);
 
     return dayBuckets.map((bucket) => ({
-      day: bucket.day,
+      day: bucket.label,
       val: Math.max(Math.round((bucket.rawTotal / maxTotal) * 100), bucket.rawTotal > 0 ? 12 : 6),
-      label: `${Math.round(bucket.rawTotal / 1000000)}M`,
+      label: bucket.rawTotal >= 1000000 
+        ? `${Math.round(bucket.rawTotal / 1000000)}M` 
+        : `${Math.round(bucket.rawTotal / 1000)}K`,
     }));
-  }, [orders]);
+  }, [orders, timeFrame]);
 
+  // Hiện top sản phẩm bao gồm cả sản phẩm đã ẩn/xóa để admin theo dõi
   const topProducts = products
     .slice()
     .sort((left, right) => Number(right.soldCount || 0) - Number(left.soldCount || 0))
-    .slice(0, 3);
+    .slice(0, 5); // Tăng lên 5 sản phẩm cho đẹp
   
   const stats = [
     { label: 'Doanh thu', value: `${(dashboardData?.revenue?.total || totalRevenue).toLocaleString()} ₫`, icon: <DollarSign />, trend: '+12.5%', isPositive: true, color: '#3b82f6' },
@@ -150,10 +182,10 @@ const AdminDashboard = () => {
         <div className="chart-section card" style={{ overflow: 'visible' }}>
           <div className="card-header">
             <h3>Báo cáo doanh thu</h3>
-            <select className="card-select">
-              <option>Theo ngày</option>
-              <option>Theo tháng</option>
-              <option>Theo năm</option>
+            <select className="card-select" value={timeFrame} onChange={(e) => setTimeFrame(e.target.value)}>
+              <option value="Theo ngày">Theo ngày</option>
+              <option value="Theo tháng">Theo tháng</option>
+              <option value="Theo năm">Theo năm</option>
             </select>
           </div>
           <div className="chart-area" style={{ height: '300px', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', paddingBottom: '30px', paddingTop: '20px' }}>

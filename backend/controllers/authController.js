@@ -312,16 +312,25 @@ export const otpEmailLogin = asyncHandler(async (req, res) => {
   }
 
   const email = rawEmail.toLowerCase().trim();
-  let user = await User.findOne({ email });
+  console.log(`[Auth Debug] Attempting OTP login for: ${email}`);
+  
+  let user;
+  try {
+    user = await User.findOne({ email });
 
-  if (!user) {
-    // Create new user if not exists (Register on first login)
-    user = await User.create({
-      email,
-      fullName: 'Khách hàng',
-      password: crypto.randomBytes(16).toString('hex'), // Dummy password
-      authProvider: 'email_otp',
-    });
+    if (!user) {
+      console.log(`[Auth Debug] User not found, creating new account for: ${email}`);
+      // Create new user if not exists (Register on first login)
+      user = await User.create({
+        email,
+        fullName: 'Khách hàng',
+        password: crypto.randomBytes(16).toString('hex'), // Dummy password
+        authProvider: 'email_otp',
+      });
+    }
+  } catch (error) {
+    console.error(`[Auth Debug] Error finding or creating user:`, error);
+    throw error;
   }
 
   if (user.isActive === false) {
@@ -331,8 +340,11 @@ export const otpEmailLogin = asyncHandler(async (req, res) => {
   user.lastLoginAt = new Date();
   await user.save({ validateBeforeSave: false });
 
+  const authResponse = buildAuthResponse(user);
+  console.log(`[Auth Debug] OTP login successful for: ${email}`);
+
   res.json({
-    ...buildAuthResponse(user),
+    ...authResponse,
     message: 'Đăng nhập bằng Email OTP thành công.',
   });
 });

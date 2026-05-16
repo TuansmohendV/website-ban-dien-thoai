@@ -53,8 +53,9 @@ const ProductDetailPage = () => {
     const [selectedPayment, setSelectedPayment] = useState(0);
     const [showBuyModal, setShowBuyModal] = useState(false);
 
-    const [reviewRating, setReviewRating] = useState(0);
+    const [reviewRating, setReviewRating] = useState(5);
     const [reviewContent, setReviewContent] = useState('');
+    const [reviewImages, setReviewImages] = useState([]);
     const [isSubmittingReview, setIsSubmittingReview] = useState(false);
     const [editingReviewId, setEditingReviewId] = useState('');
     const [editingReviewContent, setEditingReviewContent] = useState('');
@@ -361,22 +362,38 @@ const ProductDetailPage = () => {
         }
     };
 
+    const handleImageChange = (e) => {
+        const files = Array.from(e.target.files);
+        if (reviewImages.length + files.length > 3) {
+            alert('Bạn chỉ có thể tải lên tối đa 3 hình ảnh.');
+            return;
+        }
+
+        files.forEach(file => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setReviewImages(prev => [...prev, reader.result]);
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+
     const showReviewNotice = (type, message) => {
         setReviewNotice({ type, message });
         setTimeout(() => setReviewNotice({ type: '', message: '' }), 3000);
     };
 
-    const submitReview = async ({ comment, rating }) => {
-        const trimmedComment = String(comment || '').trim();
-        const safeRating = Number(rating || 0);
+    const submitReview = async () => {
+        const trimmedComment = String(reviewContent || '').trim();
+        const safeRating = Number(reviewRating || 0);
 
         if (!product?.backendId) {
             showReviewNotice('error', 'Không tìm thấy sản phẩm để gửi đánh giá.');
             return;
         }
 
-        if (trimmedComment.length < 3) {
-            showReviewNotice('error', 'Vui lòng nhập nội dung tối thiểu 3 ký tự.');
+        if (trimmedComment.length < 15) {
+            showReviewNotice('error', 'Vui lòng nhập nội dung tối thiểu 15 ký tự.');
             return;
         }
 
@@ -392,10 +409,12 @@ const ProductDetailPage = () => {
                 rating: safeRating,
                 title: `Đánh giá ${safeRating} sao`,
                 comment: trimmedComment,
+                images: reviewImages
             });
-            showReviewNotice('success', 'Gửi đánh giá thành công.');
+            showReviewNotice('success', 'Gửi đánh giá thành công! Đánh giá của bạn đang được chờ duyệt.');
             setReviewContent('');
-            setReviewRating(0);
+            setReviewRating(5);
+            setReviewImages([]);
             await loadProductReviews(product.backendId);
         } catch (error) {
             if (error?.response?.status === 401) {
@@ -1560,13 +1579,37 @@ const ProductDetailPage = () => {
                         {/* Body: Textarea + Star picker */}
                         <div className="flex flex-col lg:flex-row gap-6">
                             {/* Textarea */}
-                            <textarea
-                                rows={4}
-                                placeholder="Nội dung. Tối thiểu 15 ký tự"
-                                value={reviewContent}
-                                onChange={(event) => setReviewContent(event.target.value)}
-                                className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-[14px] text-gray-700 placeholder:text-gray-400 outline-none focus:border-[#00917a] focus:ring-2 focus:ring-emerald-100 transition-all resize-none bg-gray-50/50"
-                            />
+                            <div className="flex-1 flex flex-col gap-3">
+                                <textarea
+                                    rows={4}
+                                    placeholder="Nội dung. Tối thiểu 15 ký tự (Cấm hình ảnh và ngôn từ nhạy cảm)"
+                                    value={reviewContent}
+                                    onChange={(event) => setReviewContent(event.target.value)}
+                                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[14px] text-gray-700 placeholder:text-gray-400 outline-none focus:border-[#00917a] focus:ring-2 focus:ring-emerald-100 transition-all resize-none bg-gray-50/50"
+                                />
+                                
+                                {/* Image Upload Buttons */}
+                                <div className="flex flex-wrap gap-3">
+                                    {reviewImages.map((img, idx) => (
+                                        <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 group">
+                                            <img src={img} className="w-full h-full object-cover" alt="Preview" />
+                                            <button 
+                                                onClick={() => setReviewImages(prev => prev.filter((_, i) => i !== idx))}
+                                                className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {reviewImages.length < 3 && (
+                                        <label className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-[#00917a] hover:bg-emerald-50 transition-all text-gray-400 hover:text-[#00917a]">
+                                            <ImageIcon size={20} />
+                                            <span className="text-[10px] font-bold">Thêm ảnh</span>
+                                            <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} multiple />
+                                        </label>
+                                    )}
+                                </div>
+                            </div>
 
                             {/* Star picker */}
                             <div className="flex flex-col items-start lg:items-end justify-center gap-2 shrink-0">
@@ -1574,12 +1617,13 @@ const ProductDetailPage = () => {
                                 <StarRatingPicker value={reviewRating} onChange={setReviewRating} />
                                 <button
                                     type="button"
-                                    onClick={() => submitReview({ comment: reviewContent, rating: reviewRating })}
+                                    onClick={() => submitReview()}
                                     disabled={isSubmittingReview}
                                     className="mt-2 bg-[#00917a] hover:bg-[#00795f] disabled:opacity-60 disabled:cursor-not-allowed transition-all text-white font-black text-[12px] uppercase px-5 py-2 rounded-lg"
                                 >
                                     {isSubmittingReview ? 'Đang gửi...' : 'Gửi đánh giá'}
                                 </button>
+                                <p className="text-[10px] text-gray-400 italic max-w-[150px] text-right mt-1">Lưu ý: Mọi hình ảnh nhạy cảm sẽ bị xóa và khóa tài khoản.</p>
                             </div>
                         </div>
                     </div>
@@ -1643,6 +1687,33 @@ const ProductDetailPage = () => {
                                                     ))}
                                                 </div>
                                                 <p className="text-sm text-gray-700 mt-2">{item.comment || item.title || 'Đánh giá sản phẩm'}</p>
+                                                
+                                                {/* Customer Images */}
+                                                {item.images && item.images.length > 0 && (
+                                                    <div className="flex gap-2 mt-3">
+                                                        {item.images.map((img, idx) => (
+                                                            <div key={idx} className="w-20 h-20 rounded-lg overflow-hidden border border-gray-100 cursor-pointer hover:opacity-80 transition-opacity">
+                                                                <img src={img} className="w-full h-full object-cover" alt="Customer" onClick={() => window.open(img, '_blank')} />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {item.reply && (
+                                                    <div className="mt-4 p-4 bg-[#f1fcf9] border-l-4 border-[#00917a] rounded-r-xl shadow-sm">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <div className="w-6 h-6 rounded-full bg-[#00917a] flex items-center justify-center">
+                                                                <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                                </svg>
+                                                            </div>
+                                                            <span className="text-[12px] font-black text-[#00917a] uppercase tracking-wider">Phản hồi từ PhoneSin</span>
+                                                        </div>
+                                                        <p className="text-[13px] text-gray-600 leading-relaxed font-medium">
+                                                            {item.reply}
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </>
                                         )}
                                         {isOwnReview(item) && editingReviewId !== item._id && (

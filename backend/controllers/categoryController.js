@@ -135,7 +135,7 @@ const attachProductCounts = (categories, productGroups, includeDerived) => {
 };
 
 export const getCategories = asyncHandler(async (req, res) => {
-  const isAdminRequest = req.user?.role === 'admin' || req.user?.isAdmin === true;
+  const isAdminRequest = ['admin', 'manager', 'staff'].includes(req.user?.role) || req.user?.isAdmin === true;
   const includeInactive = isAdminRequest && String(req.query.includeInactive) === 'true';
   const includeDerived = String(req.query.includeDerived) !== 'false';
 

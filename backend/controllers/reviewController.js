@@ -265,6 +265,11 @@ export const updateAdminReview = asyncHandler(async (req, res) => {
     review.moderationNote = req.body.moderationNote;
   }
 
+  if (req.body.reply !== undefined) {
+    review.reply = req.body.reply;
+    review.replyDate = new Date();
+  }
+
   await review.save();
 
   res.json({

@@ -729,7 +729,7 @@ export const getUserOrders = asyncHandler(async (req, res) => {
 
 export const getUserOrderYears = asyncHandler(async (req, res) => {
   const years = await Order.aggregate([
-    { $match: { user: req.user._id } },
+    { $match: { user: new mongoose.Types.ObjectId(req.user._id) } },
     {
       $group: {
         _id: { $year: '$createdAt' },

@@ -381,15 +381,35 @@ const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSin
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 divide-y divide-gray-100">
 
-        {/* Loại sản phẩm (Chỉ hiện khi ở trang Search hoặc yêu cầu) */}
-        {(category === 'search' || currentConfig.sections?.includes('category')) && (
-          <div>
-            <FilterHeader title="Loại sản phẩm" section="category" isExpanded={expandedSections.category} />
-            {expandedSections.category && renderFilterList('category', [
-              'Điện thoại', 'Laptop', 'Tablet', 'Đồng hồ', 'Âm thanh', 'Smart Home', 'Phụ kiện'
-            ])}
-          </div>
-        )}
+        {/* Loại sản phẩm */}
+        <div>
+          <FilterHeader title="Loại sản phẩm" section="category" isExpanded={expandedSections.category} />
+          {expandedSections.category && (
+            <div className="pb-6 space-y-2">
+              {[
+                { name: 'Điện thoại', slug: 'dien-thoai' },
+                { name: 'Laptop', slug: 'laptop' },
+                { name: 'Tablet', slug: 'tablet' },
+                { name: 'Đồng hồ', slug: 'dong-ho' },
+                { name: 'Âm thanh', slug: 'am-thanh' },
+                { name: 'Smart Home', slug: 'smart-home' },
+                { name: 'Phụ kiện', slug: 'phu-kien' }
+              ].map((cat) => (
+                <label key={cat.slug} className="flex items-center gap-3 cursor-pointer group py-1">
+                  <input
+                    type="checkbox"
+                    checked={filters.category === cat.slug || category === cat.slug}
+                    onChange={() => onSetSingleFilter('category', cat.slug)}
+                    className="w-4.5 h-4.5 accent-[#008d71] border-gray-300 rounded cursor-pointer"
+                  />
+                  <span className={`text-[14px] font-medium transition-colors ${filters.category === cat.slug || category === cat.slug ? 'text-[#008d71] font-bold' : 'text-gray-600 group-hover:text-[#008d71]'}`}>
+                    {cat.name}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Hãng */}
         {currentBrands && currentBrands.length > 0 && (

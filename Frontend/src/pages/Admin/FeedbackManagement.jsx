@@ -34,6 +34,9 @@ const mapReviewForAdmin = (review = {}) => ({
   date: review.createdAt ? new Date(review.createdAt).toLocaleDateString('vi-VN') : '',
   status: moderationLabelMap[review.moderationStatus] || 'Chờ duyệt',
   isVIP: review.user?.isVIP || false,
+  reply: review.reply || '',
+  replyDate: review.replyDate ? new Date(review.replyDate).toLocaleDateString('vi-VN') : '',
+  images: review.images || [],
 });
 
 const FeedbackManagement = () => {
@@ -42,6 +45,9 @@ const FeedbackManagement = () => {
   const [comments, setComments] = useState([]);
   const [isLoadingComments, setIsLoadingComments] = useState(true);
   const [commentsError, setCommentsError] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [replyContent, setReplyContent] = useState('');
+  const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -134,6 +140,29 @@ const FeedbackManagement = () => {
   const handleDeleteNotification = (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa thông báo này khỏi giao diện? (Dữ liệu trong database vẫn còn)')) {
       setNotifications(notifications.filter(n => n._id !== id));
+    }
+  };
+
+  const handleSendReply = async () => {
+    if (!replyContent.trim()) {
+      alert('Vui lòng nhập nội dung phản hồi!');
+      return;
+    }
+
+    try {
+      setIsSubmittingReply(true);
+      await api.patch(`/api/admin/reviews/${replyingTo.id}`, { 
+        reply: replyContent,
+        moderationStatus: 'approved' // Tự động duyệt khi phản hồi
+      });
+      alert('Đã gửi phản hồi thành công!');
+      setReplyingTo(null);
+      setReplyContent('');
+      await loadComments();
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Không thể gửi phản hồi.'));
+    } finally {
+      setIsSubmittingReply(false);
     }
   };
 
@@ -371,7 +400,45 @@ const FeedbackManagement = () => {
 
                   <p className="comment-body">{comment.content}</p>
 
+                  {/* Display Review Images */}
+                  {comment.images && comment.images.length > 0 && (
+                    <div className="flex gap-2 mt-3 mb-3">
+                      {comment.images.map((img, idx) => (
+                        <div key={idx} className="w-16 h-16 rounded-lg overflow-hidden border border-gray-200 cursor-pointer hover:opacity-80">
+                          <img src={img} className="w-full h-full object-cover" alt="Review" onClick={() => window.open(img, '_blank')} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {comment.reply && (
+                    <div className="admin-reply-box" style={{ 
+                      marginTop: '15px', padding: '12px', background: '#f8fafc', 
+                      borderRadius: '8px', borderLeft: '4px solid #2563eb' 
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#1e293b', textTransform: 'uppercase' }}>Phản hồi từ Admin</span>
+                        <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{comment.replyDate}</span>
+                      </div>
+                      <p style={{ fontSize: '0.85rem', color: '#475569', margin: 0 }}>{comment.reply}</p>
+                    </div>
+                  )}
+
                   <div className="comment-actions">
+                    <button 
+                      className="btn-reply" 
+                      onClick={() => {
+                        setReplyingTo(comment);
+                        setReplyContent(comment.reply);
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px',
+                        background: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: '8px',
+                        fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem'
+                      }}
+                    >
+                      <Send size={16} /> {comment.reply ? 'Sửa phản hồi' : 'Phản hồi'}
+                    </button>
                     {comment.status === 'Chờ duyệt' && (
                       <button className="btn-approve" onClick={() => handleApprove(comment.id)}>
                         <CheckCircle2 size={16} /> Duyệt đánh giá
@@ -517,6 +584,44 @@ const FeedbackManagement = () => {
                 <button type="submit" className="btn-primary"><Send size={18} /> Gửi ngay</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reply Modal */}
+      {replyingTo && (
+        <div className="modal-overlay" onClick={() => setReplyingTo(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h2>Phản hồi đánh giá</h2>
+              <button className="close-btn" onClick={() => setReplyingTo(null)}><X size={24} /></button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: '15px', padding: '10px', background: '#f1f5f9', borderRadius: '8px', fontSize: '0.9rem' }}>
+                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{replyingTo.user}:</div>
+                <div style={{ color: '#475569' }}>"{replyingTo.content}"</div>
+              </div>
+              <div className="input-group">
+                <label>Nội dung phản hồi của bạn</label>
+                <textarea 
+                  rows="5" 
+                  placeholder="Cảm ơn bạn đã ủng hộ PhoneSin..."
+                  value={replyContent}
+                  onChange={(e) => setReplyContent(e.target.value)}
+                  autoFocus
+                ></textarea>
+              </div>
+              <div className="modal-footer">
+                <button className="btn-outline" onClick={() => setReplyingTo(null)}>Hủy</button>
+                <button 
+                  className="btn-primary" 
+                  onClick={handleSendReply}
+                  disabled={isSubmittingReply}
+                >
+                  {isSubmittingReply ? 'Đang gửi...' : 'Gửi phản hồi'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

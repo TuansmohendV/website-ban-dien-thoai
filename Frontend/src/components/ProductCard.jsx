@@ -52,22 +52,24 @@ const ProductCard = ({ product }) => {
             };
 
             if (product.category === 'dien-thoai') {
-              specItems = [
-                { label: 'Chip', value: product.specs?.chip || 'AI', svg: iconSvg.cpu },
-                { label: 'RAM', value: product.specs?.ram || '12GB', svg: iconSvg.ram },
-                { label: 'Size', value: product.specs?.screen || '6.73"', svg: iconSvg.phone },
-                { label: 'Panel', value: product.specs?.panel || 'AMOLED', svg: iconSvg.display }
+              const specs = [
+                { label: 'Chip', value: product.specs?.chip || product.cpu, svg: iconSvg.cpu },
+                { label: 'RAM', value: product.specs?.ram || product.ram, svg: iconSvg.ram },
+                { label: 'Size', value: product.specs?.screen || product.screenSize, svg: iconSvg.phone },
+                { label: 'Panel', value: product.specs?.panel || product.specs?.displayType, svg: iconSvg.display }
               ];
+              specItems = specs.filter(s => s.value);
             } else if (product.category === 'smart-home') {
-              specItems = []; // Hide for smart-home as per screenshot
+              specItems = []; 
             } else {
-              // Default to monitor specs
-              specItems = [
-                { label: 'Hz', value: product.specs?.hz || '180Hz', svg: iconSvg.refresh },
-                { label: 'Panel', value: product.specs?.panel || 'IPS', svg: iconSvg.display },
-                { label: 'Size', value: product.specs?.size || '24"', svg: iconSvg.phone },
-                { label: 'Res', value: product.specs?.res || 'FHD', svg: iconSvg.display }
+              // Default to monitor/other specs if available
+              const specs = [
+                { label: 'Hz', value: product.specs?.hz || product.refreshRate, svg: iconSvg.refresh },
+                { label: 'Panel', value: product.specs?.panel, svg: iconSvg.display },
+                { label: 'Size', value: product.specs?.size || product.screenSize, svg: iconSvg.phone },
+                { label: 'Res', value: product.specs?.res, svg: iconSvg.display }
               ];
+              specItems = specs.filter(s => s.value);
             }
             
             return specItems.map((s, i) => (
@@ -76,7 +78,7 @@ const ProductCard = ({ product }) => {
                 <span className="text-[8px] font-bold text-gray-600 text-center leading-none mt-1 uppercase tracking-tighter">{s.value}</span>
               </div>
             ));
-          })()}
+          })() }
         </div>
       </Link>
 

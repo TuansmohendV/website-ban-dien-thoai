@@ -24,6 +24,8 @@ export const sendOTP = asyncHandler(async (req, res) => {
     // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     
+    console.log(`[OTP Debug] Generated OTP: ${otp} for ${normalizedEmail}`);
+
     // Xóa OTP cũ (nếu có) và lưu OTP mới vào MongoDB
     await OTPModel.deleteMany({ email: normalizedEmail });
     await OTPModel.create({
@@ -50,6 +52,9 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
+    console.log(`[OTP Debug] Verifying OTP for: ${normalizedEmail}`);
+    console.log(`[OTP Debug] OTP Code entered: "${otp}"`);
+
     // Tìm OTP trong MongoDB
     const storedOTP = await OTPModel.findOne({
         email: normalizedEmail,
@@ -58,8 +63,11 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     });
 
     if (!storedOTP) {
+        console.log(`[OTP Debug] No matching OTP found or OTP expired for ${normalizedEmail}`);
         throw new AppError(400, 'Mã OTP không chính xác hoặc đã hết hạn.');
     }
+
+    console.log(`[OTP Debug] OTP verification successful for ${normalizedEmail}`);
 
     // Xóa OTP sau khi xác thực thành công
     await OTPModel.deleteMany({ email: normalizedEmail });

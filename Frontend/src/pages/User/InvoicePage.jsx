@@ -28,37 +28,9 @@ const InvoicePage = () => {
     );
   }
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    if (dateStr.includes('/')) {
-        const parts = dateStr.split('/');
-        if (parts[0].length > 2) return dateStr; // Likely YYYY/MM/DD
-        if (parseInt(parts[0]) > 12) return dateStr; // Likely DD/MM/YYYY already
-    }
-    try {
-      const d = new Date(dateStr.split(',')[0]);
-      if (!isNaN(d.getTime())) {
-        return d.toLocaleDateString('vi-VN');
-      }
-      return dateStr;
-    } catch (e) {
-      return dateStr;
-    }
-  };
 
-  const calculateDeliveryDate = (dateStr, city) => {
-    try {
-      const orderD = new Date(dateStr ? dateStr.split(',')[0] : new Date());
-      if (isNaN(orderD.getTime())) return 'Đang cập nhật';
-      let days = 3;
-      if (['Hà Nội', 'Hồ Chí Minh', 'TP. Hồ Chí Minh'].includes(city)) days = 1;
-      else if (['Đà Nẵng'].includes(city)) days = 2;
-      orderD.setDate(orderD.getDate() + days);
-      return orderD.toLocaleDateString('vi-VN');
-    } catch {
-      return 'Đang cập nhật';
-    }
-  };
+
+
 
   let realOrder = orders.find(o => o.id === orderId);
 
@@ -75,8 +47,8 @@ const InvoicePage = () => {
     issueDate: new Date().toLocaleDateString('vi-VN'),
     dueDate: new Date().toLocaleDateString('vi-VN'),
     orderId: String(realOrder.id || realOrder.orderId).slice(-8).toUpperCase(),
-    orderDate: formatDate(realOrder.date),
-    deliveryDate: calculateDeliveryDate(realOrder.date, realOrder.customer?.city),
+    orderDate: realOrder.date,
+    deliveryDate: realOrder.estimatedDelivery || 'Đang cập nhật',
     status: realOrder.status === 'pending' ? 'Chờ xác nhận' : realOrder.status === 'cancelled' ? 'Đã hủy' : 'Đã xác nhận',
     customer: {
       fullName: realOrder.customer.fullName,

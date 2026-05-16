@@ -36,7 +36,7 @@ const buildVariantSummaryMap = (variants) => {
 
 export const getProducts = asyncHandler(async (req, res) => {
   const page = Math.max(Number(req.query.page) || 1, 1);
-  const isAdminRequest = req.user?.role === 'admin' || req.user?.isAdmin === true;
+  const isAdminRequest = ['admin', 'manager', 'staff'].includes(req.user?.role) || req.user?.isAdmin === true;
   const maxLimit = isAdminRequest ? 500 : 200;
   const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), maxLimit);
   const skip = (page - 1) * limit;
@@ -65,7 +65,7 @@ export const getProducts = asyncHandler(async (req, res) => {
 
   const includeInactive =
     isAdminRequest && String(req.query.includeInactive) === 'true';
-  const filters = includeInactive ? [] : [{ status: 'active' }];
+  const filters = includeInactive ? [] : [{ $or: [{ status: 'active' }, { status: { $exists: false } }] }];
 
   if (keyword) {
     const keywordRegex = buildRegex(keyword);
