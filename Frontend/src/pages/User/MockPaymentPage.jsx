@@ -19,7 +19,7 @@ const MockPaymentPage = () => {
         }
     }, [location, navigate]);
 
-    const handlePayment = (success) => {
+    const redirectPayment = (success) => {
         setLoading(true);
         setTimeout(() => {
             const returnUrl = params.returnUrl || '/checkout-result';
@@ -54,6 +54,11 @@ const MockPaymentPage = () => {
         if (m === 'zalopay') return 'https://img.mservice.io/momo-payment/210811/momo-payment_1628675662700.png';
         if (m === 'BANK_TRANSFER') return '🏦';
         return '💳';
+    };
+
+    const getConfirmButtonLabel = () => {
+        if (params.method === 'BANK_TRANSFER') return 'TÔI ĐÃ CHUYỂN KHOẢN';
+        return 'THANH TOÁN NGAY';
     };
 
     return (
@@ -136,16 +141,16 @@ const MockPaymentPage = () => {
                     {/* Actions */}
                     <div className="space-y-3 pt-4">
                         <button 
-                            onClick={() => handlePayment(true)}
+                            onClick={() => redirectPayment(true)}
                             disabled={loading}
                             className="w-full h-14 bg-[#007bff] text-white font-black rounded-2xl hover:bg-[#0056b3] active:bg-[#ffd700] active:text-slate-900 transition-all shadow-xl active:scale-95 uppercase tracking-widest flex items-center justify-center border-none outline-none"
                         >
                             {loading ? (
                                 <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            ) : 'XÁC NHẬN ĐÃ THANH TOÁN'}
+                            ) : getConfirmButtonLabel()}
                         </button>
                         <button 
-                            onClick={() => handlePayment(false)}
+                            onClick={() => redirectPayment(false)}
                             disabled={loading}
                             className="w-full h-12 text-gray-400 font-black rounded-2xl hover:bg-gray-100 transition-all uppercase tracking-widest text-xs"
                         >

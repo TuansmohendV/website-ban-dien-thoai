@@ -194,7 +194,10 @@ const PromotionManagement = () => {
       if (editingPromo) {
         await api.put(`/api/voucher/admin/${editingPromo.id}`, payload);
       } else {
-        await api.post('/api/voucher/admin', payload);
+        const response = await api.post('/api/voucher/admin', payload);
+        if (response.data?.notifiedUsers > 0) {
+          alert(`Đã tạo voucher và gửi thông báo đến ${response.data.notifiedUsers} khách hàng.`);
+        }
       }
 
       await loadPromos();
@@ -206,9 +209,14 @@ const PromotionManagement = () => {
     }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa mã khuyến mãi này khỏi giao diện? (Dữ liệu trong database vẫn còn)')) {
-      setPromos(promos.filter(p => p.id !== id));
+      try {
+        await api.delete(`/api/voucher/admin/${id}`);
+        setPromos(promos.filter(p => p.id !== id));
+      } catch (error) {
+        alert(getApiErrorMessage(error, 'Không thể xóa mã khuyến mãi.'));
+      }
     }
   };
 

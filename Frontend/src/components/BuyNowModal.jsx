@@ -4,9 +4,16 @@ import { useOrders } from '../context/OrdersContext';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api, { getApiErrorMessage } from '../lib/api';
-import { Ticket, Zap, Check, Plus } from 'lucide-react';
+import { CreditCard, Ticket, Truck, Wallet } from 'lucide-react';
 
-const BuyNowModal = ({ product, isOpen, onClose }) => {
+const MONGO_OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
+
+const getMongoObjectId = (value) => {
+  const id = String(value || '').trim();
+  return MONGO_OBJECT_ID_PATTERN.test(id) ? id : undefined;
+};
+
+const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialColor = null }) => {
   const { formatPrice } = useLanguage();
   const { createOrder, processPayment } = useOrders();
   const { user } = useAuth();
@@ -43,34 +50,26 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
   const [deliveryEstimate, setDeliveryEstimate] = useState('');
   const [errors, setErrors] = useState({});
   const [isLookingUp, setIsLookingUp] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [tempData, setTempData] = useState(null);
-  const [isLinking, setIsLinking] = useState(false);
 
-  // Bank states
-  const [selectedBank, setSelectedBank] = useState(null);
-  const [bankAccountNumber, setBankAccountNumber] = useState('');
-  const [bankAccountName, setBankAccountName] = useState('');
-  const [bankPhone, setBankPhone] = useState('');
-  const [bankIDNumber, setBankIDNumber] = useState('');
-  const [bankIDIssueDate, setBankIDIssueDate] = useState('');
-  const [bankBranch, setBankBranch] = useState('');
+  const selectedVariant = React.useMemo(() => {
+    if (!product?.variants?.length) return null;
 
-  const banks = [
-    { id: 'vcb', name: 'Vietcombank', logo: 'https://s-vnba-cdn.aicms.vn/vnba-media/23/8/11/2-logo-vietcombank-voi-y-nghia-rieng_64d5f7a4a4311.png', bin: '970436' },
-    { id: 'mb', name: 'MB Bank', logo: 'https://upload.wikimedia.org/wikipedia/commons/2/25/Logo_MB_new.png', bin: '970422' },
-    { id: 'tcb', name: 'Techcombank', logo: 'https://forbes.vn/wp-content/uploads/2022/08/LogoTop25tc_techcombank.jpg', bin: '970407' },
-    { id: 'bidv', name: 'BIDV', logo: 'https://bidv.diadiembank.com/wp-content/uploads/2024/12/logo-bidv.jpg', bin: '970418' },
-    { id: 'ctg', name: 'VietinBank', logo: 'https://inhopgiay.net/wp-content/uploads/2026/01/logo-Vietinbank-vector-01-768x768.png', bin: '970415' },
-    { id: 'agr', name: 'Agribank', logo: 'https://inhopgiay.net/wp-content/uploads/2025/09/Logo-ngan-hang-agribank-png.jpg', bin: '970405' },
-    { id: 'vpb', name: 'VPBank', logo: 'https://api.vietqr.io/img/VPB.png', bin: '970432' },
-    { id: 'acb', name: 'ACB', logo: 'https://rubicmarketing.com/wp-content/uploads/2022/12/y-nghia-logo-acb-1.jpg', bin: '970416' },
-    { id: 'stb', name: 'Sacombank', logo: 'https://sepay.vn/blog/wp-content/uploads/2026/01/Logo-Sacombank_7-1-2026_Nen-Xanh_07.1.2026.jpg', bin: '970403' },
-    { id: 'tpb', name: 'TPBank', logo: 'https://media.loveitopcdn.com/3807/logo-tpbank-2.jpg', bin: '970423' },
-    { id: 'hdb', name: 'HDBank', logo: 'https://thuvienvector.vn/wp-content/uploads/2025/10/mau-logo-hdbank.jpg', bin: '970437' },
-    { id: 'vib', name: 'VIB', logo: 'https://inkythuatso.com/uploads/images/2021/12/logo-vib-inkythuatso-3-21-13-43-27.jpg', bin: '970441' },
-  ];
+    const selectedColorName = selectedColor?.name || selectedColor?.color || '';
+    const initialStorage = initialVariant?.storage || '';
+
+    return (
+      product.variants.find(
+        (variant) => variant.color === selectedColorName && variant.storage === initialStorage
+      ) ||
+      product.variants.find((variant) => variant.id === initialVariant?.id) ||
+      product.variants.find((variant) => !variant.color) ||
+      product.variants[0]
+    );
+  }, [product?.variants, selectedColor, initialVariant]);
+
+  const availableStock = Number(
+    selectedVariant?.stock ?? product?.countInStock ?? product?.totalStock ?? 0
+  );
 
   const cities = [
     "An Giang", "Bà Rịa - Vũng Tàu", "Bắc Giang", "Bắc Kạn", "Bạc Liêu", "Bắc Ninh", "Bến Tre", "Bình Định", "Bình Dương", "Bình Phước", "Bình Thuận", "Cà Mau", "Cần Thơ", "Cao Bằng", "Đà Nẵng", "Đắk Lắk", "Đắk Nông", "Điện Biên", "Đồng Nai", "Đồng Tháp", "Gia Lai", "Hà Giang", "Hà Nam", "Hà Nội", "Hà Tĩnh", "Hải Dương", "Hải Phòng", "Hậu Giang", "Hòa Bình", "Hưng Yên", "Khánh Hòa", "Kiên Giang", "Kon Tum", "Lai Châu", "Lâm Đồng", "Lạng Sơn", "Lào Cai", "Long An", "Nam Định", "Nghệ An", "Ninh Bình", "Ninh Thuận", "Phú Thọ", "Phú Yên", "Quảng Bình", "Quảng Nam", "Quảng Ngãi", "Quảng Ninh", "Quảng Trị", "Sóc Trăng", "Sơn La", "Tây Ninh", "Thái Bình", "Thái Nguyên", "Thanh Hóa", "Thừa Thiên Huế", "Tiền Giang", "TP Hồ Chí Minh", "Trà Vinh", "Tuyên Quang", "Vĩnh Long", "Vĩnh Phúc", "Yên Bái"
@@ -83,7 +82,7 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
 
   useEffect(() => {
     if (isOpen && product) {
-      setSelectedColor(product.colors?.[0] || { name: 'Mặc định', price: product.priceNum, image: product.image });
+      setSelectedColor(initialColor || product.colors?.[0] || { name: 'Mặc định', price: product.priceNum, image: product.image });
       setQuantity(1);
       setIsSuccess(false);
       setErrors({});
@@ -93,23 +92,10 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
       setPhone(user?.phone || '');
       setEmail(user?.email || '');
       
-      if (user?.linkedAccounts) {
-        if (user.linkedAccounts.banks?.length > 0) {
-          const defaultBank = user.linkedAccounts.banks[0];
-          setSelectedBank(defaultBank.bankId);
-          setBankAccountNumber(defaultBank.accountNumber);
-          setBankAccountName(defaultBank.accountName);
-          setBankIDNumber(defaultBank.idNumber);
-          setBankPhone(defaultBank.phone);
-          setBankIDIssueDate(defaultBank.issueDate);
-          setBankBranch(defaultBank.branch);
-        }
-      }
-      
       document.body.style.overflow = 'hidden';
     }
     return () => { document.body.style.overflow = ''; };
-  }, [isOpen, product, user]);
+  }, [isOpen, product, user, initialColor]);
 
   useEffect(() => {
     const fetchVouchers = async () => {
@@ -134,39 +120,6 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
     if (isOpen) fetchVouchers();
   }, [isOpen, user]);
 
-  useEffect(() => {
-    const lookup = async () => {
-      if (selectedBank && bankAccountNumber.length >= 6) {
-        setIsLookingUp(true);
-        setBankAccountName("");
-        try {
-          const selectedBankObj = banks.find(b => b.id === selectedBank);
-          if (!selectedBankObj?.bin) return;
-
-          const response = await api.post('/api/user/lookup-bank-account', {
-            bin: selectedBankObj.bin,
-            accountNumber: bankAccountNumber
-          });
-          
-          if (response.data?.success && response.data.accountName) {
-            setBankAccountName(response.data.accountName);
-          } else {
-            const mockNames = ["NGUYEN VAN TUAN", "TRAN THI MAI", "LE VAN HOANG", "PHAM MINH DUC"];
-            const randomName = mockNames[Math.floor(Math.random() * mockNames.length)];
-            setBankAccountName(bankAccountNumber === '123456789' ? 'NGUYEN VAN SIN' : randomName);
-          }
-        } catch (error) {
-          console.error('Bank lookup failed', error);
-          setBankAccountName(bankAccountNumber === '123456789' ? 'NGUYEN VAN SIN' : "MAI THANH TUẤN");
-        } finally {
-          setIsLookingUp(false);
-        }
-      }
-    };
-    const timer = setTimeout(lookup, 800);
-    return () => clearTimeout(timer);
-  }, [selectedBank, bankAccountNumber]);
-
   const validate = () => {
     const newErrors = {};
     if (!fullName.trim()) newErrors.fullName = 'Vui lòng nhập họ tên';
@@ -177,66 +130,8 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const validateBankInfo = () => {
-    const newErrors = {};
-    if (!selectedBank) newErrors.bank = 'Vui lòng chọn ngân hàng';
-    if (!/^[0-9]{8,15}$/.test(bankAccountNumber)) newErrors.accountNumber = 'Số tài khoản phải từ 8-15 chữ số';
-    if (!bankAccountName.trim()) newErrors.accountName = 'Vui lòng nhập tên chủ tài khoản';
-    if (!/^0[0-9]{9}$/.test(bankPhone)) newErrors.bankPhone = 'Số điện thoại không hợp lệ (10 chữ số)';
-    if (!/^([0-9]{9}|[0-9]{12})$/.test(bankIDNumber)) newErrors.bankID = 'Số CCCD phải là 9 hoặc 12 chữ số';
-    
-    setErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) {
-      alert(Object.values(newErrors)[0]);
-      return false;
-    }
-    return true;
-  };
-
-  const handleLinkAccount = async (type) => {
-    if (!user) {
-      alert('Vui lòng đăng nhập để thực hiện.');
-      return;
-    }
-    if (type === 'bank') {
-      if (!validateBankInfo()) return;
-      const data = {
-        bankId: selectedBank,
-        accountNumber: bankAccountNumber,
-        accountName: bankAccountName,
-        idNumber: bankIDNumber,
-        phone: bankPhone,
-        issueDate: bankIDIssueDate,
-        branch: bankBranch
-      };
-      setTempData({ type, data });
-      setIsVerifying(true);
-    }
-  };
-
-  const confirmVerification = async () => {
-    if (otpCode.length !== 6) {
-      alert('Vui lòng nhập mã xác thực 6 chữ số từ ứng dụng ngân hàng.');
-      return;
-    }
-    setIsLinking(true);
-    try {
-      const response = await api.post('/api/user/link-account', tempData);
-      if (response.data) {
-        setIsVerifying(false);
-        setOtpCode('');
-        setTempData(null);
-        alert('Xác thực và liên kết thành công!');
-      }
-    } catch (error) {
-      alert(getApiErrorMessage(error));
-    } finally {
-      setIsLinking(false);
-    }
-  };
-
   const handleApplyCoupon = async (manualCode = null) => {
-    const codeToApply = manualCode || couponCode;
+    const codeToApply = typeof manualCode === 'string' ? manualCode : couponCode;
     if (!codeToApply.trim()) return;
     setIsLookingUp(true);
     setCouponStatus(null);
@@ -267,8 +162,33 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
 
   const handleSubmit = async () => {
     if (!validate()) return;
+
+    if (quantity > availableStock) {
+      setCouponStatus({
+        type: 'error',
+        message: availableStock > 0
+          ? `Chỉ còn ${availableStock} sản phẩm. Vui lòng giảm số lượng hoặc chọn mẫu khác.`
+          : 'Sản phẩm vừa hết chỗ/tồn kho. Vui lòng chọn sản phẩm khác.',
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      const backendPaymentMethod = paymentMethod;
+      const productId =
+        getMongoObjectId(product.backendId) ||
+        getMongoObjectId(product.backendProductId) ||
+        getMongoObjectId(product._id);
+      const variantId =
+        getMongoObjectId(selectedVariant?._id) ||
+        getMongoObjectId(selectedVariant?.backendId) ||
+        getMongoObjectId(selectedVariant?.id);
+
+      if (!productId) {
+        throw new Error('Không xác định được sản phẩm để đặt hàng.');
+      }
+
       const order = await createOrder({
         customerInfo: { fullName, phone, email },
         shippingAddress: {
@@ -279,13 +199,17 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
           ward: deliveryMethod === 'store' ? 'Nhận tại cửa hàng' : ward,
           street: deliveryMethod === 'store' ? (selectedStore || 'Cửa hàng PhoneSin') : street,
         },
-        paymentMethod,
-        items: [{ productId: product.backendId || product._id, quantity }],
+        paymentMethod: backendPaymentMethod,
+        items: [{
+          productId,
+          variantId,
+          quantity,
+        }],
         voucherCode: appliedCoupon || undefined,
       });
 
-      if (paymentMethod !== 'COD') {
-        const payResponse = await processPayment(order.backendId || order.id, paymentMethod, {
+      if (backendPaymentMethod !== 'COD') {
+        const payResponse = await processPayment(order.backendId || order.id, backendPaymentMethod, {
           returnUrl: `${window.location.origin}/checkout-result`,
           origin: window.location.origin
         });
@@ -325,24 +249,24 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
         </button>
 
         {isSuccess ? (
-          <div className="w-full p-20 text-center flex flex-col items-center">
+          <div className="w-full p-6 sm:p-12 lg:p-20 text-center flex flex-col items-center">
              <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mb-6">
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="3"><path d="M20 6 9 17l-5-5" /></svg>
              </div>
-             <h2 className="text-4xl font-black text-slate-900 mb-4 tracking-tighter">ĐẶT HÀNG THÀNH CÔNG!</h2>
-             <p className="text-xl text-gray-500 mb-8 font-medium">Cảm ơn bạn đã tin tưởng PhoneSin. Chúng tôi sẽ sớm liên hệ xác nhận đơn hàng.</p>
-             <button onClick={onClose} className="px-12 py-5 bg-emerald-600 text-white font-black rounded-2xl text-xl shadow-xl active:scale-95 transition-all">QUAY LẠI CỬA HÀNG</button>
+             <h2 className="text-2xl sm:text-4xl font-black text-slate-900 mb-4 tracking-normal break-words">ĐẶT HÀNG THÀNH CÔNG!</h2>
+             <p className="text-base sm:text-xl text-gray-500 mb-8 font-medium leading-snug">Cảm ơn bạn đã tin tưởng PhoneSin. Chúng tôi sẽ sớm liên hệ xác nhận đơn hàng.</p>
+             <button onClick={onClose} className="min-h-14 px-6 sm:px-12 py-3 sm:py-5 bg-emerald-600 text-white font-black rounded-2xl text-base sm:text-xl shadow-xl active:scale-95 transition-all text-center leading-tight">QUAY LẠI CỬA HÀNG</button>
           </div>
         ) : (
           <>
-            <div className="w-full md:w-[480px] p-10 border-r border-gray-50 bg-[#fff]">
+            <div className="w-full md:w-[480px] p-5 sm:p-8 lg:p-10 border-r border-gray-50 bg-[#fff]">
               <div className="flex flex-col h-full">
                 <div className="aspect-square flex items-center justify-center mb-8">
                    <img src={selectedColor?.image || product.image} alt={product.name} className="max-h-full object-contain drop-shadow-2xl transition-all duration-500" />
                 </div>
-                <h3 className="text-center font-black text-xl text-slate-800 leading-tight mb-3">{product.name}</h3>
-                <div className="flex items-center justify-center gap-3 mb-6">
-                   <span className="text-red-600 font-black text-2xl">{formatPrice(selectedColor?.price || product.priceNum)}</span>
+                <h3 className="text-center font-black text-lg sm:text-xl text-slate-800 leading-tight mb-3 break-words">{product.name}</h3>
+                <div className="flex flex-wrap items-center justify-center gap-3 mb-6">
+                   <span className="text-red-600 font-black text-xl sm:text-2xl whitespace-nowrap">{formatPrice(selectedVariant?.price || selectedColor?.price || product.priceNum)}</span>
                    <span className="text-gray-400 line-through text-sm">{formatPrice((selectedColor?.price || product.priceNum) * 1.2)}</span>
                 </div>
                 <div className="space-y-3">
@@ -362,8 +286,8 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
               </div>
             </div>
 
-            <div className="flex-1 p-8 overflow-y-auto bg-white custom-scrollbar">
-               <h2 className="text-xl font-black text-slate-800 mb-6 uppercase tracking-tighter">Đặt hàng sản phẩm</h2>
+            <div className="flex-1 p-5 sm:p-8 overflow-y-auto bg-white custom-scrollbar">
+               <h2 className="text-lg sm:text-xl font-black text-slate-800 mb-6 uppercase tracking-normal break-words">Đặt hàng sản phẩm</h2>
                
                <div className="mb-8">
                  <p className="text-sm font-black text-slate-400 mb-4 uppercase tracking-widest">Chọn màu sắc</p>
@@ -389,11 +313,11 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
                                 </svg>
                             )}
                          </div>
-                         <div className="flex flex-col text-left">
+                         <div className="flex flex-col text-left min-w-0">
                             <span className={`text-sm font-black transition-colors ${selectedColor?.name === c.name ? 'text-slate-900' : 'text-slate-600'}`}>
                                 {c.name}
                             </span>
-                            <span className="text-sm text-red-500 font-black tracking-tight">
+                            <span className="text-sm text-red-500 font-black tracking-normal whitespace-nowrap">
                                 {formatPrice(c.price || product.priceNum)}
                             </span>
                          </div>
@@ -407,13 +331,24 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
                   <div className="flex items-center border border-gray-200 rounded-lg">
                      <button onClick={() => setQuantity(Math.max(1, quantity-1))} className="w-8 h-8 flex items-center justify-center font-bold border-r border-gray-200">-</button>
                      <span className="w-10 text-center font-bold text-sm">{quantity}</span>
-                     <button onClick={() => setQuantity(quantity+1)} className="w-8 h-8 flex items-center justify-center font-bold border-l border-gray-200">+</button>
+                     <button
+                      onClick={() => setQuantity(Math.min(availableStock || 1, quantity + 1))}
+                      disabled={quantity >= availableStock}
+                      className="w-8 h-8 flex items-center justify-center font-bold border-l border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                     >
+                      +
+                     </button>
                   </div>
+               </div>
+               <div className={`mb-6 rounded-xl px-4 py-3 text-sm font-black ${
+                  availableStock > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+               }`}>
+                  {availableStock > 0 ? `Còn ${availableStock} sản phẩm` : 'Sản phẩm vừa hết chỗ/tồn kho'}
                </div>
 
                <div className="space-y-3 mb-6">
                   <input type="text" placeholder="Họ tên" value={fullName} onChange={(e)=>setFullName(e.target.value)} className="w-full h-11 px-4 bg-gray-100 rounded-xl outline-none text-sm font-bold text-slate-800" />
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                      <input type="text" placeholder="Điện thoại" value={phone} onChange={(e)=>setPhone(e.target.value)} className="w-full h-11 px-4 bg-gray-100 rounded-xl outline-none text-sm font-bold text-slate-800" />
                      <input type="text" placeholder="Email" value={email} onChange={(e)=>setEmail(e.target.value)} className="w-full h-11 px-4 bg-gray-100 rounded-xl outline-none text-sm font-bold text-slate-800" />
                   </div>
@@ -421,7 +356,7 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
 
                <div className="mb-6">
                  <p className="text-xs font-black text-gray-400 mb-3 uppercase tracking-widest">Hình thức nhận hàng</p>
-                 <div className="grid grid-cols-2 gap-3">
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button onClick={() => setDeliveryMethod('home')} className={`h-11 px-4 rounded-xl border-2 flex items-center gap-3 transition-all ${deliveryMethod === 'home' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-50'}`}>
                        <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${deliveryMethod === 'home' ? 'border-emerald-500' : 'border-gray-200'}`}>
                           {deliveryMethod === 'home' && <div className="w-2 h-2 rounded-full bg-emerald-500"></div>}
@@ -458,7 +393,7 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
                     </select>
                   ) : (
                     <div className="space-y-3 animate-fadeIn">
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <input type="text" placeholder="Quận / Huyện *" value={district} onChange={(e)=>setDistrict(e.target.value)} className="w-full h-11 px-4 bg-gray-100 rounded-xl outline-none text-sm font-bold focus:bg-white focus:ring-2 focus:ring-emerald-500 transition-all" />
                             <input type="text" placeholder="Phường / Xã *" value={ward} onChange={(e)=>setWard(e.target.value)} className="w-full h-11 px-4 bg-gray-100 rounded-xl outline-none text-sm font-bold focus:bg-white focus:ring-2 focus:ring-emerald-500 transition-all" />
                         </div>
@@ -472,19 +407,19 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
                {/* Voucher Section */}
                <div className="mb-8 p-6 bg-slate-900 rounded-3xl border-2 border-emerald-500/30 shadow-xl shadow-emerald-500/5">
                  <p className="text-[11px] font-black text-emerald-400 mb-4 uppercase tracking-[0.2em] text-center italic">Mã giảm giá Sin Store</p>
-                 <div className="flex gap-2">
+                 <div className="flex flex-col sm:flex-row gap-2">
                     <input 
                       type="text" 
                       placeholder="Nhập mã ưu đãi..." 
                       value={couponCode}
                       onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponStatus(null); }}
                       disabled={!!appliedCoupon}
-                      className="flex-1 h-12 px-4 bg-white/10 rounded-xl border border-white/10 text-white font-black outline-none focus:border-emerald-500 transition-all uppercase placeholder:text-gray-600"
+                      className="flex-1 min-w-0 h-12 px-4 bg-white/10 rounded-xl border border-white/10 text-white font-black outline-none focus:border-emerald-500 transition-all uppercase placeholder:text-gray-600"
                     />
                     {appliedCoupon ? (
-                      <button onClick={handleRemoveCoupon} className="h-12 px-6 bg-red-600 text-white font-black rounded-xl hover:bg-red-700 transition-all shadow-lg active:scale-95 uppercase text-xs">Gỡ bỏ</button>
+                      <button onClick={handleRemoveCoupon} className="h-12 px-6 bg-red-600 text-white font-black rounded-xl hover:bg-red-700 transition-all shadow-lg active:scale-95 uppercase text-xs whitespace-nowrap">Gỡ bỏ</button>
                     ) : (
-                      <button onClick={() => handleApplyCoupon()} disabled={isLookingUp} className="h-12 px-6 bg-emerald-600 text-white font-black rounded-xl hover:bg-emerald-700 transition-all shadow-lg active:scale-95 uppercase text-xs">
+                      <button onClick={() => handleApplyCoupon()} disabled={isLookingUp} className="h-12 px-6 bg-emerald-600 text-white font-black rounded-xl hover:bg-emerald-700 transition-all shadow-lg active:scale-95 uppercase text-xs whitespace-nowrap">
                         {isLookingUp ? '...' : 'Áp dụng'}
                       </button>
                     )}
@@ -538,8 +473,8 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
                                       <Ticket size={16} className="text-white" />
                                     </div>
                                     <div>
-                                      <div className="flex items-center gap-2">
-                                        <p className="text-[12px] font-black tracking-tight text-white uppercase">{v.code}</p>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <p className="text-[12px] font-black tracking-normal text-white uppercase break-all">{v.code}</p>
                                         {isMax && <span className="bg-white text-red-600 text-[6px] font-black px-1 py-0.5 rounded uppercase">BEST</span>}
                                       </div>
                                       <p className="text-[8px] font-bold text-white/70 italic">Giảm {v.discountType === 'percentage' ? `${v.discountValue}%` : formatPrice(v.discountValue)}</p>
@@ -560,79 +495,60 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
 
                <div className="mb-8 p-6 bg-slate-50 rounded-3xl border border-gray-100">
                   <p className="text-[11px] font-black text-slate-400 mb-5 uppercase tracking-widest text-center">Hình thức thanh toán</p>
-                  <div className="flex flex-col gap-4">
-                      <div className="grid grid-cols-2 gap-4">
-                         <button onClick={() => setPaymentMethod('COD')} className={`relative flex flex-col items-center justify-center p-5 rounded-2xl border-2 transition-all duration-300 ${paymentMethod === 'COD' ? 'border-emerald-500 bg-white shadow-lg' : 'border-transparent bg-white/50 text-slate-400 hover:bg-white'}`}>
-                            <span className="text-3xl mb-2">🚚</span>
-                            <span className="text-[11px] font-black uppercase">Tiền mặt</span>
-                            {paymentMethod === 'COD' && <div className="absolute top-2 right-2 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></div>}
-                         </button>
-                         <button onClick={() => { setPaymentMethod('BANK_TRANSFER'); if(!selectedBank) setSelectedBank('sacombank'); }} className={`relative flex flex-col items-center justify-center p-5 rounded-2xl border-2 transition-all duration-300 ${paymentMethod !== 'COD' ? 'border-emerald-500 bg-white shadow-lg' : 'border-transparent bg-white/50 text-slate-400 hover:bg-white'}`}>
-                            <span className="text-3xl mb-2">💳</span>
-                            <span className="text-[11px] font-black uppercase text-center leading-tight">Chuyển khoản<br/>Ví điện tử</span>
-                            {paymentMethod !== 'COD' && <div className="absolute top-2 right-2 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></div>}
-                         </button>
-                      </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {[
+                      {
+                        id: 'COD',
+                        label: 'Tiền mặt',
+                        description: 'Thanh toán khi nhận hàng',
+                        Icon: Truck,
+                        active: 'border-emerald-500 bg-white shadow-lg text-slate-900',
+                        icon: 'bg-emerald-600 text-white',
+                      },
+                      {
+                        id: 'VNPAY',
+                        label: 'VNPay',
+                        description: 'Thanh toán qua VNPay',
+                        Icon: CreditCard,
+                        active: 'border-blue-500 bg-white shadow-lg text-slate-900',
+                        icon: 'bg-blue-600 text-white',
+                      },
+                      {
+                        id: 'MOMO',
+                        label: 'MoMo',
+                        description: 'Thanh toán ví MoMo',
+                        Icon: Wallet,
+                        active: 'border-[#A50064] bg-white shadow-lg text-slate-900',
+                        icon: 'bg-[#A50064] text-white',
+                      },
+                    ].map(({ id, label, description, Icon, active, icon }) => {
+                      const isActive = paymentMethod === id;
 
-                      {paymentMethod !== 'COD' && (
-                        <div className="mt-4 p-6 bg-white rounded-2xl border-2 border-emerald-500/20 shadow-xl animate-fadeIn">
-                          <div className="flex gap-2 mb-6">
-                            <button 
-                              onClick={() => setSelectedBank('sacombank')}
-                              className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all border-2 ${selectedBank === 'sacombank' ? 'bg-slate-900 text-white border-slate-900 shadow-lg' : 'bg-white text-slate-400 border-gray-100'}`}
-                            >
-                              Sacombank
-                            </button>
-                            <button 
-                              onClick={() => setSelectedBank('momo')}
-                              className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all border-2 ${selectedBank === 'momo' ? 'bg-[#A50064] text-white border-[#A50064] shadow-lg' : 'bg-white text-slate-400 border-gray-100'}`}
-                            >
-                              Ví Momo
-                            </button>
-                          </div>
-
-                          <div className="flex flex-col items-center animate-scaleIn">
-                            <div className="w-full max-w-[320px] aspect-square bg-white rounded-3xl border-2 border-emerald-500/10 p-2 flex flex-col items-center justify-center relative overflow-hidden shadow-2xl">
-                               <img 
-                                 src={selectedBank === 'momo' ? '/payment/momo_qr.jpg' : '/payment/sacombank_qr.jpg'} 
-                                 alt="QR Code" 
-                                 className="w-full h-full object-cover transition-all duration-500 scale-[1.8]" 
-                                 style={{ objectPosition: selectedBank === 'momo' ? 'center 55%' : 'center 45%' }}
-                                 onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                               />
-                               <div style={{ display: 'none' }} className="flex-col items-center text-center text-gray-400">
-                                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M7 7h.01M17 7h.01M7 17h.01M17 17h.01M12 12h.01" /></svg>
-                                  <span className="text-[10px] font-bold mt-2">Vui lòng quét mã QR<br/>để thanh toán</span>
-                               </div>
-                            </div>
-
-                            <div className="mt-6 w-full space-y-3">
-                               <div className="p-4 bg-slate-50 rounded-xl border border-gray-100">
-                                  <div className="flex justify-between items-center mb-2">
-                                     <span className="text-[10px] font-bold text-gray-400 uppercase">Chủ tài khoản:</span>
-                                     <span className="text-sm font-black text-slate-800">MAI THANH TUAN</span>
-                                  </div>
-                                  <div className="flex justify-between items-center mb-2">
-                                     <span className="text-[10px] font-bold text-gray-400 uppercase">Số tài khoản:</span>
-                                     <span className="text-sm font-black text-emerald-600">{selectedBank === 'momo' ? '070131723553' : '070131723553'}</span>
-                                  </div>
-                                  <div className="flex justify-between items-center">
-                                     <span className="text-[10px] font-bold text-gray-400 uppercase">Nội dung:</span>
-                                     <span className="text-sm font-black text-slate-800 uppercase tracking-tighter">THANH TOAN DON HANG #{Math.floor(100000 + Math.random() * 900000)}</span>
-                                  </div>
-                               </div>
-                               <p className="text-[9px] text-center text-gray-400 italic">Hệ thống sẽ tự động xác nhận sau khi nhận được tiền</p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                   </div>
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setPaymentMethod(id)}
+                          className={`relative min-h-[112px] flex flex-col items-center justify-center gap-2 p-4 rounded-2xl border-2 transition-all duration-300 ${
+                            isActive ? active : 'border-transparent bg-white/60 text-slate-400 hover:bg-white hover:text-slate-700'
+                          }`}
+                        >
+                          <span className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${isActive ? icon : 'bg-slate-100 text-slate-400'}`}>
+                            <Icon size={22} strokeWidth={2.5} />
+                          </span>
+                          <span className="text-[12px] font-black uppercase text-center leading-tight">{label}</span>
+                          <span className="text-[9px] font-bold text-center leading-tight opacity-70">{description}</span>
+                          {isActive && <div className="absolute top-2 right-2 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white"></div>}
+                        </button>
+                      );
+                    })}
+                  </div>
                </div>
 
                <div className="p-6 bg-slate-900 rounded-3xl mb-8">
                   <div className="flex justify-between items-center mb-2">
                      <span className="text-gray-400 text-sm font-bold">Tạm tính:</span>
-                     <span className="text-white text-sm font-black">{formatPrice((selectedColor?.price || product.priceNum) * quantity)}</span>
+                     <span className="text-white text-sm font-black">{formatPrice((selectedVariant?.price || selectedColor?.price || product.priceNum) * quantity)}</span>
                   </div>
                   <div className="flex justify-between items-center mb-4 text-emerald-400">
                      <span className="text-sm font-bold">Giảm giá:</span>
@@ -640,12 +556,12 @@ const BuyNowModal = ({ product, isOpen, onClose }) => {
                   </div>
                   <div className="border-t border-white/10 pt-4 flex justify-between items-center">
                      <span className="text-white font-black uppercase tracking-widest">Tổng tiền:</span>
-                     <span className="text-emerald-400 text-2xl font-black">{formatPrice(Math.max(0, (selectedColor?.price || product.priceNum) * quantity - discountAmount))}</span>
+                     <span className="text-emerald-400 text-xl sm:text-2xl font-black whitespace-nowrap">{formatPrice(Math.max(0, (selectedVariant?.price || selectedColor?.price || product.priceNum) * quantity - discountAmount))}</span>
                   </div>
                </div>
 
-               <button onClick={handleSubmit} disabled={isSubmitting} className="w-full h-16 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl text-xl shadow-xl shadow-emerald-900/20 transition-all active:scale-95 flex items-center justify-center gap-3">
-                  {isSubmitting ? <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div> : "HOÀN TẤT ĐẶT HÀNG"}
+               <button onClick={handleSubmit} disabled={isSubmitting || availableStock <= 0 || quantity > availableStock} className="w-full min-h-16 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl text-base sm:text-xl shadow-xl shadow-emerald-900/20 transition-all active:scale-95 flex items-center justify-center gap-3 text-center leading-tight disabled:opacity-60 disabled:cursor-not-allowed">
+                  {isSubmitting ? <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div> : availableStock <= 0 ? 'HẾT HÀNG' : "HOÀN TẤT ĐẶT HÀNG"}
                </button>
             </div>
           </>

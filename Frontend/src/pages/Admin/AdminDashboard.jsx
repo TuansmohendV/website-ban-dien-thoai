@@ -29,7 +29,7 @@ const AdminDashboard = () => {
           api.get('/api/products', {
             params: { limit: 200, sort: 'popular', includeInactive: true },
           }),
-          api.get('/api/dashboard')
+          api.get('/api/admin/dashboard')
         ]);
         setProducts((productsRes.data?.data || []).map(normalizeProduct));
         setDashboardData(statsRes.data.data);

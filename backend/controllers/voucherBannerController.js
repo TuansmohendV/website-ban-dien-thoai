@@ -3,7 +3,10 @@ import VoucherBanner from '../models/VoucherBanner.js';
 // GET /api/voucher-banners — Public: get active banners ordered
 export const getPublicVoucherBanners = async (req, res) => {
   try {
-    const banners = await VoucherBanner.find({ isActive: true }).sort({ order: 1, createdAt: -1 });
+    const banners = await VoucherBanner.find({
+      isActive: true,
+      isDeleted: { $ne: true },
+    }).sort({ order: 1, createdAt: -1 });
     res.json({ success: true, data: banners });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -13,7 +16,9 @@ export const getPublicVoucherBanners = async (req, res) => {
 // GET /api/admin/voucher-banners — Admin: get all banners
 export const getAdminVoucherBanners = async (req, res) => {
   try {
-    const banners = await VoucherBanner.find().sort({ order: 1, createdAt: -1 });
+    const includeDeleted = String(req.query.includeDeleted) === 'true';
+    const query = includeDeleted ? {} : { isDeleted: { $ne: true } };
+    const banners = await VoucherBanner.find(query).sort({ order: 1, createdAt: -1 });
     res.json({ success: true, data: banners });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -39,7 +44,11 @@ export const createVoucherBanner = async (req, res) => {
 // PUT /api/admin/voucher-banners/:id — Admin: update banner
 export const updateVoucherBanner = async (req, res) => {
   try {
-    const banner = await VoucherBanner.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const banner = await VoucherBanner.findOneAndUpdate(
+      { _id: req.params.id, isDeleted: { $ne: true } },
+      req.body,
+      { new: true, runValidators: true }
+    );
     if (!banner) return res.status(404).json({ success: false, message: 'Không tìm thấy banner.' });
     res.json({ success: true, data: banner, message: 'Cập nhật banner thành công!' });
   } catch (err) {
@@ -50,9 +59,15 @@ export const updateVoucherBanner = async (req, res) => {
 // DELETE /api/admin/voucher-banners/:id — Admin: delete banner
 export const deleteVoucherBanner = async (req, res) => {
   try {
-    const banner = await VoucherBanner.findByIdAndDelete(req.params.id);
+    const banner = await VoucherBanner.findById(req.params.id);
     if (!banner) return res.status(404).json({ success: false, message: 'Không tìm thấy banner.' });
-    res.json({ success: true, message: 'Xóa banner thành công!' });
+
+    banner.isActive = false;
+    banner.isDeleted = true;
+    banner.deletedAt = new Date();
+    await banner.save();
+
+    res.json({ success: true, message: 'Đã ẩn banner khỏi giao diện (xoá mềm), dữ liệu vẫn còn trong database.' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

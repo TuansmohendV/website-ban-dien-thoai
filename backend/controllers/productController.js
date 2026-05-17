@@ -65,7 +65,13 @@ export const getProducts = asyncHandler(async (req, res) => {
 
   const includeInactive =
     isAdminRequest && String(req.query.includeInactive) === 'true';
+  const includeDeleted =
+    isAdminRequest && String(req.query.includeDeleted) === 'true';
   const filters = includeInactive ? [] : [{ $or: [{ status: 'active' }, { status: { $exists: false } }] }];
+
+  if (!includeDeleted) {
+    filters.push({ isDeleted: { $ne: true } });
+  }
 
   if (keyword) {
     const keywordRegex = buildRegex(keyword);
@@ -404,6 +410,7 @@ export const getProductSuggestions = asyncHandler(async (req, res) => {
 
   const suggestions = await Product.find({
     status: 'active',
+    isDeleted: { $ne: true },
     name: buildRegex(keyword),
   })
     .select('name slug image price brand')
@@ -419,8 +426,8 @@ export const getProductById = asyncHandler(async (req, res) => {
   const identifier = req.params.id;
 
   const product = mongoose.isValidObjectId(identifier)
-    ? await Product.findOne({ _id: identifier, status: 'active' }).lean()
-    : await Product.findOne({ slug: identifier, status: 'active' }).lean();
+    ? await Product.findOne({ _id: identifier, status: 'active', isDeleted: { $ne: true } }).lean()
+    : await Product.findOne({ slug: identifier, status: 'active', isDeleted: { $ne: true } }).lean();
 
   if (!product) {
     throw new AppError(404, 'Không tìm thấy điện thoại.');
@@ -464,7 +471,7 @@ export const getProductById = asyncHandler(async (req, res) => {
 });
 
 export const getProductSpecs = asyncHandler(async (req, res) => {
-  const product = await Product.findById(req.params.id).lean();
+  const product = await Product.findOne({ _id: req.params.id, isDeleted: { $ne: true } }).lean();
 
   if (!product) {
     throw new AppError(404, 'Không tìm thấy sản phẩm.');
@@ -513,7 +520,7 @@ export const compareProductSpecs = asyncHandler(async (req, res) => {
     throw new AppError(400, 'Cần ít nhất 2 sản phẩm để so sánh.');
   }
 
-  const products = await Product.find({ _id: { $in: ids } }).lean();
+  const products = await Product.find({ _id: { $in: ids }, isDeleted: { $ne: true } }).lean();
 
   if (products.length < 2) {
     throw new AppError(404, 'Không tìm đủ sản phẩm để so sánh.');
@@ -596,7 +603,7 @@ export const getAdminProducts = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search, status } = req.query;
   const skip = (page - 1) * limit;
 
-  const query = {};
+  const query = { isDeleted: { $ne: true } };
   if (search) {
     query.name = { $regex: search, $options: 'i' };
   }
@@ -695,10 +702,15 @@ export const deleteAdminProduct = asyncHandler(async (req, res, next) => {
 
   // Soft delete: update status to inactive
   product.status = 'inactive';
+  product.isDeleted = true;
+  product.deletedAt = new Date();
   await product.save();
 
   // Also soft delete related variants
-  await ProductVariant.updateMany({ product: product._id }, { isActive: false });
+  await ProductVariant.updateMany(
+    { product: product._id },
+    { isActive: false, isDeleted: true, deletedAt: new Date() }
+  );
 
   res.json({
     status: 'success',

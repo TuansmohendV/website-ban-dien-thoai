@@ -31,7 +31,7 @@ export const OrdersProvider = ({ children }) => {
         try {
             if (user?.id) {
                 const response = await api.get(
-                    user.role === 'admin' || user.isAdmin ? '/api/orders/admin' : '/api/orders/user'
+                    user.role === 'admin' || user.isAdmin ? '/api/admin/orders' : '/api/orders/user'
                 );
                 const nextOrders = Array.isArray(response.data?.data)
                     ? response.data.data.map(normalizeOrder)
@@ -146,7 +146,7 @@ export const OrdersProvider = ({ children }) => {
     const updateOrderStatus = async (orderId, newStatus) => {
         if (user?.role === 'admin' || user?.isAdmin) {
             try {
-                const response = await api.put(`/api/orders/admin/${orderId}/status`, {
+                const response = await api.put(`/api/admin/orders/${orderId}/status`, {
                     status: newStatus,
                 });
                 const nextOrder = normalizeOrder(response.data?.order || {});

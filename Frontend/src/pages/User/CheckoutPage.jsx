@@ -5,11 +5,19 @@ import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { useOrders } from '../../context/OrdersContext';
 import api, { getApiErrorMessage } from '../../lib/api';
-import { mapPaymentMethodToBackend } from '../../lib/orders';
+import { Ticket } from 'lucide-react';
 
 const MapPinIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" /><circle cx="12" cy="10" r="3" /></svg>);
 const CreditCardIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></svg>);
 const TruckIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" /><path d="M15 18H9" /><path d="M19 18h2a1 1 0 0 0 1-1v-5h-7v7a1 1 0 0 0 1 1h2" /><circle cx="7" cy="18" r="2" /><circle cx="17" cy="18" r="2" /></svg>);
+
+const normalizeCheckoutPaymentMethod = (method = '') => {
+    const value = String(method).toLowerCase();
+
+    if (value === 'vnpay' || value === 'vnpay_sub') return 'VNPAY';
+    if (value === 'momo' || value === 'momo_sub' || value === 'zalopay') return 'MOMO';
+    return 'COD';
+};
 
 const CheckoutPage = () => {
     const { formatPrice } = useLanguage();
@@ -23,7 +31,7 @@ const CheckoutPage = () => {
     } = useCart();
     const { createOrder, processPayment } = useOrders();
     const { user, refreshProfile } = useAuth();
-    const [paymentMethod, setPaymentMethod] = useState('cod');
+    const [paymentMethod, setPaymentMethod] = useState('COD');
     const [subMethod, setSubMethod] = useState('');
     const [couponCode, setCouponCode] = useState('');
     const [isApplying, setIsApplying] = useState(false);
@@ -116,7 +124,7 @@ const CheckoutPage = () => {
                     setFormData(s.formData);
                     hasSavedData = true;
                 }
-                if (s.paymentMethod) setPaymentMethod(s.paymentMethod);
+                if (s.paymentMethod) setPaymentMethod(normalizeCheckoutPaymentMethod(s.paymentMethod));
                 if (s.subMethod) setSubMethod(s.subMethod);
                 if (s.walletPhone) setWalletPhone(s.walletPhone);
                 if (s.walletName) setWalletName(s.walletName);
@@ -197,15 +205,6 @@ const CheckoutPage = () => {
             email: prevData.email || user.email || '',
         }));
 
-        // Auto-fill linked wallet if available
-        if (user.linkedAccounts?.wallets?.length > 0) {
-            const defaultWallet = user.linkedAccounts.wallets[0];
-            setPaymentMethod('momo');
-            setSubMethod(defaultWallet.walletId === 'momo' ? 'momo_sub' : 'vnpay_sub');
-            setWalletPhone(defaultWallet.phone);
-            setWalletName(defaultWallet.accountName);
-        }
-
         // Auto-fill linked bank if available
         if (user.linkedAccounts?.banks?.length > 0) {
             const defaultBank = user.linkedAccounts.banks[0];
@@ -249,8 +248,9 @@ const CheckoutPage = () => {
     const phoneRegex = /^0\d{9}$/;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+    const hasCartItems = cartItems.length > 0;
     const subtotal = cartSubtotal || cartItems.reduce((acc, item) => acc + item.price * item.qty, 0);
-    const shippingFee = 35000;
+    const shippingFee = hasCartItems ? 35000 : 0;
     const discount = cartDiscount;
     const total = (cartTotal || Math.max(subtotal - discount, 0)) + shippingFee;
 
@@ -292,17 +292,19 @@ const CheckoutPage = () => {
     }, []);
 
     const handleApplyCoupon = async (manualCode = null) => {
-        const codeToApply = manualCode || couponCode;
+        const codeToApply = typeof manualCode === 'string' ? manualCode : couponCode;
         if (!codeToApply.trim()) return;
         setIsApplying(true);
         setCouponStatus(null);
 
         try {
+            const normalizedCode = codeToApply.trim().toUpperCase();
             const response = await api.post('/api/voucher/apply', {
-                code: couponCode.trim().toUpperCase(),
+                code: normalizedCode,
             });
             await refreshCart();
-            setAppliedCoupon(response.data?.voucher?.code || couponCode.trim().toUpperCase());
+            setAppliedCoupon(response.data?.voucher?.code || normalizedCode);
+            setCouponCode(response.data?.voucher?.code || normalizedCode);
             setCouponStatus({
                 type: 'success',
                 message: response.data?.message || 'Ap dung ma giam gia thanh cong.',
@@ -425,7 +427,7 @@ const CheckoutPage = () => {
             }
 
             const estimate = calculateDelivery(formData.province);
-            const backendPaymentMethod = mapPaymentMethodToBackend(paymentMethod, subMethod);
+            const backendPaymentMethod = normalizeCheckoutPaymentMethod(paymentMethod);
 
             try {
                 setIsPlacingOrder(true);
@@ -448,7 +450,15 @@ const CheckoutPage = () => {
                     shippingFee,
                     paymentMethod: backendPaymentMethod,
                     voucherCode: appliedCoupon || undefined,
-                    vatInfo: requestVat ? vatInfo : null, // Add VAT info if backend supports it
+                    invoiceInfo: requestVat
+                        ? {
+                            enabled: true,
+                            email: formData.email.trim(),
+                            companyName: vatInfo.companyName.trim(),
+                            taxCode: vatInfo.taxCode.trim(),
+                            companyAddress: vatInfo.companyAddress.trim(),
+                        }
+                        : undefined,
                 });
 
                 if (backendPaymentMethod !== 'COD') {
@@ -824,123 +834,88 @@ const CheckoutPage = () => {
 
                     {/* CỘT PHẢI: TÓM TẮT ĐƠN HÀNG */}
                     <div className="lg:w-[450px] space-y-8">
-                        <div className="bg-[#ffd700] text-slate-900 rounded-3xl p-8 shadow-2xl sticky top-24 border border-yellow-400">
-                            <h2 className="text-2xl font-black mb-8 italic flex items-center gap-3 border-b border-black/10 pb-5 uppercase tracking-tighter">
-                                <TruckIcon className="w-6 h-6" />
-                                Đơn hàng của bạn
+                        <div className="bg-[#ffd700] text-slate-900 rounded-3xl p-5 sm:p-8 shadow-2xl sticky top-24 border border-yellow-400">
+                            <h2 className="text-xl sm:text-2xl font-black mb-8 italic flex items-center gap-3 border-b border-black/10 pb-5 uppercase tracking-normal leading-tight">
+                                <TruckIcon className="w-6 h-6 shrink-0" />
+                                <span className="min-w-0 break-words">Đơn hàng của bạn</span>
                             </h2>
 
                             <div className="space-y-6 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar mb-8">
-                                {cartItems.map((item) => (
+                                {hasCartItems ? cartItems.map((item) => (
                                     <div key={item.id} className="flex gap-4 group">
                                         <div className="w-20 h-20 bg-white rounded-2xl p-1 overflow-hidden shrink-0 transition-transform group-hover:scale-105">
                                             <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
                                         </div>
-                                        <div className="flex-1">
-                                            <h4 className="text-sm font-black leading-tight uppercase mb-1 line-clamp-2 text-slate-900">{item.name}</h4>
-                                            <div className="flex justify-between items-center mt-2">
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="text-sm font-black leading-tight uppercase mb-1 line-clamp-2 text-slate-900 break-words">{item.name}</h4>
+                                            <div className="flex flex-wrap justify-between items-center gap-2 mt-2">
                                                 <span className="text-xs font-bold text-slate-600 italic">Số lượng: {item.qty}</span>
-                                                <span className="text-sm font-black text-slate-900">{formatPrice(item.price)}</span>
+                                                <span className="text-sm font-black text-slate-900 whitespace-nowrap">{formatPrice(item.price)}</span>
                                             </div>
                                         </div>
                                     </div>
-                                ))}
+                                )) : (
+                                    <div className="rounded-2xl border-2 border-dashed border-black/10 bg-white/20 p-5 text-center">
+                                        <p className="text-sm font-black uppercase text-slate-800">Giỏ hàng đang trống</p>
+                                        <Link to="/cart" className="mt-3 inline-flex min-h-10 items-center justify-center rounded-xl bg-white px-5 py-2 text-xs font-black uppercase text-slate-900 text-center leading-tight">
+                                            Về giỏ hàng
+                                        </Link>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Phương thức thanh toán nằm chung với đơn hàng */}
-                            <div className="mb-8 p-6 bg-white/5 rounded-3xl border border-white/10">
+                            <div className="mb-8 p-4 sm:p-6 bg-white/5 rounded-3xl border border-white/10">
                                 <div className="flex items-center gap-2 mb-6 border-b border-white/10 pb-3">
-                                    <CreditCardIcon className="text-amber-500 w-5 h-5" />
-                                    <h3 className="text-lg font-black uppercase tracking-tighter">Hình thức thanh toán</h3>
+                                    <CreditCardIcon className="text-amber-500 w-5 h-5 shrink-0" />
+                                    <h3 className="text-base sm:text-lg font-black uppercase tracking-normal leading-tight break-words">Hình thức thanh toán</h3>
                                 </div>
                                 <div className="space-y-3">
                                     {[
-                                        { id: 'cod', name: 'Tiền mặt (COD)', icon: '🚚' },
-                                        { id: 'bank', name: 'Chuyển khoản', icon: '🏦' }
-                                    ].map((method) => (
-                                        <div key={method.id} className="space-y-3">
-                                            <label
-                                                className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer ${paymentMethod === method.id ? 'border-black bg-black/5 shadow-lg' : 'border-black/5 hover:border-black/10'
-                                                    }`}
+                                        { id: 'COD', name: 'Tiền mặt (COD)', description: 'Thanh toán khi nhận hàng', icon: '🚚' },
+                                        { id: 'VNPAY', name: 'VNPay', description: 'Thanh toán qua cổng VNPay', icon: '💳' },
+                                        { id: 'MOMO', name: 'MoMo', description: 'Thanh toán qua ví MoMo', icon: '👛' },
+                                    ].map((method) => {
+                                        const isActive = paymentMethod === method.id;
+
+                                        return (
+                                            <button
+                                                key={method.id}
+                                                type="button"
+                                                className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
+                                                    isActive ? 'border-black bg-black/5 shadow-lg' : 'border-black/5 hover:border-black/10'
+                                                }`}
                                                 onClick={() => {
                                                     setPaymentMethod(method.id);
-                                                    setSubMethod('');
+                                                    setSubMethod(method.id === 'MOMO' ? 'momo_sub' : method.id === 'VNPAY' ? 'vnpay_sub' : '');
                                                 }}
                                             >
-                                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${paymentMethod === method.id ? 'border-black bg-black' : 'border-black/20'
-                                                    }`}>
-                                                    {paymentMethod === method.id && <div className="w-1.5 h-1.5 bg-[#ffd700] rounded-full"></div>}
+                                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all ${
+                                                    isActive ? 'border-black bg-black' : 'border-black/20'
+                                                }`}>
+                                                    {isActive && <div className="w-1.5 h-1.5 bg-[#ffd700] rounded-full"></div>}
                                                 </div>
-                                                <div className="flex items-center gap-2 flex-1">
-                                                    <span className="text-sm">{method.icon}</span>
-                                                    <span className="text-sm font-black uppercase">{method.name}</span>
+                                                <div className="w-8 h-8 rounded-lg bg-white/60 flex items-center justify-center text-sm shrink-0">
+                                                    {method.icon}
                                                 </div>
-                                            </label>
-
-                                            {/* QR Code Payment System */}
-                                            {paymentMethod === 'bank' && method.id === 'bank' && (
-                                                <div className="p-4 bg-white rounded-2xl border border-gray-100 mt-2 space-y-4 animate-fadeIn">
-                                                   <div className="flex gap-2 mb-4">
-                                                     <button 
-                                                       onClick={() => setSelectedBank('sacombank')}
-                                                       className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all border-2 ${selectedBank === 'sacombank' ? 'bg-black text-white border-black shadow-lg' : 'bg-white text-slate-400 border-gray-100'}`}
-                                                     >
-                                                       Sacombank
-                                                     </button>
-                                                     <button 
-                                                       onClick={() => setSelectedBank('momo')}
-                                                       className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-wider transition-all border-2 ${selectedBank === 'momo' ? 'bg-[#A50064] text-white border-[#A50064] shadow-lg' : 'bg-white text-slate-400 border-gray-100'}`}
-                                                     >
-                                                       Ví Momo
-                                                     </button>
-                                                   </div>
-
-                                                   <div className="flex flex-col items-center">
-                                                     <div className="w-full aspect-square bg-white rounded-2xl border-2 border-slate-100 p-1 flex flex-col items-center justify-center relative overflow-hidden shadow-inner">
-                                                        <img 
-                                                          src={selectedBank === 'momo' ? '/payment/momo_qr.jpg' : '/payment/sacombank_qr.jpg'} 
-                                                          alt="QR Code" 
-                                                          className="w-full h-full object-cover scale-[1.7] transition-all duration-500" 
-                                                          style={{ objectPosition: selectedBank === 'momo' ? 'center 55%' : 'center 45%' }}
-                                                          onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                                                        />
-                                                        <div style={{ display: 'none' }} className="flex-col items-center text-center text-gray-300">
-                                                           <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M7 7h.01M17 7h.01M7 17h.01M17 17h.01M12 12h.01" /></svg>
-                                                           <span className="text-[8px] font-bold mt-1">Vui lòng quét mã QR</span>
-                                                        </div>
-                                                     </div>
-
-                                                     <div className="mt-4 w-full space-y-2">
-                                                        <div className="p-3 bg-slate-50 rounded-xl border border-gray-100">
-                                                           <div className="flex justify-between items-center mb-1">
-                                                              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Chủ TK:</span>
-                                                              <span className="text-xs font-black text-slate-800">MAI THANH TUAN</span>
-                                                           </div>
-                                                           <div className="flex justify-between items-center mb-1">
-                                                              <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Số TK:</span>
-                                                              <span className="text-xs font-black text-emerald-600">070131723553</span>
-                                                           </div>
-                                                        </div>
-                                                        <p className="text-[8px] text-center text-gray-400 italic">Quét mã để thanh toán nhanh chóng</p>
-                                                     </div>
-                                                   </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <span className="block text-sm font-black uppercase leading-tight">{method.name}</span>
+                                                    <span className="block text-[10px] font-bold text-slate-700/70 leading-tight mt-0.5">{method.description}</span>
                                                 </div>
-                                            )}
-
-
-                                        </div>
-                                    ))}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
 
 
                             {/* Mã giảm giá */}
                             <div className="mb-10">
-                                <div className="flex gap-2 h-12">
+                                <div className="flex flex-col sm:flex-row gap-2 sm:min-h-12">
                                     <input
                                         type="text"
                                         placeholder="Mã voucher hoặc giới thiệu..."
-                                        className="flex-1 bg-white/10 rounded-xl outline-none px-4 text-sm font-black border border-white/20 focus:border-white transition-all uppercase placeholder:text-gray-500"
+                                        className="flex-1 min-h-12 bg-white/10 rounded-xl outline-none px-4 text-sm font-black border border-white/20 focus:border-white transition-all uppercase placeholder:text-gray-500 min-w-0"
                                         value={couponCode}
                                         onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponStatus(null); }}
                                         disabled={!!appliedCoupon}
@@ -948,7 +923,7 @@ const CheckoutPage = () => {
                                     {appliedCoupon ? (
                                         <button
                                             onClick={handleRemoveCoupon}
-                                            className="bg-red-600 text-white px-6 rounded-xl font-black text-sm hover:bg-red-700 transition-all"
+                                            className="min-h-12 bg-red-600 text-white px-6 py-2 rounded-xl font-black text-sm hover:bg-red-700 transition-all whitespace-nowrap"
                                         >
                                             XÓA
                                         </button>
@@ -956,14 +931,14 @@ const CheckoutPage = () => {
                                         <button
                                             onClick={handleApplyCoupon}
                                             disabled={isApplying}
-                                            className="bg-white text-black px-6 rounded-xl font-black text-sm hover:bg-red-600 hover:text-white transition-all disabled:opacity-50"
+                                            className="min-h-12 bg-white text-black px-6 py-2 rounded-xl font-black text-sm hover:bg-red-600 hover:text-white transition-all disabled:opacity-50 whitespace-nowrap"
                                         >
                                             {isApplying ? '...' : 'ÁP DỤNG'}
                                         </button>
                                     )}
                                 </div>
                                 {couponStatus && (
-                                    <p className={`text-xs mt-2 font-bold ${couponStatus.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                                    <p className={`text-xs mt-2 font-bold leading-snug break-words ${couponStatus.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
                                         {couponStatus.message}
                                     </p>
                                 )}
@@ -1001,22 +976,22 @@ const CheckoutPage = () => {
                                                                     handleApplyCoupon(v.code);
                                                                     setShowVoucherList(false);
                                                                 }}
-                                                                className={`relative group rounded-2xl p-4 flex justify-between items-center cursor-pointer transition-all shadow-md active:scale-[0.98] ${
+                                                                className={`relative group rounded-2xl p-4 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 cursor-pointer transition-all shadow-md active:scale-[0.98] ${
                                                                     isMax ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'
                                                                 }`}
                                                             >
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/20 border border-white/20">
+                                                                <div className="flex items-center gap-3 min-w-0">
+                                                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-white/20 border border-white/20 shrink-0">
                                                                         <Ticket size={20} className="text-white" />
                                                                     </div>
-                                                                    <div>
-                                                                        <p className="text-sm font-black tracking-tight text-white uppercase">{v.code}</p>
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-sm font-black tracking-normal text-white uppercase break-all">{v.code}</p>
                                                                         <p className="text-[10px] font-bold text-white/70 italic">
                                                                             Giảm {v.discountType === 'percentage' ? `${v.discountValue}%` : formatPrice(v.discountValue)}
                                                                         </p>
                                                                     </div>
                                                                 </div>
-                                                                <div className="text-right">
+                                                                <div className="text-left sm:text-right shrink-0">
                                                                     <span className="text-[10px] font-black uppercase px-3 py-1 rounded-lg bg-white text-slate-900 shadow-sm transition-all group-hover:bg-slate-100">Chọn</span>
                                                                     <p className="text-[8px] text-white/60 mt-1 font-bold">Đơn từ {formatPrice(v.minOrderValue)}</p>
                                                                 </div>
@@ -1031,34 +1006,34 @@ const CheckoutPage = () => {
                             </div>
 
                             <div className="mt-8 space-y-4 pt-6 border-t border-black/10">
-                                <div className="flex justify-between items-center text-slate-700">
+                                <div className="flex flex-wrap justify-between items-center gap-2 text-slate-700">
                                     <span className="text-sm font-bold uppercase italic">Tạm tính ({cartItems.length} sản phẩm):</span>
-                                    <span className="text-lg font-black text-slate-900">{formatPrice(subtotal)}</span>
+                                    <span className="text-lg font-black text-slate-900 whitespace-nowrap">{formatPrice(subtotal)}</span>
                                 </div>
-                                <div className="flex justify-between items-center text-slate-700">
+                                <div className="flex flex-wrap justify-between items-center gap-2 text-slate-700">
                                     <span className="text-sm font-bold uppercase italic">Phí vận chuyển:</span>
-                                    <span className="text-lg font-black text-slate-900">{formatPrice(shippingFee)}</span>
+                                    <span className="text-lg font-black text-slate-900 whitespace-nowrap">{formatPrice(shippingFee)}</span>
                                 </div>
 
                                 {discount > 0 && (
-                                    <div className="flex justify-between items-center text-red-600">
+                                    <div className="flex flex-wrap justify-between items-center gap-2 text-red-600">
                                         <span className="text-sm font-black uppercase italic">Giảm giá (Ưu đãi Sin):</span>
-                                        <span className="text-lg font-black">-{formatPrice(discount)}</span>
+                                        <span className="text-lg font-black whitespace-nowrap">-{formatPrice(discount)}</span>
                                     </div>
                                 )}
 
-                                <div className="flex justify-between items-end pt-4 border-t border-black/10">
+                                <div className="flex flex-wrap justify-between items-end gap-2 pt-4 border-t border-black/10">
                                     <span className="text-lg font-black uppercase italic text-slate-900">TỔNG CỘNG</span>
-                                    <span className="text-3xl font-black text-red-600 tracking-tighter">{formatPrice(total)}</span>
+                                    <span className="text-2xl sm:text-3xl font-black text-red-600 tracking-normal whitespace-nowrap">{formatPrice(total)}</span>
                                 </div>
                             </div>
 
                             <button
                                 onClick={handlePlaceOrder}
-                                disabled={isPlacingOrder || cartItems.length === 0}
-                                className="w-full h-16 bg-[#008d71] hover:bg-black text-white font-black text-xl rounded-2xl mt-10 transition-all shadow-lg active:scale-95 uppercase tracking-widest flex items-center justify-center gap-3 disabled:opacity-60">
-                                {isPlacingOrder ? 'DANG XU LY DON HANG' : 'HOÀN TẤT ĐẶT HÀNG'}
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
+                                disabled={isPlacingOrder || !hasCartItems}
+                                className="w-full min-h-16 bg-[#008d71] hover:bg-black text-white font-black text-base sm:text-xl rounded-2xl mt-10 px-4 py-3 transition-all shadow-lg active:scale-95 uppercase tracking-normal sm:tracking-widest flex items-center justify-center gap-3 disabled:opacity-60 text-center leading-tight">
+                                <span className="min-w-0 break-words">{isPlacingOrder ? 'DANG XU LY DON HANG' : hasCartItems ? 'HOÀN TẤT ĐẶT HÀNG' : 'GIỎ HÀNG ĐANG TRỐNG'}</span>
+                                <svg className="shrink-0" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14" /><path d="m12 5 7 7-7 7" /></svg>
                             </button>
 
                             <p className="text-[11px] text-center mt-5 text-gray-500 font-bold uppercase tracking-tighter italic">

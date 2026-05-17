@@ -43,8 +43,8 @@ const normalizeCategoryPayload = (body = {}) => {
 
 const buildProductCountGroups = async (includeInactive) => {
   const productMatch = includeInactive
-    ? {}
-    : { $or: [{ status: 'active' }, { status: { $exists: false } }] };
+    ? { isDeleted: { $ne: true } }
+    : { isDeleted: { $ne: true }, $or: [{ status: 'active' }, { status: { $exists: false } }] };
 
   return Product.aggregate([
     { $match: productMatch },
@@ -141,7 +141,7 @@ export const getCategories = asyncHandler(async (req, res) => {
 
   // Always fetch all categories from DB to ensure 'derived' logic knows which ones exist (even if inactive)
   const [allDbCategories, productGroups] = await Promise.all([
-    Category.find({}).sort({ isFeatured: -1, createdAt: -1 }).lean(),
+    Category.find({ isDeleted: { $ne: true } }).sort({ isFeatured: -1, createdAt: -1 }).lean(),
     buildProductCountGroups(includeInactive),
   ]);
 
@@ -242,6 +242,8 @@ export const deleteCategory = asyncHandler(async (req, res) => {
 
   // Soft delete
   category.isActive = false;
+  category.isDeleted = true;
+  category.deletedAt = new Date();
   await category.save();
 
   res.json({

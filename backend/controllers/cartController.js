@@ -15,6 +15,11 @@ const getHydratedCart = async (cartId) => {
     .populate('items.product', 'name slug image price countInStock status')
     .populate('items.variant', 'color storage price stock image isActive');
 
+  if (cart) {
+    cart.items = cart.items.filter((item) => !item.isDeleted);
+    recalculateCart(cart);
+  }
+
   return withCartSummary(cart);
 };
 
@@ -35,7 +40,7 @@ const getOrCreateCart = async (owner) => {
 const resolveCartItem = async (productId, variantId) => {
   const product = await Product.findById(productId);
 
-  if (!product || product.status !== 'active') {
+  if (!product || product.status !== 'active' || product.isDeleted) {
     throw new AppError(404, 'Sản phẩm không tồn tại hoặc đã ngừng kinh doanh.');
   }
 
@@ -52,7 +57,8 @@ const resolveCartItem = async (productId, variantId) => {
     if (
       !variant ||
       String(variant.product) !== String(product._id) ||
-      !variant.isActive
+      !variant.isActive ||
+      variant.isDeleted
     ) {
       throw new AppError(404, 'Biến thể sản phẩm không hợp lệ.');
     }
@@ -97,6 +103,7 @@ export const addToCart = asyncHandler(async (req, res) => {
 
   const existingItem = cart.items.find(
     (item) =>
+      !item.isDeleted &&
       String(item.product) === String(product._id) &&
       String(item.variant || '') === String(variant?._id || '')
   );
@@ -157,6 +164,8 @@ export const getCart = asyncHandler(async (req, res) => {
     return res.json(emptyCartResponse());
   }
 
+  cart.items = cart.items.filter((item) => !item.isDeleted);
+  recalculateCart(cart);
   res.json(withCartSummary(cart));
 });
 
@@ -178,6 +187,7 @@ export const updateCart = asyncHandler(async (req, res) => {
     (req.body.itemId && cart.items.id(req.body.itemId)) ||
     cart.items.find(
       (item) =>
+        !item.isDeleted &&
         String(item.product) === String(req.body.productId || item.product) &&
         String(item.variant || '') ===
           String(
@@ -188,7 +198,7 @@ export const updateCart = asyncHandler(async (req, res) => {
           )
     );
 
-  if (!targetItem) {
+  if (!targetItem || targetItem.isDeleted) {
     throw new AppError(404, 'Không tìm thấy sản phẩm cần cập nhật trong giỏ.');
   }
 
@@ -196,7 +206,10 @@ export const updateCart = asyncHandler(async (req, res) => {
   const resolved = await resolveCartItem(targetItem.product, nextVariantId);
 
   if (quantity === 0) {
-    targetItem.deleteOne();
+    targetItem.isDeleted = true;
+    targetItem.deletedAt = new Date();
+    targetItem.quantity = 1;
+    targetItem.lineTotal = 0;
   } else {
     if (quantity > resolved.stock) {
       throw new AppError(400, 'Số lượng mới vượt quá tồn kho hiện tại.');
@@ -238,12 +251,16 @@ export const removeCartItem = asyncHandler(async (req, res) => {
   const clearAll = req.body.clearAll === true || req.query.clearAll === 'true';
 
   if (clearAll) {
-    cart.items = [];
+    cart.items.forEach((item) => {
+      item.isDeleted = true;
+      item.deletedAt = new Date();
+      item.lineTotal = 0;
+    });
   } else {
-    const initialCount = cart.items.length;
-    cart.items = cart.items.filter(
+    const targetItem = cart.items.find(
       (item) =>
-        !(
+        !item.isDeleted &&
+        (
           (itemId && String(item._id) === String(itemId)) ||
           (productId &&
             String(item.product) === String(productId) &&
@@ -251,9 +268,13 @@ export const removeCartItem = asyncHandler(async (req, res) => {
         )
     );
 
-    if (cart.items.length === initialCount) {
+    if (!targetItem) {
       throw new AppError(404, 'Không tìm thấy sản phẩm cần xóa khỏi giỏ.');
     }
+
+    targetItem.isDeleted = true;
+    targetItem.deletedAt = new Date();
+    targetItem.lineTotal = 0;
   }
 
   recalculateCart(cart);
@@ -278,7 +299,10 @@ export const getCartCount = asyncHandler(async (req, res) => {
   const cart = await Cart.findOne(buildOwnerQuery(owner)).select('items.quantity');
 
   const count =
-    cart?.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+    cart?.items.reduce(
+      (sum, item) => sum + (item.isDeleted ? 0 : Number(item.quantity || 0)),
+      0
+    ) || 0;
 
   res.json({ count });
 });

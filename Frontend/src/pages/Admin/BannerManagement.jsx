@@ -143,9 +143,14 @@ const BannerManagement = () => {
     }
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa banner này khỏi giao diện? (Dữ liệu trong database vẫn còn)')) {
-      setBanners(banners.filter(b => b._id !== id));
+      try {
+        await api.delete(`/api/banners/admin/${id}`);
+        setBanners(banners.filter(b => b._id !== id));
+      } catch (err) {
+        alert('Không thể xóa banner: ' + (err.response?.data?.message || err.message));
+      }
     }
   };
 

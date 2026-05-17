@@ -8,12 +8,12 @@ export const getSearchHistory = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   const skip = (page - 1) * limit;
 
-  const history = await SearchHistory.find({ userId })
+  const history = await SearchHistory.find({ userId, isDeleted: { $ne: true } })
     .limit(limit * 1)
     .skip(skip)
     .sort({ createdAt: -1 });
 
-  const total = await SearchHistory.countDocuments({ userId });
+  const total = await SearchHistory.countDocuments({ userId, isDeleted: { $ne: true } });
 
   res.json({
     status: 'success',
@@ -27,7 +27,11 @@ export const deleteSearchHistoryItem = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
   const userId = req.user._id;
 
-  const item = await SearchHistory.findOneAndDelete({ _id: id, userId });
+  const item = await SearchHistory.findOneAndUpdate(
+    { _id: id, userId, isDeleted: { $ne: true } },
+    { $set: { isDeleted: true, deletedAt: new Date() } },
+    { new: true }
+  );
 
   if (!item) {
     return next(new AppError('Không tìm thấy item lịch sử tìm kiếm', 404));
@@ -43,7 +47,10 @@ export const deleteSearchHistoryItem = asyncHandler(async (req, res, next) => {
 export const clearSearchHistory = asyncHandler(async (req, res) => {
   const userId = req.user._id;
 
-  await SearchHistory.deleteMany({ userId });
+  await SearchHistory.updateMany(
+    { userId, isDeleted: { $ne: true } },
+    { $set: { isDeleted: true, deletedAt: new Date() } }
+  );
 
   res.json({
     status: 'success',
@@ -54,7 +61,7 @@ export const clearSearchHistory = asyncHandler(async (req, res) => {
 // Save search (internal function, call from product search)
 export const saveSearchHistory = asyncHandler(async (userId, keyword, resultCount = 0) => {
   // Check if keyword already exists, if yes update, if no create new
-  const existingSearch = await SearchHistory.findOne({ userId, keyword });
+  const existingSearch = await SearchHistory.findOne({ userId, keyword, isDeleted: { $ne: true } });
 
   if (existingSearch) {
     existingSearch.resultCount = resultCount;

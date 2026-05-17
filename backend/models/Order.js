@@ -158,6 +158,12 @@ const orderSchema = new mongoose.Schema(
       default: 'pending',
     },
     paidAt: Date,
+    inventoryReserved: {
+      type: Boolean,
+      default: false,
+    },
+    inventoryReservedAt: Date,
+    inventoryReleasedAt: Date,
     status: {
       type: String,
       enum: ['pending', 'confirmed', 'processing', 'packing', 'shipping', 'delivered', 'cancelled'],
