@@ -49,6 +49,24 @@ const buildPublicFrontendUrl = (req) => {
 const buildMockPaymentUrl = ({ mockUrl, order, method, returnUrl, requestId }) =>
   `${mockUrl}?orderId=${order._id}&method=${method}&amount=${order.total}&returnUrl=${encodeURIComponent(returnUrl)}&requestId=${requestId}`;
 
+const isFalseyEnv = (value) =>
+  ['0', 'false', 'no', 'off'].includes(String(value || '').trim().toLowerCase());
+
+const shouldUseRealVNPayGateway = () => {
+  if (!isVNPayConfigured()) {
+    return false;
+  }
+
+  const gatewayMode = String(process.env.PAYMENT_GATEWAY_MODE || '').trim().toLowerCase();
+  const realVNPayFlag = process.env.VNPAY_USE_REAL ?? process.env.VNP_USE_REAL;
+
+  if (['mock', 'local', 'demo'].includes(gatewayMode) || isFalseyEnv(realVNPayFlag)) {
+    return false;
+  }
+
+  return true;
+};
+
 const syncCartItemsWithInventory = async (cart) => {
   for (const item of cart.items) {
     const product = await Product.findById(item.product);
@@ -672,7 +690,7 @@ export const processPayment = asyncHandler(async (req, res) => {
   let paymentUrl = '';
 
   if (normalizedMethod === 'VNPAY') {
-    if (isVNPayConfigured()) {
+    if (shouldUseRealVNPayGateway()) {
       paymentUrl = createVNPayUrl(req, order.total, order._id, returnUrl);
     } else {
       const requestId = `${order._id}_${Date.now()}`;
@@ -773,7 +791,10 @@ export const createVNPayPaymentUrl = asyncHandler(async (req, res) => {
     orderId = req.body.txnRef || req.body.orderCode || Date.now().toString();
   }
 
-  const paymentUrl = createVNPayUrl(req, amount, orderId, returnUrl);
+  const useRealVNPay = shouldUseRealVNPayGateway();
+  const paymentUrl = useRealVNPay
+    ? createVNPayUrl(req, amount, orderId, returnUrl)
+    : `${req.body.origin || buildPublicFrontendUrl(req)}/mock-payment?orderId=${orderId}&method=vnpay&amount=${amount}&returnUrl=${encodeURIComponent(returnUrl)}&requestId=${orderId}_${Date.now()}`;
 
   res.status(200).json({
     url: paymentUrl,

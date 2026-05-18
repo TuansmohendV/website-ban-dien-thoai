@@ -88,19 +88,19 @@ const getSpecValue = (product, keys = []) => {
 export const resolveFrontendCategory = (product = {}) => {
   // 0. Ưu tiên dựa vào category từ backend nếu có
   if (product.category) {
-    const bc = String(product.category).toLowerCase();
-    if (bc.includes('phone') || bc.includes('mobile') || bc.includes('smartphone')) return 'dien-thoai';
+    const bc = slugifyValue(product.category);
+    if (bc.includes('phone') || bc.includes('mobile') || bc.includes('smartphone') || bc.includes('dien-thoai')) return 'dien-thoai';
     if (bc.includes('laptop') || bc.includes('notebook')) return 'laptop';
-    if (bc.includes('tablet') || bc.includes('ipad')) return 'tablet';
-    if (bc.includes('watch')) return 'dong-ho';
-    if (bc.includes('audio') || bc.includes('sound') || bc.includes('earphone') || bc.includes('speaker')) return 'am-thanh';
-    if (bc.includes('monitor') || bc.includes('screen')) return 'man-hinh';
-    if (bc.includes('component') || bc.includes('linh kien')) return 'linh-kien-may-tinh';
-    if (bc.includes('accessory') || bc.includes('phu kien')) return 'phu-kien';
-    if (bc.includes('service') || bc.includes('dich vu')) return 'dich-vu';
+    if (bc.includes('tablet') || bc.includes('ipad') || bc.includes('may-tinh-bang')) return 'tablet';
+    if (bc.includes('watch') || bc.includes('dong-ho')) return 'dong-ho';
+    if (bc.includes('audio') || bc.includes('sound') || bc.includes('earphone') || bc.includes('speaker') || bc.includes('am-thanh')) return 'am-thanh';
+    if (bc.includes('monitor') || bc.includes('screen') || bc.includes('man-hinh')) return 'man-hinh';
+    if (bc.includes('component') || bc.includes('linh-kien')) return 'linh-kien-may-tinh';
+    if (bc.includes('accessory') || bc.includes('phu-kien')) return 'phu-kien';
+    if (bc.includes('service') || bc.includes('dich-vu')) return 'dich-vu';
   }
 
-  const searchableText = [
+  const searchableText = slugifyValue([
     product.name,
     product.brand,
     product.category,
@@ -108,12 +108,11 @@ export const resolveFrontendCategory = (product = {}) => {
     ...(product.features || []),
   ]
     .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
+    .join(' '));
 
   // 1. Phụ kiện & Linh kiện (Kiểm tra keyword cụ thể)
   if (
-    /(op-lung|op lung|bao-da|bao da|dan-man-hinh|dan man hinh|cu-sac|cap-sac|sac-du-phong|gay-chup-anh|tripod|tui-chong-nuoc|apple-care|bao-hanh|phu-kien|phu kien)/.test(
+    /(op-lung|bao-da|dan-man-hinh|cu-sac|cap-sac|sac-du-phong|gay-chup-anh|tripod|tui-chong-nuoc|apple-care|bao-hanh|phu-kien)/.test(
       searchableText
     )
   ) {
@@ -122,7 +121,7 @@ export const resolveFrontendCategory = (product = {}) => {
 
   // 2. Điện thoại (Smartphone)
   if (
-    /(iphone|smartphone|dien-thoai|dien thoai|galaxy|redmi|xiaomi|oppo|vivo|realme|nokia|honor|huawei|fold|flip)/.test(
+    /(iphone|smartphone|dien-thoai|galaxy|redmi|xiaomi|oppo|vivo|realme|nokia|honor|huawei|fold|flip)/.test(
       searchableText
     ) && !/(laptop|macbook|ipad|tablet|watch|dong-ho)/.test(searchableText)
   ) {
@@ -135,7 +134,7 @@ export const resolveFrontendCategory = (product = {}) => {
   }
 
   // 4. Máy tính bảng (Tablet)
-  if (/(ipad|tablet|galaxy-tab|galaxy tab|tab )/.test(searchableText)) {
+  if (/(ipad|tablet|galaxy-tab|may-tinh-bang|(^|-)tab($|-))/.test(searchableText)) {
     return 'tablet';
   }
 
@@ -146,7 +145,7 @@ export const resolveFrontendCategory = (product = {}) => {
 
   // 6. Âm thanh
   if (
-    /(airpods|tai-nghe|tai nghe|earbud|headphone|loa|speaker|audio|am-thanh|am thanh|galaxy buds)/.test(
+    /(airpods|tai-nghe|earbud|headphone|loa|speaker|audio|am-thanh|galaxy-buds)/.test(
       searchableText
     )
   ) {
@@ -154,13 +153,13 @@ export const resolveFrontendCategory = (product = {}) => {
   }
 
   // 7. Màn hình
-  if (/(man-hinh|man hinh|monitor|display|ultrasharp|proart)/.test(searchableText)) {
+  if (/(man-hinh|monitor|display|ultrasharp|proart)/.test(searchableText)) {
     return 'man-hinh';
   }
 
   // 8. Linh kiện máy tính
   if (
-    /(chuot|ban-phim|ban phim|keyboard|mouse|ssd|ram|vga|linh-kien|linh kien|component|mainboard|psu|nguon-may-tinh)/.test(
+    /(chuot|ban-phim|keyboard|mouse|ssd|ram|vga|linh-kien|component|mainboard|psu|nguon-may-tinh)/.test(
       searchableText
     )
   ) {
@@ -169,7 +168,7 @@ export const resolveFrontendCategory = (product = {}) => {
 
   // 9. Gia dụng thông minh (Smart Home)
   if (
-    /(camera|robot|massage|smart home|smart-home|purifier|air fryer|vacuum|xiaomi home|gia-dung|gia dung)/.test(
+    /(camera|robot|massage|smart-home|purifier|air-fryer|vacuum|xiaomi-home|gia-dung)/.test(
       searchableText
     )
   ) {
@@ -177,7 +176,7 @@ export const resolveFrontendCategory = (product = {}) => {
   }
 
   // 10. Dịch vụ (Sim, Thẻ cào...)
-  if (/(sim|goi-cuoc|goi cuoc|dich-vu|dich vu|service|data|nap-the|nap the)/.test(searchableText)) {
+  if (/(sim|goi-cuoc|dich-vu|service|data|nap-the)/.test(searchableText)) {
     return 'dich-vu';
   }
 
