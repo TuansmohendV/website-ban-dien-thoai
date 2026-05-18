@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { 
-    ChevronRight, ChevronLeft, Star, Heart, Share2, ShieldCheck, Truck, RefreshCw, 
-    MapPin, Video, Image as ImageIcon, Info, Plus, ShoppingCart, Settings, 
+import {
+    ChevronRight, ChevronLeft, Star, Heart, Share2, ShieldCheck, Truck, RefreshCw,
+    MapPin, Video, Image as ImageIcon, Info, Plus, ShoppingCart, Settings,
     FileText, Wallet, Check, Cpu, Monitor, HardDrive, Smartphone, X, Box
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
@@ -25,7 +25,7 @@ const ProductDetailPage = () => {
     const { t, formatPrice } = useLanguage();
     const { addToCart } = useCart();
     const { user } = useAuth();
-    
+
     // Zoom State (Legacy)
     const [zoomPos, setZoomPos] = useState({ x: 0, y: 0, show: false });
     const imgRef = useRef(null);
@@ -160,15 +160,15 @@ const ProductDetailPage = () => {
 
         // Socket.io Real-time Stock Update
         socket.emit('join_product', id);
-        
+
         const handleStockUpdate = (data) => {
             if (data.productId === id) {
                 setProduct(prev => {
                     if (!prev) return prev;
-                    
+
                     const next = { ...prev };
                     if (data.variantId) {
-                        next.variants = next.variants.map(v => 
+                        next.variants = next.variants.map(v =>
                             v.id === data.variantId ? { ...v, stock: data.newStock } : v
                         );
                     } else {
@@ -232,7 +232,7 @@ const ProductDetailPage = () => {
 
     const videoUrls = useMemo(() => {
         let urls = [];
-        
+
         // Priority 1: Use dedicated videoUrl array field
         if (Array.isArray(product?.videoUrl) && product.videoUrl.length > 0) {
             product.videoUrl.forEach(url => {
@@ -244,7 +244,7 @@ const ProductDetailPage = () => {
                 } else if (url.includes('embed/')) {
                     embedId = url.split('embed/')[1].split('?')[0];
                 }
-                
+
                 if (embedId) urls.push(`https://www.youtube-nocookie.com/embed/${embedId}`);
                 else if (url.includes('youtube') && url.includes('embed')) urls.push(url);
             });
@@ -257,7 +257,7 @@ const ProductDetailPage = () => {
                 urls.push(match[1].replace('youtube.com', 'youtube-nocookie.com'));
             });
         }
-        
+
         return [...new Set(urls)]; // Remove duplicates
     }, [product?.videoUrl, product?.description]);
 
@@ -302,7 +302,7 @@ const ProductDetailPage = () => {
 
     const currentStock = useMemo(() => {
         if (!product || !selectedStorage || !selectedColor) return 0;
-        
+
         const exactVariant = product.variants.find(
             v => v.storage === selectedStorage.storage && v.color === selectedColor.name
         );
@@ -534,7 +534,7 @@ const ProductDetailPage = () => {
         const [hovered, setHovered] = React.useState(0);
         return (
             <div className="flex gap-1">
-                {[1,2,3,4,5].map(s => (
+                {[1, 2, 3, 4, 5].map(s => (
                     <button key={s} type="button"
                         onMouseEnter={() => setHovered(s)}
                         onMouseLeave={() => setHovered(0)}
@@ -542,7 +542,7 @@ const ProductDetailPage = () => {
                         className="transition-transform hover:scale-125"
                     >
                         <svg className={`w-7 h-7 transition-colors ${s <= (hovered || value) ? 'text-amber-400' : 'text-gray-300'}`} fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                         </svg>
                     </button>
                 ))}
@@ -557,17 +557,17 @@ const ProductDetailPage = () => {
             </div>
 
             <div className="max-w-[1600px] mx-auto px-4 pt-4">
-                
+
                 {/* Product Title Banner */}
                 <div className="mb-4">
                     <h1 className="text-[26px] font-bold text-[#333] tracking-tight mb-2">{product.name}</h1>
-                    
+
                     {/* Product Tags (Hashtags) */}
                     {product.tags && product.tags.length > 0 && (
                         <div className="flex flex-wrap gap-2 mb-2">
                             {product.tags.map((tag, idx) => (
-                                <Link 
-                                    key={idx} 
+                                <Link
+                                    key={idx}
                                     to={`/search?keyword=${encodeURIComponent(tag)}`}
                                     className="text-[13px] font-medium text-blue-600 hover:text-blue-800 hover:underline"
                                 >
@@ -579,26 +579,26 @@ const ProductDetailPage = () => {
                 </div>
 
                 <div className="flex flex-col lg:flex-row gap-6">
-                    
+
                     {/* LEFT COLUMN: Media & Description */}
                     <div className="flex-1 min-w-0 space-y-6">
-                        
+
                         <div className="bg-white rounded-xl shadow-sm p-4 overflow-hidden relative group">
                             <div className="aspect-[4/3] flex items-center justify-center relative">
-                                <img 
-                                    src={product.images[activeImageIndex]} 
+                                <img
+                                    src={product.images[activeImageIndex]}
                                     className="max-h-full max-w-full object-contain transition-all duration-500"
                                     alt={product.name}
                                 />
 
                                 {/* NAVIGATION ARROWS */}
-                                <button 
+                                <button
                                     onClick={prevImage}
                                     className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-emerald-50/80 hover:bg-emerald-100 text-[#00917a] rounded-full flex items-center justify-center shadow-md transition-all z-10"
                                 >
                                     <ChevronLeft size={28} strokeWidth={3} />
                                 </button>
-                                <button 
+                                <button
                                     onClick={nextImage}
                                     className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-emerald-50/80 hover:bg-emerald-100 text-[#00917a] rounded-full flex items-center justify-center shadow-md transition-all z-10"
                                 >
@@ -615,10 +615,10 @@ const ProductDetailPage = () => {
                                     <Share2 size={22} />
                                 </div>
                             </div>
-                            
+
                             {/* Action Buttons below image */}
                             <div className="flex justify-center gap-4 mt-6">
-                                <button 
+                                <button
                                     onClick={() => {
                                         if (videoRef.current) {
                                             videoRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -641,8 +641,8 @@ const ProductDetailPage = () => {
                                     <span className="text-[10px] font-bold uppercase">Video</span>
                                 </button>
                                 {product.colors.map((c, i) => (
-                                    <button 
-                                        key={i} 
+                                    <button
+                                        key={i}
                                         onClick={() => { setSelectedColor(c); setActiveImageIndex(i % product.images.length); }}
                                         className="flex flex-col items-center gap-1 group"
                                     >
@@ -652,23 +652,23 @@ const ProductDetailPage = () => {
                                         <span className={`text-[10px] font-bold uppercase ${selectedColor.name === c.name ? 'text-[#00917a]' : ''}`}>{c.name}</span>
                                     </button>
                                 ))}
-                                <button 
+                                <button
                                     onClick={() => specsRef.current?.scrollIntoView({ behavior: 'smooth' })}
                                     className="flex flex-col items-center gap-1 group"
                                 >
                                     <div className="w-12 h-12 rounded-xl border border-gray-200 flex items-center justify-center group-hover:border-[#00917a] transition-all">
                                         <Settings size={20} />
                                     </div>
-                                    <span className="text-[10px] font-bold uppercase text-center leading-tight">Thông số<br/>kỹ thuật</span>
+                                    <span className="text-[10px] font-bold uppercase text-center leading-tight">Thông số<br />kỹ thuật</span>
                                 </button>
-                                <button 
+                                <button
                                     onClick={() => descriptionRef.current?.scrollIntoView({ behavior: 'smooth' })}
                                     className="flex flex-col items-center gap-1 group"
                                 >
                                     <div className="w-12 h-12 rounded-xl border border-gray-200 flex items-center justify-center group-hover:border-[#00917a] transition-all">
                                         <FileText size={20} />
                                     </div>
-                                    <span className="text-[10px] font-bold uppercase text-center leading-tight">Thông tin<br/>sản phẩm</span>
+                                    <span className="text-[10px] font-bold uppercase text-center leading-tight">Thông tin<br />sản phẩm</span>
                                 </button>
                             </div>
                         </div>
@@ -704,7 +704,7 @@ const ProductDetailPage = () => {
                             </div>
                             <div className="p-6 space-y-4">
                                 <div className="flex flex-col md:flex-row gap-4">
-                                    <select 
+                                    <select
                                         className="flex-1 bg-white border border-gray-200 rounded-lg px-4 py-2 text-[13px] outline-none focus:border-[#00917a]"
                                         value={selectedCity}
                                         onChange={(e) => setSelectedCity(e.target.value)}
@@ -760,17 +760,16 @@ const ProductDetailPage = () => {
                         {/* CROSS-SELL SECTION: COMPACT AUTO-SLIDER CAROUSEL */}
                         <div className="bg-white rounded-2xl shadow-sm p-6 space-y-6">
                             <h3 className="text-[18px] font-bold text-[#333]">Sản phẩm mua cùng</h3>
-                            
+
                             <div className="flex gap-2">
                                 {['Tất cả', 'Tai nghe', 'Đồng hồ thông minh'].map(tab => (
-                                    <button 
+                                    <button
                                         key={tab}
                                         onClick={() => setCrossSellTab(tab)}
-                                        className={`px-4 py-1.5 rounded-lg text-[13px] font-bold transition-all border ${
-                                            crossSellTab === tab 
-                                            ? 'bg-[#00917a] text-white border-[#00917a]' 
-                                            : 'bg-white text-gray-400 border-gray-100 hover:border-[#00917a] hover:text-[#00917a]'
-                                        }`}
+                                        className={`px-4 py-1.5 rounded-lg text-[13px] font-bold transition-all border ${crossSellTab === tab
+                                                ? 'bg-[#00917a] text-white border-[#00917a]'
+                                                : 'bg-white text-gray-400 border-gray-100 hover:border-[#00917a] hover:text-[#00917a]'
+                                            }`}
                                     >
                                         {tab}
                                     </button>
@@ -778,8 +777,8 @@ const ProductDetailPage = () => {
                             </div>
 
                             <div className="relative overflow-hidden group/cs">
-                                <div 
-                                    className="flex transition-transform duration-1000 ease-in-out" 
+                                <div
+                                    className="flex transition-transform duration-1000 ease-in-out"
                                     style={{ transform: `translateX(-${crossSellIndex * 100}%)` }}
                                 >
                                     {[0, 1].map(page => (
@@ -806,7 +805,7 @@ const ProductDetailPage = () => {
                                                             <span className="text-[10px] font-bold text-[#00917a]">Giá Member</span>
                                                             <span className="text-[#00917a] font-black text-[14px]">{formatPrice(p.memberPrice || p.priceNum)}</span>
                                                         </div>
-                                                        <button 
+                                                        <button
                                                             onClick={() => handleAddCrossSellToCart(p)}
                                                             className="w-full bg-[#cc0000] hover:bg-[#b00000] text-white py-2.5 rounded-xl text-[12px] font-black uppercase flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
                                                         >
@@ -822,7 +821,7 @@ const ProductDetailPage = () => {
 
                             <div className="flex justify-center gap-2">
                                 {[0, 1].map(i => (
-                                    <div 
+                                    <div
                                         key={i}
                                         onClick={() => setCrossSellIndex(i)}
                                         className={`h-1 rounded-full transition-all cursor-pointer ${crossSellIndex === i ? 'w-10 bg-[#00917a]' : 'w-6 bg-emerald-100'}`}
@@ -837,7 +836,7 @@ const ProductDetailPage = () => {
 
                     {/* RIGHT COLUMN: Selection & Sidebar */}
                     <div className="w-full lg:w-[700px] space-y-6">
-                        
+
                         {/* VERSION SELECTION */}
                         <div className="bg-white rounded-xl shadow-sm p-6 space-y-6">
                             <div className="flex flex-wrap items-end gap-3">
@@ -845,12 +844,12 @@ const ProductDetailPage = () => {
                                 <span className="text-gray-400 line-through text-[14px] mb-1">{formatPrice(selectedStorage.price * 1.2)}</span>
                             </div>
 
-                            
+
                             <div className="space-y-4">
                                 <h4 className="text-[13px] font-bold">Lựa chọn phiên bản</h4>
                                 <div className="grid grid-cols-2 gap-3">
                                     {product.variants.map((v) => (
-                                        <button 
+                                        <button
                                             key={v.id}
                                             onClick={() => setSelectedStorage(v)}
                                             className={`p-3 rounded-lg border-2 text-left transition-all relative ${selectedStorage.id === v.id ? 'border-[#00917a] bg-emerald-50' : 'border-gray-100 bg-white'}`}
@@ -871,7 +870,7 @@ const ProductDetailPage = () => {
                                 <h4 className="text-[13px] font-bold">Lựa chọn màu sắc</h4>
                                 <div className="grid grid-cols-2 gap-3">
                                     {product.colors.map((c, i) => (
-                                        <button 
+                                        <button
                                             key={i}
                                             onClick={() => setSelectedColor(c)}
                                             className={`p-3 rounded-lg border-2 text-left transition-all flex items-center gap-2 relative ${selectedColor.name === c.name ? 'border-[#00917a] bg-emerald-50' : 'border-gray-100 bg-white'}`}
@@ -891,7 +890,7 @@ const ProductDetailPage = () => {
                                         </button>
                                     ))}
                                 </div>
-                                
+
                                 {/* DYNAMIC STOCK INDICATOR */}
                                 <div className="mt-4 p-3 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-between">
                                     <span className="text-[13px] font-bold text-gray-600">Tình trạng kho:</span>
@@ -912,21 +911,21 @@ const ProductDetailPage = () => {
                             {/* PRICE BOXES (Member & Trade-in) */}
                             <div className="space-y-3">
                                 <div className="bg-[#f0faf7] border border-[#d0ede7] rounded-xl p-5 flex justify-between items-center relative overflow-hidden group">
-                                     <div className="relative z-10">
+                                    <div className="relative z-10">
                                         <p className="text-[13px] text-gray-600 font-bold mb-1">Mức giá dành riêng cho hạng MEMBER chỉ còn</p>
                                         <p className="text-[#008d71] font-black text-[26px] tracking-tight">{formatPrice(selectedStorage.price - 500000)}</p>
                                         <div className="bg-white/80 border border-emerald-100 rounded-full px-4 py-1 mt-2 flex items-center gap-2 w-fit">
                                             <Star size={14} className="fill-amber-400 text-amber-400" />
                                             <span className="text-[12px] font-bold text-gray-700">+26,000 Điểm thưởng</span>
                                         </div>
-                                     </div>
-                                     {!user ? (
+                                    </div>
+                                    {!user ? (
                                         <Link to="/login" className="absolute top-2 right-4 text-[12px] text-blue-600 font-bold hover:underline">Đăng nhập ngay</Link>
-                                     ) : (
+                                    ) : (
                                         <div className="absolute top-2 right-4 flex items-center gap-1.5 text-[11px] text-[#008d71] font-black uppercase bg-emerald-100/50 px-2 py-0.5 rounded-full">
                                             <ShieldCheck size={14} /> Member
                                         </div>
-                                     )}
+                                    )}
                                 </div>
 
                                 <div className="bg-gray-50 border border-gray-100 rounded-xl p-5 flex justify-between items-center">
@@ -941,15 +940,15 @@ const ProductDetailPage = () => {
 
                             {/* BUY BUTTONS */}
                             <div className="flex gap-3">
-                                <button 
+                                <button
                                     onClick={handleAddToCart}
                                     disabled={currentStock <= 0}
                                     className={`flex-1 bg-white border-2 p-4 rounded-xl flex items-center justify-center transition-all ${currentStock > 0 ? 'border-[#cc0000] text-[#cc0000] hover:bg-red-50' : 'border-gray-300 text-gray-400 cursor-not-allowed opacity-50'}`}
                                 >
                                     <ShoppingCart size={24} />
                                 </button>
-                                <button 
-                                    onClick={() => currentStock > 0 && setShowBuyModal(true)} 
+                                <button
+                                    onClick={() => currentStock > 0 && setShowBuyModal(true)}
                                     disabled={currentStock <= 0}
                                     className={`flex-[4] p-4 rounded-xl font-black text-[18px] uppercase transition-all ${currentStock > 0 ? 'bg-[#cc0000] text-white shadow-lg shadow-red-200 active:scale-95' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
                                 >
@@ -975,11 +974,11 @@ const ProductDetailPage = () => {
                                         <span className="text-[12px] text-gray-500 font-bold">Trợ giá đến: <span className="text-[#008d71] underline font-black">500.000 đ</span></span>
                                     </div>
                                 </div>
-                                
+
                                 {/* Middle: Searchable Autocomplete Input */}
                                 <div className="flex-1 relative group/search">
                                     <div className="relative">
-                                        <input 
+                                        <input
                                             type="text"
                                             placeholder="Tìm sản phẩm muốn thu cũ"
                                             className="w-full bg-white border border-gray-300 rounded-lg pl-3 pr-8 py-2.5 text-[13px] font-bold text-gray-700 outline-none focus:border-[#ff424e] focus:ring-2 focus:ring-red-100 transition-all h-[42px] placeholder:text-gray-400"
@@ -1003,7 +1002,7 @@ const ProductDetailPage = () => {
                                             {tradeInMatches.length > 0 ? (
                                                 tradeInMatches
                                                     .map((p, idx) => (
-                                                        <div 
+                                                        <div
                                                             key={idx}
                                                             onClick={() => {
                                                                 setSearchQuery(p);
@@ -1032,11 +1031,11 @@ const ProductDetailPage = () => {
 
                         {/* PROMO SIDEBAR 1: ƯU ĐÃI PHONESIN */}
                         <div className="bg-red-50 rounded-xl shadow-sm overflow-hidden border border-red-100">
-                             <div className="bg-red-100/50 px-4 py-2 flex items-center gap-2">
+                            <div className="bg-red-100/50 px-4 py-2 flex items-center gap-2">
                                 <Star size={16} className="text-[#cc0000] fill-[#cc0000]" />
                                 <h4 className="font-bold text-[13px] text-[#cc0000] uppercase tracking-wide">Ưu đãi PhoneSin</h4>
-                             </div>
-                             <div className="p-4 space-y-5">
+                            </div>
+                            <div className="p-4 space-y-5">
                                 {[
                                     "Trả góp lên đến 18 tháng qua Samsung Finance",
                                     "Tặng gói dịch vụ đặc quyền (Google AI Pro 6 tháng, VIEON VIP 6 tháng...)",
@@ -1055,7 +1054,7 @@ const ProductDetailPage = () => {
                                     </div>
                                 ))}
 
-                                <button 
+                                <button
                                     onClick={() => setIsPromoExpanded(!isPromoExpanded)}
                                     className="w-full text-center text-[13px] font-black text-[#555] uppercase flex items-center justify-center gap-1 mt-2 hover:text-[#cc0000] transition-colors"
                                 >
@@ -1065,43 +1064,42 @@ const ProductDetailPage = () => {
                                         <>Xem thêm ưu đãi sản phẩm <ChevronLeft size={14} className="-rotate-90" /></>
                                     )}
                                 </button>
-                             </div>
+                            </div>
                         </div>
 
                         {/* PROMO SIDEBAR 2: ƯU ĐÃI THANH TOÁN - INTERACTIVE LOGO GRID */}
                         <div className="bg-emerald-50 rounded-xl shadow-sm overflow-hidden border border-emerald-100">
-                             <div className="bg-emerald-100/50 px-4 py-3 flex items-center gap-2 border-b border-emerald-100">
+                            <div className="bg-emerald-100/50 px-4 py-3 flex items-center gap-2 border-b border-emerald-100">
                                 <div className="bg-[#00917a] p-1.5 rounded-lg text-white shadow-sm">
-                                   <Wallet size={18} />
+                                    <Wallet size={18} />
                                 </div>
                                 <h4 className="font-black text-[15px] text-[#00917a] uppercase tracking-tight">Ưu đãi thanh toán</h4>
-                             </div>
-                             <div className="p-4 space-y-5 bg-white">
+                            </div>
+                            <div className="p-4 space-y-5 bg-white">
                                 <div className="grid grid-cols-4 gap-2">
-                                   {paymentOffers.map((offer, idx) => (
-                                       <button 
-                                           key={idx}
-                                           onClick={() => setSelectedPayment(idx)}
-                                           className={`relative h-[55px] border rounded-lg p-1.5 flex items-center justify-center transition-all ${
-                                               selectedPayment === idx 
-                                               ? 'border-[#00917a] bg-emerald-50/30' 
-                                               : 'border-gray-200 hover:border-[#00917a]'
-                                           }`}
-                                       >
-                                           <img src={offer.logo} alt={offer.name} className="max-w-full max-h-full object-contain" />
-                                           {selectedPayment === idx && (
-                                               <div className="absolute -bottom-[1px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-[#00917a]"></div>
-                                           )}
-                                       </button>
-                                   ))}
+                                    {paymentOffers.map((offer, idx) => (
+                                        <button
+                                            key={idx}
+                                            onClick={() => setSelectedPayment(idx)}
+                                            className={`relative h-[55px] border rounded-lg p-1.5 flex items-center justify-center transition-all ${selectedPayment === idx
+                                                    ? 'border-[#00917a] bg-emerald-50/30'
+                                                    : 'border-gray-200 hover:border-[#00917a]'
+                                                }`}
+                                        >
+                                            <img src={offer.logo} alt={offer.name} className="max-w-full max-h-full object-contain" />
+                                            {selectedPayment === idx && (
+                                                <div className="absolute -bottom-[1px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-[#00917a]"></div>
+                                            )}
+                                        </button>
+                                    ))}
                                 </div>
 
                                 <div className="pt-2">
-                                   <p className="text-[14px] leading-relaxed text-gray-700 font-medium italic">
-                                       {paymentOffers[selectedPayment].desc} <span className="text-[#00917a] font-black cursor-pointer hover:underline">(Xem chi tiết)</span>
-                                   </p>
+                                    <p className="text-[14px] leading-relaxed text-gray-700 font-medium italic">
+                                        {paymentOffers[selectedPayment].desc} <span className="text-[#00917a] font-black cursor-pointer hover:underline">(Xem chi tiết)</span>
+                                    </p>
                                 </div>
-                             </div>
+                            </div>
                         </div>
 
                         {/* TECHNICAL SPECS SECTION - REDESIGNED */}
@@ -1114,7 +1112,7 @@ const ProductDetailPage = () => {
                                     <h4 className="font-black text-[16px] uppercase text-[#333] tracking-tight">Thông số kỹ thuật</h4>
                                 </div>
                             </div>
-                            
+
                             <div className="p-6">
                                 {/* Main Specs Grid - Modern Cards */}
                                 <div className="grid grid-cols-2 gap-4 mb-6">
@@ -1144,7 +1142,7 @@ const ProductDetailPage = () => {
                                     ))}
                                 </div>
 
-                                <button 
+                                <button
                                     onClick={() => setShowSpecsModal(true)}
                                     className="w-full bg-white border-2 border-gray-200 text-[#333] hover:border-[#00917a] hover:text-[#00917a] py-3 rounded-xl text-[14px] font-black uppercase flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95"
                                 >
@@ -1165,14 +1163,14 @@ const ProductDetailPage = () => {
                                             </div>
                                             <h3 className="text-[18px] font-black text-[#333] uppercase">Thông số kỹ thuật chi tiết</h3>
                                         </div>
-                                        <button 
+                                        <button
                                             onClick={() => setShowSpecsModal(false)}
                                             className="w-10 h-10 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
                                         >
                                             <X size={24} />
                                         </button>
                                     </div>
-                                    
+
                                     <div className="p-6 max-h-[70vh] overflow-y-auto hh-scrollbar">
                                         <div className="border border-gray-100 rounded-2xl overflow-hidden">
                                             {product.specs_detailed.map((spec, i) => (
@@ -1183,9 +1181,9 @@ const ProductDetailPage = () => {
                                             ))}
                                         </div>
                                     </div>
-                                    
+
                                     <div className="p-6 bg-gray-50/50 border-t border-gray-100">
-                                        <button 
+                                        <button
                                             onClick={() => setShowSpecsModal(false)}
                                             className="w-full bg-[#333] text-white py-3.5 rounded-xl font-black uppercase text-[14px] shadow-lg hover:bg-black transition-all active:scale-95"
                                         >
@@ -1209,10 +1207,10 @@ const ProductDetailPage = () => {
                             <div className={`grid gap-6 ${videoUrls.length > 1 ? 'grid-cols-1 md:grid-cols-2' : 'max-w-[900px] mx-auto'}`}>
                                 {videoUrls.map((url, index) => (
                                     <div key={index} className="video-wrapper">
-                                        <iframe 
-                                            src={url} 
+                                        <iframe
+                                            src={url}
                                             title={`Video ${product.name} ${index + 1}`}
-                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                                             allowFullScreen
                                         ></iframe>
                                     </div>
@@ -1229,7 +1227,7 @@ const ProductDetailPage = () => {
                             <FileText size={20} className="text-[#333]" />
                             <h4 className="font-extrabold text-[15px] uppercase text-[#333] tracking-wide">Thông tin sản phẩm</h4>
                         </div>
-                        
+
                         <div className={`p-8 transition-all duration-1000 ease-in-out overflow-hidden ${!isDescriptionExpanded ? 'max-h-[700px]' : 'max-h-[5000px]'}`}>
                             {/* Box: Nội dung chính */}
                             <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-8 mb-10">
@@ -1264,16 +1262,16 @@ const ProductDetailPage = () => {
 
                             {/* Content Area - Rendering Real Product Description */}
                             <div className="space-y-8 max-w-[1200px] mx-auto px-4 md:px-10 pb-20">
-                                <div 
+                                <div
                                     className="product-description-content"
                                     dangerouslySetInnerHTML={{ __html: cleanDescription }}
-                                    style={{ 
-                                        fontSize: '17px', 
-                                        lineHeight: '1.8', 
+                                    style={{
+                                        fontSize: '17px',
+                                        lineHeight: '1.8',
                                         color: '#374151'
                                     }}
                                 />
-                                
+
                                 {/* Fallback if description is very short or missing images */}
                                 {!product.description?.includes('<img') && (
                                     <div className="text-center space-y-6 mt-10">
@@ -1284,13 +1282,13 @@ const ProductDetailPage = () => {
                             </div>
                         </div>
 
-                        <div className={`${!isDescriptionExpanded 
-                            ? 'absolute bottom-0 left-0 w-full flex justify-center pb-10 pt-40 bg-gradient-to-t from-white via-white/95 to-transparent z-20 pointer-events-none' 
+                        <div className={`${!isDescriptionExpanded
+                            ? 'absolute bottom-0 left-0 w-full flex justify-center pb-10 pt-40 bg-gradient-to-t from-white via-white/95 to-transparent z-20 pointer-events-none'
                             : 'relative flex justify-center py-10 bg-white border-t border-gray-50 z-20'}`}>
-                            <button 
+                            <button
                                 onClick={() => {
                                     setIsDescriptionExpanded(!isDescriptionExpanded);
-                                    if(isDescriptionExpanded) {
+                                    if (isDescriptionExpanded) {
                                         descriptionRef.current?.scrollIntoView({ behavior: 'smooth' });
                                     }
                                 }}
@@ -1319,7 +1317,7 @@ const ProductDetailPage = () => {
                         {/* Carousel */}
                         <div className="relative px-6 py-5">
                             {/* Left Arrow */}
-                            <button 
+                            <button
                                 onClick={() => setHotIndex(prev => Math.max(0, prev - 1))}
                                 className="absolute left-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-md hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-30"
                                 disabled={hotIndex === 0}
@@ -1329,34 +1327,34 @@ const ProductDetailPage = () => {
 
                             {/* Products Grid */}
                             <div className="overflow-hidden mx-8">
-                                <div 
+                                <div
                                     className="flex transition-transform duration-700 ease-in-out"
                                     style={{ transform: `translateX(-${hotIndex * 25}%)` }}
                                 >
                                     {hotProducts.map((p, i) => (
                                         <div key={p.uiKey || p.id || i} className="min-w-[25%] px-2">
                                             <Link to={`/product/${p.routeId || p.id}`} className="block border border-gray-100 rounded-xl p-4 hover:shadow-lg transition-all duration-300 group bg-white hover:border-gray-200">
-                                                
+
                                                 {/* Spec Badges */}
                                                 <div className="text-[11px] text-gray-400 space-y-1 mb-3">
                                                     <div className="flex items-center gap-1.5">
-                                                        <svg className="w-3.5 h-3.5 shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="2" y="3" width="20" height="14" rx="2" strokeWidth="1.5"/><path d="M8 21h8M12 17v4" strokeWidth="1.5"/></svg>
+                                                        <svg className="w-3.5 h-3.5 shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="2" y="3" width="20" height="14" rx="2" strokeWidth="1.5" /><path d="M8 21h8M12 17v4" strokeWidth="1.5" /></svg>
                                                         <span className="truncate">{p.specs?.chip || 'Snapdragon 8 Gen 3'}</span>
                                                     </div>
                                                     <div className="flex items-center gap-1.5">
-                                                        <svg className="w-3.5 h-3.5 shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" strokeWidth="1.5"/></svg>
+                                                        <svg className="w-3.5 h-3.5 shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="5" y="2" width="14" height="20" rx="2" strokeWidth="1.5" /></svg>
                                                         <span>{p.specs?.resolution || '2400 × 1080'}</span>
                                                     </div>
                                                     <div className="flex items-center gap-1.5">
-                                                        <svg className="w-3.5 h-3.5 shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="6" y="4" width="12" height="18" rx="2" strokeWidth="1.5"/><path d="M10 2h4" strokeWidth="1.5"/></svg>
+                                                        <svg className="w-3.5 h-3.5 shrink-0 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="6" y="4" width="12" height="18" rx="2" strokeWidth="1.5" /><path d="M10 2h4" strokeWidth="1.5" /></svg>
                                                         <span>{p.specs?.pin || '5000mAh'}</span>
                                                     </div>
                                                 </div>
 
                                                 {/* Product Image */}
                                                 <div className="flex items-center justify-center h-[140px] mb-3 overflow-hidden">
-                                                    <img 
-                                                        src={p.image} 
+                                                    <img
+                                                        src={p.image}
                                                         alt={p.name}
                                                         className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-500"
                                                     />
@@ -1401,7 +1399,7 @@ const ProductDetailPage = () => {
                             </div>
 
                             {/* Right Arrow */}
-                            <button 
+                            <button
                                 onClick={() => setHotIndex(prev => Math.min(4, prev + 1))}
                                 className="absolute right-2 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white border border-gray-200 rounded-full flex items-center justify-center shadow-md hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-30"
                                 disabled={hotIndex >= 4}
@@ -1412,9 +1410,9 @@ const ProductDetailPage = () => {
 
                         {/* Pagination Dots */}
                         <div className="flex justify-center gap-2 pb-5">
-                            {[0,1,2,3,4].map(i => (
-                                <button 
-                                    key={i} 
+                            {[0, 1, 2, 3, 4].map(i => (
+                                <button
+                                    key={i}
                                     onClick={() => setHotIndex(i)}
                                     className={`h-1.5 rounded-full transition-all duration-300 ${hotIndex === i ? 'w-8 bg-[#00917a]' : 'w-4 bg-gray-200 hover:bg-gray-300'}`}
                                 />
@@ -1504,7 +1502,7 @@ const ProductDetailPage = () => {
                                     img: product.image,
                                 },
                                 {
-                                    title: `So sánh top 3 smartphone ${product.name.split(' ').slice(0,3).join(' ')} Series: Mẫu nào đáng mua đầu năm 2026`,
+                                    title: `So sánh top 3 smartphone ${product.name.split(' ').slice(0, 3).join(' ')} Series: Mẫu nào đáng mua đầu năm 2026`,
                                     date: '08-04-2026',
                                     img: product.image,
                                 },
@@ -1531,10 +1529,10 @@ const ProductDetailPage = () => {
                                         ) : (
                                             <div className="flex items-center justify-center w-full h-full">
                                                 <svg viewBox="0 0 64 64" className="w-14 h-14 text-[#00917a]" fill="currentColor">
-                                                    <rect x="4" y="8" width="30" height="24" rx="3" fill="none" stroke="currentColor" strokeWidth="4"/>
-                                                    <rect x="30" y="8" width="30" height="24" rx="3" fill="none" stroke="currentColor" strokeWidth="4"/>
-                                                    <rect x="4" y="32" width="30" height="24" rx="3" fill="none" stroke="currentColor" strokeWidth="4"/>
-                                                    <rect x="30" y="32" width="30" height="24" rx="3" fill="none" stroke="currentColor" strokeWidth="4"/>
+                                                    <rect x="4" y="8" width="30" height="24" rx="3" fill="none" stroke="currentColor" strokeWidth="4" />
+                                                    <rect x="30" y="8" width="30" height="24" rx="3" fill="none" stroke="currentColor" strokeWidth="4" />
+                                                    <rect x="4" y="32" width="30" height="24" rx="3" fill="none" stroke="currentColor" strokeWidth="4" />
+                                                    <rect x="30" y="32" width="30" height="24" rx="3" fill="none" stroke="currentColor" strokeWidth="4" />
                                                 </svg>
                                             </div>
                                         )}
@@ -1559,14 +1557,14 @@ const ProductDetailPage = () => {
                             <div className="flex items-center gap-2">
                                 {/* Average stars */}
                                 <div className="flex gap-0.5">
-                                    {[1,2,3,4,5].map(s => (
+                                    {[1, 2, 3, 4, 5].map(s => (
                                         <svg
                                             key={s}
                                             className={`w-5 h-5 ${s <= Math.round(reviewStats.average) ? 'text-amber-400' : 'text-gray-300'}`}
                                             fill="currentColor"
                                             viewBox="0 0 24 24"
                                         >
-                                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
                                         </svg>
                                     ))}
                                 </div>
@@ -1587,13 +1585,13 @@ const ProductDetailPage = () => {
                                     onChange={(event) => setReviewContent(event.target.value)}
                                     className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[14px] text-gray-700 placeholder:text-gray-400 outline-none focus:border-[#00917a] focus:ring-2 focus:ring-emerald-100 transition-all resize-none bg-gray-50/50"
                                 />
-                                
+
                                 {/* Image Upload Buttons */}
                                 <div className="flex flex-wrap gap-3">
                                     {reviewImages.map((img, idx) => (
                                         <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 group">
                                             <img src={img} className="w-full h-full object-cover" alt="Preview" />
-                                            <button 
+                                            <button
                                                 onClick={() => setReviewImages(prev => prev.filter((_, i) => i !== idx))}
                                                 className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
                                             >
@@ -1687,7 +1685,7 @@ const ProductDetailPage = () => {
                                                     ))}
                                                 </div>
                                                 <p className="text-sm text-gray-700 mt-2">{item.comment || item.title || 'Đánh giá sản phẩm'}</p>
-                                                
+
                                                 {/* Customer Images */}
                                                 {item.images && item.images.length > 0 && (
                                                     <div className="flex gap-2 mt-3">
@@ -1762,7 +1760,7 @@ const ProductDetailPage = () => {
                         <Link to="/cart" className="text-[13px] underline font-medium opacity-90">Xem giỏ hàng ngay</Link>
                     </div>
                     <button onClick={() => setShowToast(false)} className="ml-4 hover:scale-110 transition-transform">
-                         <Plus className="rotate-45" size={20} />
+                        <Plus className="rotate-45" size={20} />
                     </button>
                 </div>
             )}
@@ -1782,11 +1780,10 @@ const ProductDetailPage = () => {
 
             {reviewNotice.message && (
                 <div
-                    className={`fixed top-40 right-6 z-[210] px-4 py-2 rounded-xl shadow-lg text-sm font-bold ${
-                        reviewNotice.type === 'success'
+                    className={`fixed top-40 right-6 z-[210] px-4 py-2 rounded-xl shadow-lg text-sm font-bold ${reviewNotice.type === 'success'
                             ? 'bg-white border border-[#008d71]/30 text-[#008d71]'
                             : 'bg-white border border-[#ef4444]/30 text-[#ef4444]'
-                    }`}
+                        }`}
                 >
                     {reviewNotice.message}
                 </div>
