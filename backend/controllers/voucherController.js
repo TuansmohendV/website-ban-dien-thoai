@@ -1,4 +1,6 @@
 import Cart from '../models/Cart.js';
+import Notification from '../models/Notification.js';
+import User from '../models/User.js';
 import Voucher from '../models/Voucher.js';
 import UserVoucher from '../models/UserVoucher.js';
 import asyncHandler from '../utils/asyncHandler.js';
@@ -47,8 +49,59 @@ const mapVoucherForAdmin = (voucher) => ({
   status: getVoucherStatus(voucher),
 });
 
+const formatVoucherDiscountText = (voucher) => {
+  if (voucher.discountType === 'percentage') {
+    const maxText = voucher.maxDiscount > 0
+      ? `, tối đa ${voucher.maxDiscount.toLocaleString('vi-VN')}đ`
+      : '';
+    return `giảm ${voucher.discountValue}%${maxText}`;
+  }
+
+  return `giảm ${voucher.discountValue.toLocaleString('vi-VN')}đ`;
+};
+
+const notifyUsersAboutNewVoucher = async (voucher) => {
+  if (!voucher.isActive || voucher.isDeleted) {
+    return 0;
+  }
+
+  const users = await User.find({
+    isActive: true,
+    isDeleted: { $ne: true },
+    role: 'customer',
+  }).select('_id').lean();
+
+  if (users.length === 0) {
+    return 0;
+  }
+
+  const discountText = formatVoucherDiscountText(voucher);
+  const title = voucher.isHuntedOnly
+    ? `Voucher săn mới: ${voucher.code}`
+    : `Voucher mới dành cho bạn: ${voucher.code}`;
+  const message = voucher.isHuntedOnly
+    ? `Hoàn thành nhiệm vụ để nhận mã ${discountText}.`
+    : `Nhập mã ${voucher.code} để được ${discountText}.`;
+
+  await Notification.insertMany(
+    users.map((user) => ({
+      userId: user._id,
+      title,
+      message,
+      type: 'promotion',
+      relatedId: voucher._id,
+      relatedType: 'voucher',
+    })),
+    { ordered: false }
+  );
+
+  return users.length;
+};
+
 export const getAdminVouchers = asyncHandler(async (req, res) => {
-  const vouchers = await Voucher.find({}).sort({ createdAt: -1 }).lean();
+  const includeDeleted = String(req.query.includeDeleted) === 'true';
+  const query = includeDeleted ? {} : { isDeleted: { $ne: true } };
+  const vouchers = await Voucher.find(query).sort({ createdAt: -1 }).lean();
 
   res.json({
     data: vouchers.map(mapVoucherForAdmin),
@@ -60,9 +113,12 @@ export const getPublicVouchers = asyncHandler(async (req, res) => {
   
   const vouchers = await Voucher.find({
     isActive: true,
+    isDeleted: { $ne: true },
     isHuntedOnly: { $ne: true },
-    $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: now } }],
-    $or: [{ startsAt: { $exists: false } }, { startsAt: { $lt: now } }],
+    $and: [
+      { $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: now } }] },
+      { $or: [{ startsAt: { $exists: false } }, { startsAt: { $lt: now } }] },
+    ],
   })
     .sort({ discountValue: -1 })
     .lean();
@@ -81,7 +137,11 @@ export const getPublicVouchers = asyncHandler(async (req, res) => {
 });
 
 export const getHuntedVouchers = asyncHandler(async (req, res) => {
-  const vouchers = await Voucher.find({ isHuntedOnly: true, isActive: true }).lean();
+  const vouchers = await Voucher.find({
+    isHuntedOnly: true,
+    isActive: true,
+    isDeleted: { $ne: true },
+  }).lean();
   
   // If user is logged in, check their hunt status for each voucher
   let userHuntStatuses = {};
@@ -234,10 +294,14 @@ export const createAdminVoucher = asyncHandler(async (req, res) => {
   }
 
   const voucher = await Voucher.create(payload);
+  const notifiedUsers = await notifyUsersAboutNewVoucher(voucher);
 
   res.status(201).json({
-    message: 'Tạo mã khuyến mãi thành công.',
+    message: notifiedUsers > 0
+      ? `Tạo mã khuyến mãi thành công và đã gửi thông báo đến ${notifiedUsers} khách hàng.`
+      : 'Tạo mã khuyến mãi thành công.',
     voucher: mapVoucherForAdmin(voucher.toObject()),
+    notifiedUsers,
   });
 });
 
@@ -265,10 +329,12 @@ export const deleteAdminVoucher = asyncHandler(async (req, res) => {
   }
 
   voucher.isActive = false;
+  voucher.isDeleted = true;
+  voucher.deletedAt = new Date();
   await voucher.save();
 
   res.json({
-    message: 'Chuyển mã khuyến mãi vào trạng thái đã tắt (xoá mềm) thành công.',
+    message: 'Đã ẩn mã khuyến mãi khỏi giao diện (xoá mềm), dữ liệu vẫn còn trong database.',
   });
 });
 

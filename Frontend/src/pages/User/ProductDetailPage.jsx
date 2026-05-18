@@ -162,21 +162,23 @@ const ProductDetailPage = () => {
         socket.emit('join_product', id);
 
         const handleStockUpdate = (data) => {
-            if (data.productId === id) {
-                setProduct(prev => {
-                    if (!prev) return prev;
+            setProduct(prev => {
+                if (!prev) return prev;
 
-                    const next = { ...prev };
-                    if (data.variantId) {
-                        next.variants = next.variants.map(v =>
-                            v.id === data.variantId ? { ...v, stock: data.newStock } : v
-                        );
-                    } else {
-                        next.countInStock = data.newStock;
-                    }
-                    return next;
-                });
-            }
+                const targetProductId = String(data.productId || '');
+                const currentProductId = String(prev.backendId || prev._id || id);
+                if (targetProductId !== currentProductId) return prev;
+                
+                const next = { ...prev };
+                if (data.variantId) {
+                    next.variants = next.variants.map(v => 
+                        String(v.id) === String(data.variantId) ? { ...v, stock: data.newStock } : v
+                    );
+                } else {
+                    next.countInStock = data.newStock;
+                }
+                return next;
+            });
         };
 
         socket.on('stock_update', handleStockUpdate);
@@ -186,6 +188,12 @@ const ProductDetailPage = () => {
             socket.off('stock_update', handleStockUpdate);
         };
     }, [id]);
+
+    useEffect(() => {
+        if (product?.backendId) {
+            socket.emit('join_product', product.backendId);
+        }
+    }, [product?.backendId]);
 
     useEffect(() => {
         if (!product?.backendId) {
@@ -1770,6 +1778,8 @@ const ProductDetailPage = () => {
                 product={product}
                 isOpen={showBuyModal}
                 onClose={() => setShowBuyModal(false)}
+                initialVariant={selectedStorage}
+                initialColor={selectedColor}
             />
 
             {wishlistNotice && (

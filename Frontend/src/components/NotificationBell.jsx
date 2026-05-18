@@ -22,6 +22,22 @@ const timeAgo = (dateStr) => {
     return `${days} ngày trước`;
 };
 
+const getNotificationLink = (notification) => {
+    if (notification.relatedType === 'voucher' || notification.type === 'promotion') {
+        return '/flash-voucher';
+    }
+
+    if (notification.relatedType === 'order') {
+        return '/orders';
+    }
+
+    if (notification.relatedType === 'supportTicket' || notification.type === 'support') {
+        return '/support';
+    }
+
+    return '/notifications';
+};
+
 const NotificationBell = () => {
     const { user } = useAuth();
     const [open, setOpen] = useState(false);
@@ -160,12 +176,8 @@ const NotificationBell = () => {
                                 {notifications.map((n) => {
                                     const cfg = typeConfig[n.type] || typeConfig.system;
                                     const Icon = cfg.icon;
-                                    return (
-                                        <div
-                                            key={n._id}
-                                            onClick={() => !n.isRead && handleMarkOne(n._id)}
-                                            className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors ${n.isRead ? 'bg-white hover:bg-gray-50' : 'bg-blue-50/40 hover:bg-blue-50/70'}`}
-                                        >
+                                    const content = (
+                                        <>
                                             <div className={`shrink-0 w-9 h-9 rounded-full ${cfg.bg} flex items-center justify-center mt-0.5`}>
                                                 <Icon size={16} className={cfg.color} />
                                             </div>
@@ -184,7 +196,21 @@ const NotificationBell = () => {
                                                     <span className="text-[10px] text-gray-400">{timeAgo(n.createdAt)}</span>
                                                 </div>
                                             </div>
-                                        </div>
+                                        </>
+                                    );
+
+                                    return (
+                                        <Link
+                                            key={n._id}
+                                            to={getNotificationLink(n)}
+                                            onClick={() => {
+                                                if (!n.isRead) handleMarkOne(n._id);
+                                                setOpen(false);
+                                            }}
+                                            className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors ${n.isRead ? 'bg-white hover:bg-gray-50' : 'bg-blue-50/40 hover:bg-blue-50/70'}`}
+                                        >
+                                            {content}
+                                        </Link>
                                     );
                                 })}
                             </div>

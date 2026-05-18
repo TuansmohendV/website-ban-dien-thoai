@@ -40,7 +40,7 @@ export const getUserStats = asyncHandler(async (req, res) => {
 });
 
 export const getAdminUsers = asyncHandler(async (req, res) => {
-  const users = await User.find({})
+  const users = await User.find({ isDeleted: { $ne: true } })
     .select('-password -resetPasswordToken -resetPasswordExpiresAt')
     .sort({ createdAt: -1 })
     .lean();
@@ -313,6 +313,8 @@ export const deleteAdminUser = asyncHandler(async (req, res) => {
   }
 
   user.isActive = false;
+  user.isDeleted = true;
+  user.deletedAt = new Date();
   await user.save();
 
   res.json({

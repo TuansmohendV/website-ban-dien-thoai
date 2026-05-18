@@ -56,6 +56,11 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: Date,
     // Persistent Checkout Information
     province: { type: String, default: '' },
     district: { type: String, default: '' },

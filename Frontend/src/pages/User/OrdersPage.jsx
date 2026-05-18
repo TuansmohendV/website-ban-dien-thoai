@@ -37,26 +37,66 @@ const StatusBadge = ({ status }) => {
     );
 };
 
+const isOnlinePaymentMethod = (order = {}) => {
+    const method = String(order.paymentMethod || order.payment?.backendMethod || '').toUpperCase();
+    return ['VNPAY', 'MOMO', 'BANK_TRANSFER'].includes(method);
+};
+
+const canPayOrder = (order = {}) => {
+    const status = String(order.status || '').toLowerCase();
+    const paymentStatus = String(order.paymentStatus || order.payment?.status || '').toLowerCase();
+
+    return isOnlinePaymentMethod(order) &&
+        paymentStatus !== 'paid' &&
+        !['cancelled', 'delivered'].includes(status);
+};
+
+const getPaymentNotice = (order = {}) => {
+    if (!canPayOrder(order)) return null;
+
+    const paymentStatus = String(order.paymentStatus || order.payment?.status || '').toLowerCase();
+
+    if (paymentStatus === 'failed') {
+        return {
+            title: 'Thanh toán chưa thành công',
+            message: 'Giao dịch trước đó chưa hoàn tất. Bạn có thể thanh toán lại để tiếp tục xử lý đơn hàng.',
+            className: 'bg-red-50 border-red-100 text-red-700',
+        };
+    }
+
+    return {
+        title: 'Đơn hàng chưa thanh toán',
+        message: 'Bạn đã rời khỏi cổng thanh toán hoặc chưa hoàn tất giao dịch. Vui lòng thanh toán lại để giữ đơn hàng.',
+        className: 'bg-amber-50 border-amber-100 text-amber-700',
+    };
+};
+
 /* ─── Stat Card ─────────────────────────────────────────────────────────── */
-const StatCard = ({ emoji, value, label, active }) => (
-    <div className={`flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all ${active ? 'bg-[#008d71] border-[#008d71] shadow-lg shadow-[#008d71]/20' : 'bg-white border-gray-200'}`}>
+const StatCard = ({ emoji, value, label, active, onClick }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        className={`flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all text-left hover:-translate-y-0.5 hover:shadow-md active:scale-[0.98] ${active ? 'bg-[#008d71] border-[#008d71] shadow-lg shadow-[#008d71]/20' : 'bg-white border-gray-200'}`}
+    >
         <span className="text-xl">{emoji}</span>
         <div>
             <p className={`text-lg font-extrabold leading-none ${active ? 'text-white' : 'text-gray-900'}`}>{value}</p>
             <p className={`text-[11px] font-medium mt-0.5 ${active ? 'text-white/70' : 'text-gray-400'}`}>{label}</p>
         </div>
-    </div>
+    </button>
 );
 
 /* ═══════════════════════════════════════════════════════════════════════════ */
 const OrdersPage = () => {
     const { formatPrice }         = useLanguage();
-    const { orders, cancelOrder } = useOrders();
+    const { orders, cancelOrder, processPayment } = useOrders();
     const navigate                = useNavigate();
 
     const [activeStatus,     setActiveStatus]     = useState('all');
     const [expandedTimeline, setExpandedTimeline] = useState(null);
     const [drawer,           setDrawer]           = useState(null);
+    const [payingOrderId,    setPayingOrderId]    = useState('');
+    const [notice,           setNotice]           = useState('');
 
     const TABS = [
         { id: 'all',        label: 'Tất cả' },
@@ -69,6 +109,34 @@ const OrdersPage = () => {
 
     const count    = id => id === 'all' ? orders.length : orders.filter(o => o.status === id).length;
     const filtered = activeStatus === 'all' ? orders : orders.filter(o => o.status === activeStatus);
+    const unpaidCount = orders.filter(canPayOrder).length;
+
+    const handlePayOrder = async (order) => {
+        const method = String(order.paymentMethod || order.payment?.backendMethod || '').toUpperCase();
+        const orderId = order.backendId || order.id;
+
+        if (!orderId || !method) {
+            setNotice('Không tìm thấy thông tin thanh toán của đơn hàng.');
+            return;
+        }
+
+        try {
+            setPayingOrderId(order.id);
+            setNotice('');
+            const payResponse = await processPayment(orderId, method, {
+                returnUrl: `${window.location.origin}/checkout-result`,
+                origin: window.location.origin,
+            });
+
+            if (payResponse?.paymentUrl) {
+                window.location.href = payResponse.paymentUrl;
+            }
+        } catch (error) {
+            setNotice(error.message || 'Không thể tạo lại thanh toán lúc này.');
+        } finally {
+            setPayingOrderId('');
+        }
+    };
 
     return (
         <div className="min-h-screen bg-[#f1f3f6]" style={{ fontFamily: "'Inter','Segoe UI',sans-serif" }}>
@@ -91,9 +159,27 @@ const OrdersPage = () => {
 
                         {/* Stats */}
                         <div className="flex gap-3 flex-wrap">
-                            <StatCard emoji="📦" value={orders.length}                                         label="Tổng đơn"   active={false} />
-                            <StatCard emoji="🚚" value={orders.filter(o=>o.status==='shipping').length}        label="Đang giao"  active={orders.filter(o=>o.status==='shipping').length > 0} />
-                            <StatCard emoji="✅" value={orders.filter(o=>o.status==='delivered').length}       label="Hoàn thành" active={false} />
+                            <StatCard
+                                emoji="📦"
+                                value={orders.length}
+                                label="Tổng đơn"
+                                active={activeStatus === 'all'}
+                                onClick={() => setActiveStatus('all')}
+                            />
+                            <StatCard
+                                emoji="🚚"
+                                value={orders.filter(o=>o.status==='shipping').length}
+                                label="Đang giao"
+                                active={activeStatus === 'shipping'}
+                                onClick={() => setActiveStatus('shipping')}
+                            />
+                            <StatCard
+                                emoji="✅"
+                                value={orders.filter(o=>o.status==='delivered').length}
+                                label="Hoàn thành"
+                                active={activeStatus === 'delivered'}
+                                onClick={() => setActiveStatus('delivered')}
+                            />
                         </div>
                     </div>
 
@@ -133,6 +219,19 @@ const OrdersPage = () => {
 
             {/* ── Order List ── */}
             <div className="max-w-6xl mx-auto px-6 py-7">
+                {unpaidCount > 0 && (
+                    <div className="mb-5 rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-amber-700 shadow-sm">
+                        <p className="text-sm font-extrabold">Bạn có {unpaidCount} đơn hàng chưa thanh toán.</p>
+                        <p className="text-xs font-semibold mt-1">Mở đơn hàng và chọn “Thanh toán lại” để hoàn tất giao dịch.</p>
+                    </div>
+                )}
+
+                {notice && (
+                    <div className="mb-5 rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-sm font-bold text-red-600">
+                        {notice}
+                    </div>
+                )}
+
                 {filtered.length === 0 ? (
                     <div className="bg-white rounded-2xl border border-gray-200 py-20 flex flex-col items-center text-center shadow-sm">
                         <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5 text-3xl" style={{ background: BRANDBG }}>🛍️</div>
@@ -152,8 +251,11 @@ const OrdersPage = () => {
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        {filtered.map(order => (
-                            <div key={order.id} className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow duration-200">
+                        {filtered.map(order => {
+                            const paymentNotice = getPaymentNotice(order);
+
+                            return (
+                            <div key={order.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden hover:shadow-md transition-shadow duration-200 ${paymentNotice ? 'border-amber-200' : 'border-gray-200'}`}>
 
                                 {/* ── Card Header ── */}
                                 <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 bg-gray-50 border-b border-gray-100">
@@ -185,6 +287,15 @@ const OrdersPage = () => {
                                         )}
                                     </div>
                                 </div>
+
+                                {paymentNotice && (
+                                    <div className={`mx-6 mt-4 rounded-2xl border px-4 py-3 ${paymentNotice.className}`}>
+                                        <div>
+                                            <p className="text-sm font-extrabold">{paymentNotice.title}</p>
+                                            <p className="text-xs font-semibold mt-1 leading-relaxed">{paymentNotice.message}</p>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* ── Products ── */}
                                 <div className="px-6 py-4 divide-y divide-gray-50">
@@ -262,7 +373,8 @@ const OrdersPage = () => {
                                 </div>
 
                             </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 )}
             </div>
@@ -388,6 +500,19 @@ const OrdersPage = () => {
                                         <span className="text-2xl">{drawer.payment.method === 'cod' ? '🚚' : '🏦'}</span>
                                         <span className="font-semibold text-gray-900 text-sm">{drawer.payment.methodLabel}</span>
                                     </div>
+                                    {getPaymentNotice(drawer) && (
+                                        <div className={`mt-4 rounded-2xl border px-4 py-3 ${getPaymentNotice(drawer).className}`}>
+                                            <p className="text-sm font-extrabold">{getPaymentNotice(drawer).title}</p>
+                                            <p className="text-xs font-semibold mt-1 leading-relaxed">{getPaymentNotice(drawer).message}</p>
+                                            <button
+                                                onClick={() => handlePayOrder(drawer)}
+                                                disabled={payingOrderId === drawer.id}
+                                                className="mt-3 h-10 px-4 rounded-xl bg-amber-500 text-white text-xs font-black uppercase tracking-wider hover:bg-amber-600 transition-all disabled:opacity-60"
+                                            >
+                                                {payingOrderId === drawer.id ? 'Đang tạo...' : 'Thanh toán lại'}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 

@@ -77,6 +77,11 @@ const voucherSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: Date,
     isHuntedOnly: {
       type: Boolean,
       default: false,

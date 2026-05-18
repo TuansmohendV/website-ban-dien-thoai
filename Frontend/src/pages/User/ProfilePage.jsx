@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useOrders } from '../../context/OrdersContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import api, { getApiErrorMessage } from '../../lib/api';
 import { normalizeOrder } from '../../lib/orders';
 import { 
@@ -36,8 +36,9 @@ import {
 
 const ProfilePage = () => {
     const { user, logout, updateProfile } = useAuth();
-    const { orders, cancelOrder, clearCancelledOrders, clearAllOrders } = useOrders();
+    const { orders, cancelOrder, clearCancelledOrders, clearAllOrders, processPayment } = useOrders();
     const { formatPrice } = useLanguage();
+    const location = useLocation();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('overview');
     const [showOTP, setShowOTP] = useState(false);
@@ -76,6 +77,7 @@ const ProfilePage = () => {
     const [referralStats, setReferralStats] = useState(null);
     const [referralHistory, setReferralHistory] = useState([]);
     const [myVouchers, setMyVouchers] = useState([]);
+    const [payingOrderId, setPayingOrderId] = useState('');
     const fileInputRef = React.useRef(null);
 
     const [profileData, setProfileData] = useState({
@@ -116,6 +118,15 @@ const ProfilePage = () => {
         loadTabData('history');
     }, [user]);
 
+    useEffect(() => {
+        const tab = new URLSearchParams(location.search).get('tab');
+
+        if (tab && ['overview', 'orders', 'vouchers', 'addresses', 'history', 'info', 'referral', 'comments', 'ratings'].includes(tab)) {
+            setActiveTab(tab);
+            loadTabData(tab);
+        }
+    }, [location.search]);
+
     const sidebarItems = [
         { id: 'overview', label: 'Tổng quan', icon: <BarChart3 size={20} /> },
         { id: 'orders', label: 'Đơn hàng của bạn', icon: <ShoppingBag size={20} /> },
@@ -154,6 +165,55 @@ const ProfilePage = () => {
         { icon: <Truck className="text-emerald-600" />, title: 'Giao hàng 2h - Miễn phí vận chuyển', desc: 'Áp dụng với đơn hàng trên 300.000đ' },
         { icon: <PhoneCall className="text-emerald-600" />, title: 'Hotline tư vấn đặc quyền', desc: '1900.2091' },
     ];
+
+    const canPayOrder = (order = {}) => {
+        const method = String(order.paymentMethod || order.payment?.backendMethod || '').toUpperCase();
+        const status = String(order.status || '').toLowerCase();
+        const paymentStatus = String(order.paymentStatus || order.payment?.status || '').toLowerCase();
+
+        return ['VNPAY', 'MOMO', 'BANK_TRANSFER'].includes(method) &&
+            paymentStatus !== 'paid' &&
+            !['cancelled', 'delivered'].includes(status);
+    };
+
+    const handlePayOrder = async (order) => {
+        const method = String(order.paymentMethod || order.payment?.backendMethod || '').toUpperCase();
+        const orderId = order.backendId || order.id;
+
+        if (!orderId || !method) {
+            setTabNotice('Không tìm thấy thông tin thanh toán của đơn hàng.');
+            return;
+        }
+
+        try {
+            setPayingOrderId(order.id);
+            setTabNotice('');
+            const payResponse = await processPayment(orderId, method, {
+                returnUrl: `${window.location.origin}/checkout-result`,
+                origin: window.location.origin,
+            });
+
+            if (payResponse?.paymentUrl) {
+                window.location.href = payResponse.paymentUrl;
+            }
+        } catch (error) {
+            setTabNotice(error.message || 'Không thể tạo lại thanh toán lúc này.');
+        } finally {
+            setPayingOrderId('');
+        }
+    };
+
+    const unpaidOrders = orders.filter(canPayOrder);
+
+    const getUnpaidOrderMessage = (order = {}) => {
+        const paymentStatus = String(order.paymentStatus || order.payment?.status || '').toLowerCase();
+
+        if (paymentStatus === 'failed') {
+            return 'Thanh toán của đơn này chưa thành công. Bạn có thể thanh toán lại để đơn tiếp tục được xử lý.';
+        }
+
+        return 'Đơn hàng này chưa thanh toán. Nếu bạn đã thoát khỏi cổng thanh toán, hãy bấm thanh toán lại để hoàn tất giao dịch.';
+    };
 
     const handleUpdateInfo = async (e) => {
         e.preventDefault();
@@ -466,6 +526,12 @@ const ProfilePage = () => {
                         {activeTab === 'overview' && (
                             <div className="space-y-6 animate-in fade-in duration-300">
                                 <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Tổng quan</h2>
+                                {unpaidOrders.length > 0 && (
+                                    <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-amber-700">
+                                        <p className="text-sm font-black">Bạn có {unpaidOrders.length} đơn hàng chưa thanh toán.</p>
+                                        <p className="text-xs font-bold mt-1">Vào mục Đơn hàng của bạn để thanh toán lại và hoàn tất giao dịch.</p>
+                                    </div>
+                                )}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {/* Spending Card */}
                                     <div className={`rounded-3xl p-8 border shadow-sm flex items-center gap-6 transition-all duration-500 ${isVip || totalSpentAllTime >= 100000000 ? 'bg-gradient-to-br from-slate-900 to-black border-yellow-500/50 shadow-yellow-500/20' : 'bg-white border-gray-100'}`}>
@@ -868,20 +934,26 @@ const ProfilePage = () => {
                                             {cancelledCount > 0 && (
                                                 <button
                                                     onClick={() => { if(window.confirm(`Xóa ${cancelledCount} đơn đã hủy?`)) clearCancelledOrders(); }}
-                                                    className="flex items-center gap-2 px-4 py-2 text-xs font-black bg-red-50 text-red-500 border border-red-100 rounded-xl hover:bg-red-500 hover:text-white hover:border-red-500 transition-all uppercase tracking-wide"
+                                                    className="min-h-10 flex items-center justify-center gap-2 px-4 py-2 text-xs font-black bg-red-50 text-red-500 border border-red-100 rounded-xl hover:bg-red-500 hover:text-white hover:border-red-500 transition-all uppercase tracking-normal text-center leading-tight"
                                                 >
-                                                    🗑️ Xóa đơn đã hủy ({cancelledCount})
+                                                    Ẩn đơn đã hủy ({cancelledCount})
                                                 </button>
                                             )}
                                             <button
-                                                onClick={() => { if(window.confirm('Xóa toàn bộ lịch sử đơn hàng? Hành động này không thể hoàn tác.')) clearAllOrders(); }}
-                                                className="flex items-center gap-2 px-4 py-2 text-xs font-black bg-gray-50 text-gray-400 border border-gray-200 rounded-xl hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all uppercase tracking-wide"
+                                                onClick={() => { if(window.confirm('Ẩn toàn bộ lịch sử đơn hàng khỏi giao diện? Dữ liệu vẫn được giữ trong hệ thống.')) clearAllOrders(); }}
+                                                className="min-h-10 flex items-center justify-center gap-2 px-4 py-2 text-xs font-black bg-gray-50 text-gray-400 border border-gray-200 rounded-xl hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all uppercase tracking-normal text-center leading-tight"
                                             >
-                                                Xóa tất cả
+                                                Ẩn tất cả
                                             </button>
                                         </div>
                                     )}
                                 </div>
+                                {unpaidOrders.length > 0 && (
+                                    <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-amber-700">
+                                        <p className="text-sm font-black">Bạn có {unpaidOrders.length} đơn hàng chưa thanh toán.</p>
+                                        <p className="text-xs font-bold mt-1">Các đơn này sẽ có nút “Thanh toán lại” bên dưới.</p>
+                                    </div>
+                                )}
                                 {orders.length === 0 ? (
                                     <div className="bg-white rounded-3xl py-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center px-4 sm:px-10">
                                         <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-8">
@@ -904,6 +976,7 @@ const ProfilePage = () => {
                                                 cancelled: { label: 'Đã hủy', cls: 'bg-gray-100 text-gray-500' },
                                             };
                                             const st = statusMap[order.status] || { label: order.status, cls: 'bg-gray-100 text-gray-500' };
+                                            const unpaidMessage = canPayOrder(order) ? getUnpaidOrderMessage(order) : '';
                                             return (
                                                 <div key={order.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-all">
                                                     {/* Order Header */}
@@ -914,6 +987,12 @@ const ProfilePage = () => {
                                                         </div>
                                                         <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wide ${st.cls}`}>{st.label}</span>
                                                     </div>
+                                                    {unpaidMessage && (
+                                                        <div className="mx-6 mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-amber-700">
+                                                            <p className="text-sm font-black">Đơn hàng chưa thanh toán</p>
+                                                            <p className="text-xs font-bold mt-1 leading-relaxed">{unpaidMessage}</p>
+                                                        </div>
+                                                    )}
                                                     {/* Items */}
                                                     <div className="px-6 py-4 space-y-3">
                                                         {order.items.map((item, idx) => (
@@ -938,6 +1017,15 @@ const ProfilePage = () => {
                                                             <span className="text-lg font-black text-[#008d71]">{formatPrice(order.totalAmount)}</span>
                                                         </div>
                                                         <div className="flex gap-2">
+                                                            {canPayOrder(order) && (
+                                                                <button
+                                                                    onClick={() => handlePayOrder(order)}
+                                                                    disabled={payingOrderId === order.id}
+                                                                    className="px-4 py-2 text-xs font-black bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all uppercase tracking-wide shadow-sm disabled:opacity-60"
+                                                                >
+                                                                    {payingOrderId === order.id ? 'Đang mở...' : 'Thanh toán'}
+                                                                </button>
+                                                            )}
                                                             {order.status === 'pending' && (
                                                                 <button
                                                                     onClick={() => { if(window.confirm('Hủy đơn hàng này?')) cancelOrder(order.id); }}

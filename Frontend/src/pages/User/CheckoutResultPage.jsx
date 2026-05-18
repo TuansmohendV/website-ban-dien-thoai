@@ -12,48 +12,70 @@ const CheckoutResultPage = () => {
     const [orderId, setOrderId] = useState('');
 
     useEffect(() => {
+        let isMounted = true;
+
+        const inferPaymentMethod = (params, allParams) => {
+            const explicitMethod = params.get('method');
+
+            if (explicitMethod) return explicitMethod;
+            if (allParams.vnp_TxnRef || allParams.vnp_ResponseCode) return 'vnpay';
+            if (allParams.partnerCode || allParams.resultCode !== undefined || allParams.requestId) return 'momo';
+
+            return 'unknown';
+        };
+
         const verifyPayment = async () => {
             try {
                 const params = new URLSearchParams(location.search);
                 const orderIdParam = params.get('orderId');
-                const method = params.get('method') || params.get('vnp_BankCode') ? 'vnpay' : 'unknown'; // infer method if not explicit
-                
-                // Get all params as an object
                 const allParams = Object.fromEntries(params.entries());
+                const method = inferPaymentMethod(params, allParams);
 
                 if (!orderIdParam && !allParams.vnp_TxnRef) {
+                    if (!isMounted) return;
                     setStatus('failed');
                     setMessage('Không tìm thấy thông tin giao dịch.');
                     return;
                 }
 
                 const finalOrderId = orderIdParam || (allParams.vnp_TxnRef ? allParams.vnp_TxnRef.split('_')[0] : null);
+                if (!isMounted) return;
                 setOrderId(finalOrderId);
 
-                // Call backend callback to finalize payment
                 const response = await api.post('/api/payment/callback', {
                     ...allParams,
                     orderId: finalOrderId,
-                    method: params.get('method') || (allParams.vnp_TxnRef ? 'vnpay' : 'unknown'),
+                    method,
                 });
 
-                if (response.data?.payment?.status === 'paid' || response.data?.payment?.status === 'pending') {
+                if (!isMounted) return;
+
+                if (response.data?.payment?.status === 'paid') {
                     setStatus('success');
                     setMessage(response.data?.message || 'Giao dịch thành công!');
+                    localStorage.removeItem('phonesin_checkout_full_state');
+                } else if (response.data?.payment?.status === 'pending') {
+                    setStatus('failed');
+                    setMessage('Giao dịch đang chờ thanh toán. Vui lòng hoàn tất thanh toán trước khi xác nhận.');
                 } else {
                     setStatus('failed');
                     setMessage('Giao dịch thất bại hoặc đã bị hủy.');
                 }
-                
-                refreshOrders();
+
+                await refreshOrders();
             } catch (error) {
+                if (!isMounted) return;
                 setStatus('failed');
                 setMessage(error.response?.data?.message || 'Đã có lỗi xảy ra khi xác minh thanh toán.');
             }
         };
 
         verifyPayment();
-    }, [location, refreshOrders]);
+
+        return () => {
+            isMounted = false;
+        };
+    }, [location.search]);
 
     return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
@@ -105,10 +127,10 @@ const CheckoutResultPage = () => {
                         
                         <div className="space-y-3">
                             <button 
-                                onClick={() => navigate('/checkout')}
+                                onClick={() => navigate('/profile?tab=orders')}
                                 className="block w-full py-4 bg-amber-500 text-white rounded-xl font-bold uppercase hover:bg-amber-600 transition-colors"
                             >
-                                Thử Lại Thanh Toán
+                                Xem Đơn Chưa Thanh Toán
                             </button>
                             <Link 
                                 to="/orders"

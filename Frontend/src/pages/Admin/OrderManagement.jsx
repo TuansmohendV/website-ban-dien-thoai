@@ -409,7 +409,7 @@ const OrderManagement = () => {
                       className="btn-deliver" 
                       onClick={async () => {
                         try {
-                          await api.post(`/api/orders/admin/${selectedOrder.id}/resend-invoice`);
+                          await api.post(`/api/admin/orders/${selectedOrder.id}/resend-invoice`);
                           alert('Đã gửi lại email hóa đơn thành công!');
                         } catch (err) {
                           alert('Gửi email thất bại: ' + (err.response?.data?.message || err.message));

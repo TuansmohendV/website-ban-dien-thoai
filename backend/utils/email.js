@@ -49,6 +49,100 @@ const createTransporter = () => {
   });
 };
 
+const escapePdfText = (value = '') =>
+  String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)');
+
+const createSimplePdf = ({ title, lines = [] }) => {
+  const contentLines = [
+    'BT',
+    '/F1 18 Tf',
+    '50 790 Td',
+    `(${escapePdfText(title)}) Tj`,
+    '/F1 10 Tf',
+    '0 -28 Td',
+    ...lines.flatMap((line) => [
+      `(${escapePdfText(line).slice(0, 105)}) Tj`,
+      '0 -16 Td',
+    ]),
+    'ET',
+  ];
+  const stream = contentLines.join('\n');
+  const objects = [
+    '1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n',
+    '2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n',
+    '3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n',
+    '4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n',
+    `5 0 obj\n<< /Length ${Buffer.byteLength(stream, 'ascii')} >>\nstream\n${stream}\nendstream\nendobj\n`,
+  ];
+
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+
+  for (const object of objects) {
+    offsets.push(Buffer.byteLength(pdf, 'ascii'));
+    pdf += object;
+  }
+
+  const xrefOffset = Buffer.byteLength(pdf, 'ascii');
+  pdf += `xref\n0 ${objects.length + 1}\n`;
+  pdf += '0000000000 65535 f \n';
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+  return Buffer.from(pdf, 'ascii');
+};
+
+const buildInvoicePdfAttachment = (order, websiteUrl) => {
+  const formatPrice = (price) =>
+    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price || 0);
+  const orderId = order._id.toString();
+  const shortId = orderId.slice(-6).toUpperCase();
+  const invoiceUrl = `${websiteUrl}/invoice/${orderId}`;
+  const lines = [
+    `Ma hoa don: #${shortId}`,
+    `Ma don hang: ${orderId}`,
+    `Khach hang: ${order.customerInfo?.fullName || ''}`,
+    `Dien thoai: ${order.customerInfo?.phone || ''}`,
+    `Email: ${order.customerInfo?.email || ''}`,
+    `Dia chi: ${[
+      order.shippingAddress?.street,
+      order.shippingAddress?.ward,
+      order.shippingAddress?.district,
+      order.shippingAddress?.province,
+    ].filter(Boolean).join(', ')}`,
+    `Ngay tao: ${new Date(order.createdAt || Date.now()).toLocaleString('vi-VN')}`,
+    `Phuong thuc thanh toan: ${order.paymentMethod || ''}`,
+    '',
+    'San pham:',
+    ...(order.items || []).map((item, index) =>
+      `${index + 1}. ${item.name} x${item.quantity} - ${formatPrice(item.lineTotal)}`
+    ),
+    '',
+    `Tam tinh: ${formatPrice(order.subtotal || order.total)}`,
+    `Giam gia: ${formatPrice(order.discountTotal || 0)}`,
+    `Phi van chuyen: ${formatPrice(order.shippingFee || 0)}`,
+    `Tong cong: ${formatPrice(order.total || 0)}`,
+    `Xem hoa don dien tu: ${invoiceUrl}`,
+  ];
+
+  return {
+    filename: `phonesin-invoice-${shortId}.pdf`,
+    content: createSimplePdf({
+      title: `PHONESIN INVOICE #${shortId}`,
+      lines,
+    }),
+    contentType: 'application/pdf',
+  };
+};
+
 export const sendResetOtpEmail = async ({ to, otpCode, expiresAt }) => {
   const from = process.env.MAIL_FROM || process.env.SMTP_USER || 'no-reply@phonesin.vn';
   const subject = 'PhoneSin - Mã OTP khôi phục mật khẩu';
@@ -92,6 +186,7 @@ export const sendOrderConfirmationEmail = async ({ to, order, websiteUrl = 'http
   console.log(`[EMAIL] Preparing confirmation email for: ${to}, Order: ${order?._id}`);
   const from = process.env.MAIL_FROM || process.env.SMTP_USER || 'no-reply@phonesin.vn';
   const subject = `PhoneSin - Xác nhận đơn hàng #${order._id.toString().slice(-6).toUpperCase()}`;
+  const pdfAttachment = buildInvoicePdfAttachment(order, websiteUrl);
 
   const formatPrice = (price) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
 
@@ -179,13 +274,32 @@ export const sendOrderConfirmationEmail = async ({ to, order, websiteUrl = 'http
   if (process.env.SENDGRID_API_KEY) {
     console.log(`[EMAIL] Sending via SendGrid...`);
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    await sgMail.send({ to, from, subject, text, html });
+    await sgMail.send({
+      to,
+      from,
+      subject,
+      text,
+      html,
+      attachments: [{
+        filename: pdfAttachment.filename,
+        type: pdfAttachment.contentType,
+        content: pdfAttachment.content.toString('base64'),
+        disposition: 'attachment',
+      }],
+    });
     return { provider: 'sendgrid' };
   }
 
   console.log(`[EMAIL] Sending via SMTP (Transporter)...`);
   const transporter = createTransporter();
-  const info = await transporter.sendMail({ from, to, subject, text, html });
+  const info = await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text,
+    html,
+    attachments: [pdfAttachment],
+  });
   console.log(`[EMAIL] Success: ${info.messageId}`);
   return info;
 };
@@ -324,12 +438,32 @@ export const sendDeliveredInvoiceEmail = async ({ to, order, websiteUrl = 'http:
   if (process.env.SENDGRID_API_KEY) {
     console.log(`[EMAIL] Sending invoice via SendGrid...`);
     sgMail.setApiKey(process.env.SENDGRID_API_KEY);
-    await sgMail.send({ to, from, subject, text, html });
+    const pdfAttachment = buildInvoicePdfAttachment(order, websiteUrl);
+    await sgMail.send({
+      to,
+      from,
+      subject,
+      text,
+      html,
+      attachments: [{
+        filename: pdfAttachment.filename,
+        type: pdfAttachment.contentType,
+        content: pdfAttachment.content.toString('base64'),
+        disposition: 'attachment',
+      }],
+    });
     return { provider: 'sendgrid' };
   }
 
   const transporter = createTransporter();
-  const info = await transporter.sendMail({ from, to, subject, text, html });
+  const info = await transporter.sendMail({
+    from,
+    to,
+    subject,
+    text,
+    html,
+    attachments: [buildInvoicePdfAttachment(order, websiteUrl)],
+  });
   console.log(`[EMAIL] Invoice Success: ${info.messageId}`);
   return info;
 };

@@ -265,8 +265,10 @@ const CartPage = () => {
     }
   };
 
-  const handleApplyCoupon = async () => {
-    if (!couponCode.trim()) {
+  const handleApplyCoupon = async (manualCode = null) => {
+    const codeToApply = typeof manualCode === 'string' ? manualCode : couponCode;
+
+    if (!codeToApply.trim()) {
       setCouponStatus({
         type: 'error',
         message: 'Vui lòng nhập mã giảm giá trước khi áp dụng.',
@@ -278,12 +280,14 @@ const CartPage = () => {
     setCouponStatus(null);
 
     try {
+      const normalizedCode = codeToApply.trim().toUpperCase();
       const response = await api.post('/api/voucher/apply', {
-        code: couponCode.trim().toUpperCase(),
+        code: normalizedCode,
       });
 
       await refreshCart();
-      setAppliedCoupon(response.data?.voucher?.code || couponCode.trim().toUpperCase());
+      setAppliedCoupon(response.data?.voucher?.code || normalizedCode);
+      setCouponCode(response.data?.voucher?.code || normalizedCode);
       setCouponStatus({
         type: 'success',
         message: response.data?.message || 'Áp dụng mã giảm giá thành công.',
@@ -486,12 +490,12 @@ const CartPage = () => {
             <span className="mt-2 text-[15px] font-bold text-gray-900 border-b-2 border-gray-900 pb-0.5">Giỏ hàng</span>
          </div>
 
-         <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-16 items-start">
+         <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_0.9fr] gap-6 lg:gap-16 items-start">
             
             {/* LEFT COLUMN: Cart Items (Sticky) */}
-            <div className="space-y-6 sticky top-10 h-fit self-start z-10">
+            <div className="space-y-6 lg:sticky lg:top-10 h-fit self-start z-10">
                 {cartItems.map((item) => (
-                    <div key={item.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 flex flex-col gap-6 relative">
+                    <div key={item.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-8 flex flex-col gap-6 relative">
                         {/* Remove Button */}
                         {/* Remove Button */}
                         <button 
@@ -502,19 +506,19 @@ const CartPage = () => {
                             <div className="bg-white rounded-full" style={{ width: '10px', height: '2px' }}></div>
                         </button>
 
-                        <div className="flex gap-10">
+                        <div className="flex flex-col sm:flex-row gap-6 lg:gap-10">
                             {/* Left Column: Product Info & Qty */}
-                            <div className="w-[180px] flex flex-col gap-4">
-                                <div className="w-[180px] h-[180px] bg-white flex items-center justify-center">
+                            <div className="w-full sm:w-[180px] flex flex-col gap-4">
+                                <div className="w-full sm:w-[180px] h-[180px] bg-white flex items-center justify-center">
                                     <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
                                 </div>
                                 <div className="space-y-2">
-                                    <h3 className="text-[14px] font-bold text-gray-800 leading-tight">{item.name}</h3>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[#ef3d4e] font-bold text-[16px]">{formatPrice(item.price)}</span>
+                                    <h3 className="text-[14px] font-bold text-gray-800 leading-tight break-words pr-6">{item.name}</h3>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-[#ef3d4e] font-bold text-[16px] whitespace-nowrap">{formatPrice(item.price)}</span>
                                         <span className="text-gray-400 line-through text-[12px] font-medium">{formatPrice(item.oldPrice)}</span>
                                     </div>
-                                    <div className="flex items-center gap-4 mt-2">
+                                    <div className="flex flex-wrap items-center gap-4 mt-2">
                                         <span className="text-[11px] font-bold text-gray-400 uppercase">Số lượng</span>
                                         <div className="flex items-center border border-gray-200 rounded overflow-hidden">
                                             <button onClick={() => updateQuantity(item.id, item.selectedVariant?.id, item.selectedColor?.name, -1)} className="w-8 h-8 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors border-r border-gray-200">-</button>
@@ -532,8 +536,8 @@ const CartPage = () => {
                             </div>
 
                             {/* Right Column: Promos & Color */}
-                            <div className="flex-1 space-y-6">
-                                <div className="space-y-4 pr-8">
+                            <div className="flex-1 min-w-0 space-y-6">
+                                <div className="space-y-4 sm:pr-8">
                                     {item.promos && item.promos.map((promo) => (
                                         <div key={promo.id} className="relative group">
                                             <div className="absolute top-[-10px] left-0 bg-[#f97316] text-white text-[9px] font-black px-1.5 py-0.5 rounded leading-none uppercase">{promo.id}</div>
@@ -554,7 +558,7 @@ const CartPage = () => {
 
                                 <div className="space-y-2">
                                     <span className="text-[12px] font-black text-gray-800 uppercase tracking-tight">Màu sắc</span>
-                                    <button type="button" className="flex items-center gap-2 px-6 py-2 border-2 border-[#008d71] rounded-lg text-[#008d71] font-bold text-[13px] bg-white">
+                                    <button type="button" className="max-w-full flex items-center gap-2 px-4 sm:px-6 py-2 border-2 border-[#008d71] rounded-lg text-[#008d71] font-bold text-[13px] bg-white">
                                         <div className="w-5 h-5 rounded-full border-2 border-[#008d71] flex items-center justify-center bg-[#008d71]">
                                             <Check size={12} className="text-white" strokeWidth={4} />
                                         </div>
@@ -754,38 +758,38 @@ const CartPage = () => {
                         
                         <div className="grid grid-cols-1 gap-3">
                             {/* COD OPTION */}
-                            <button 
-                                type="button"
-                                onClick={() => setCustomerInfo({...customerInfo, paymentMethod: 'COD'})}
-                                className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all group ${customerInfo.paymentMethod === 'COD' ? 'border-[#008d71] bg-[#e5f9e0]/10' : 'border-gray-100 bg-white hover:border-gray-200'}`}
-                            >
-                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${customerInfo.paymentMethod === 'COD' ? 'bg-[#008d71] text-white' : 'bg-gray-50 text-gray-400'}`}>
-                                    <Coins size={24} />
-                                </div>
-                                <div className="flex-1 text-left">
-                                    <p className={`text-[14px] font-black leading-tight ${customerInfo.paymentMethod === 'COD' ? 'text-gray-900' : 'text-gray-600'}`}>Tiền mặt (COD)</p>
-                                    <p className="text-[11px] font-bold text-gray-400">Thanh toán trực tiếp khi nhận hàng</p>
-                                </div>
-                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${customerInfo.paymentMethod === 'COD' ? 'border-[#008d71]' : 'border-gray-200'}`}>
-                                    {customerInfo.paymentMethod === 'COD' && <div className="w-2.5 h-2.5 rounded-full bg-[#008d71]"></div>}
-                                </div>
-                            </button>
+                                <button 
+                                    type="button"
+                                    onClick={() => setCustomerInfo({...customerInfo, paymentMethod: 'COD'})}
+                                    className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all group text-left ${customerInfo.paymentMethod === 'COD' ? 'border-[#008d71] bg-[#e5f9e0]/10' : 'border-gray-100 bg-white hover:border-gray-200'}`}
+                                >
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors shrink-0 ${customerInfo.paymentMethod === 'COD' ? 'bg-[#008d71] text-white' : 'bg-gray-50 text-gray-400'}`}>
+                                        <Coins size={24} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-[14px] font-black leading-tight break-words ${customerInfo.paymentMethod === 'COD' ? 'text-gray-900' : 'text-gray-600'}`}>Tiền mặt (COD)</p>
+                                        <p className="text-[11px] font-bold text-gray-400 leading-snug break-words">Thanh toán trực tiếp khi nhận hàng</p>
+                                    </div>
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${customerInfo.paymentMethod === 'COD' ? 'border-[#008d71]' : 'border-gray-200'}`}>
+                                        {customerInfo.paymentMethod === 'COD' && <div className="w-2.5 h-2.5 rounded-full bg-[#008d71]"></div>}
+                                    </div>
+                                </button>
 
                             {/* BANK TRANSFER OPTION */}
                             <div className={`rounded-2xl border-2 transition-all overflow-hidden ${customerInfo.paymentMethod === 'BANK_TRANSFER' ? 'border-[#008d71] bg-[#e5f9e0]/10' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
                                 <button 
                                     type="button"
                                     onClick={() => setCustomerInfo({...customerInfo, paymentMethod: 'BANK_TRANSFER'})}
-                                    className="w-full flex items-center gap-4 p-4"
+                                    className="w-full flex items-center gap-4 p-4 text-left"
                                 >
-                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${customerInfo.paymentMethod === 'BANK_TRANSFER' ? 'bg-[#008d71] text-white' : 'bg-gray-50 text-gray-400'}`}>
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors shrink-0 ${customerInfo.paymentMethod === 'BANK_TRANSFER' ? 'bg-[#008d71] text-white' : 'bg-gray-50 text-gray-400'}`}>
                                         <CreditCard size={24} />
                                     </div>
-                                    <div className="flex-1 text-left">
-                                        <p className={`text-[14px] font-black leading-tight ${customerInfo.paymentMethod === 'BANK_TRANSFER' ? 'text-gray-900' : 'text-gray-600'}`}>Chuyển khoản Ngân hàng</p>
-                                        <p className="text-[11px] font-bold text-gray-400">Liên kết ngân hàng thanh toán nhanh</p>
+                                    <div className="flex-1 min-w-0">
+                                        <p className={`text-[14px] font-black leading-tight break-words ${customerInfo.paymentMethod === 'BANK_TRANSFER' ? 'text-gray-900' : 'text-gray-600'}`}>Chuyển khoản Ngân hàng</p>
+                                        <p className="text-[11px] font-bold text-gray-400 leading-snug break-words">Liên kết ngân hàng thanh toán nhanh</p>
                                     </div>
-                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${customerInfo.paymentMethod === 'BANK_TRANSFER' ? 'border-[#008d71]' : 'border-gray-200'}`}>
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all shrink-0 ${customerInfo.paymentMethod === 'BANK_TRANSFER' ? 'border-[#008d71]' : 'border-gray-200'}`}>
                                         {customerInfo.paymentMethod === 'BANK_TRANSFER' && <div className="w-2.5 h-2.5 rounded-full bg-[#008d71]"></div>}
                                     </div>
                                 </button>
@@ -825,16 +829,16 @@ const CartPage = () => {
                                          </div>
 
                                          <div className="mt-6 w-full space-y-3">
-                                            <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
-                                               <div className="flex justify-between items-center mb-1.5">
-                                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Chủ tài khoản:</span>
-                                                  <span className="text-[13px] font-black text-gray-900">MAI THANH TUAN</span>
-                                               </div>
-                                               <div className="flex justify-between items-center">
-                                                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Số tài khoản:</span>
-                                                  <span className="text-[14px] font-black text-[#008d71] tracking-wider">070131723553</span>
-                                               </div>
-                                            </div>
+                                             <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                                                <div className="flex flex-wrap justify-between items-center gap-2 mb-1.5">
+                                                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-normal">Chủ tài khoản:</span>
+                                                   <span className="text-[13px] font-black text-gray-900 break-words text-right">MAI THANH TUAN</span>
+                                                </div>
+                                                <div className="flex flex-wrap justify-between items-center gap-2">
+                                                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-normal">Số tài khoản:</span>
+                                                   <span className="text-[14px] font-black text-[#008d71] tracking-normal break-all text-right">070131723553</span>
+                                                </div>
+                                             </div>
                                             <p className="text-[10px] text-center text-gray-400 font-medium italic">Vui lòng nhập đúng nội dung chuyển khoản là Mã đơn hàng của bạn.</p>
                                          </div>
                                        </div>
@@ -864,7 +868,7 @@ const CartPage = () => {
                                     type="button"
                                     onClick={handleRemoveCoupon}
                                     disabled={isApplyingCoupon}
-                                    className="bg-red-100 text-red-700 px-8 rounded-xl font-bold text-[13px] uppercase tracking-widest hover:bg-red-200 transition-all disabled:opacity-50"
+                                className="min-h-[52px] bg-red-100 text-red-700 px-5 sm:px-8 py-2 rounded-xl font-bold text-[13px] uppercase tracking-normal hover:bg-red-200 transition-all disabled:opacity-50 whitespace-nowrap"
                                 >
                                     {isApplyingCoupon ? '...' : 'Gỡ mã'}
                                 </button>
@@ -873,7 +877,7 @@ const CartPage = () => {
                                     type="button"
                                     onClick={handleApplyCoupon}
                                     disabled={isApplyingCoupon || !couponCode}
-                                    className="bg-[#444] text-white px-8 rounded-xl font-bold text-[13px] uppercase tracking-widest hover:bg-black transition-all disabled:opacity-50"
+                                className="min-h-[52px] bg-[#444] text-white px-5 sm:px-8 py-2 rounded-xl font-bold text-[13px] uppercase tracking-normal hover:bg-black transition-all disabled:opacity-50 whitespace-nowrap"
                                 >
                                     {isApplyingCoupon ? '...' : 'Sử dụng'}
                                 </button>
@@ -948,7 +952,7 @@ const CartPage = () => {
                         <button 
                             type="button"
                             onClick={handleSubmitOrder}
-                            className="w-fit px-16 bg-gradient-to-r from-[#006e58] to-[#008d71] text-white h-[64px] rounded-2xl flex items-center justify-center gap-2 font-black text-[18px] uppercase tracking-[0.1em] shadow-xl shadow-[#008d71]/20 hover:scale-[1.02] transition-all active:scale-95"
+                            className="w-full sm:w-fit min-h-[64px] px-8 sm:px-16 py-3 bg-gradient-to-r from-[#006e58] to-[#008d71] text-white rounded-2xl flex items-center justify-center gap-2 font-black text-[15px] sm:text-[18px] uppercase tracking-normal sm:tracking-[0.1em] text-center leading-tight shadow-xl shadow-[#008d71]/20 hover:scale-[1.02] transition-all active:scale-95"
                         >
                             XÁC NHẬN VÀ ĐẶT HÀNG
                         </button>
