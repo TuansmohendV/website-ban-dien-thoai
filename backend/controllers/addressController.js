@@ -59,7 +59,7 @@ export const createAddress = asyncHandler(async (req, res) => {
 });
 
 export const getAddresses = asyncHandler(async (req, res) => {
-  const addresses = await Address.find({ user: req.user._id }).sort({
+  const addresses = await Address.find({ user: req.user._id, isActive: true }).sort({
     isDefault: -1,
     updatedAt: -1,
   });
@@ -123,10 +123,12 @@ export const deleteAddress = asyncHandler(async (req, res) => {
   }
 
   const wasDefault = address.isDefault;
-  await address.deleteOne();
+  address.isActive = false;
+  address.isDefault = false;
+  await address.save();
 
   if (wasDefault) {
-    const fallbackAddress = await Address.findOne({ user: req.user._id }).sort({
+    const fallbackAddress = await Address.findOne({ user: req.user._id, isActive: true }).sort({
       updatedAt: -1,
     });
 

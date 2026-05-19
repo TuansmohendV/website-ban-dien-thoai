@@ -16,6 +16,7 @@ import {
   Package,
   Calendar
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { useOrders } from '../../context/OrdersContext';
 
 const OrderManagement = () => {
@@ -89,6 +90,31 @@ const OrderManagement = () => {
     }
   };
 
+  const exportToExcel = () => {
+    if (orders.length === 0) {
+      alert('Không có dữ liệu để xuất!');
+      return;
+    }
+
+    const exportData = orders.map(o => ({
+      'Mã đơn hàng': o.id,
+      'Ngày đặt': formatDateTime(o),
+      'Tên khách hàng': o.customerInfo?.name || 'Khách vãng lai',
+      'Số điện thoại': o.customerInfo?.phone || '',
+      'Địa chỉ': o.customerInfo?.address || '',
+      'Tổng sản phẩm': o.items?.reduce((acc, item) => acc + item.quantity, 0) || 0,
+      'Tổng tiền': o.total || 0,
+      'Trạng thái': getStatusInfo(o.status).label,
+      'Phương thức thanh toán': o.paymentMethod || 'COD'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Đơn hàng');
+    
+    XLSX.writeFile(workbook, 'Danh_sach_don_hang_PhoneSin.xlsx');
+  };
+
   return (
     <div className="management-container">
       <div className="header-actions">
@@ -97,7 +123,9 @@ const OrderManagement = () => {
           <p className="page-subtitle">Theo dõi trạng thái và xử lý đơn đặt hàng từ khách hàng.</p>
         </div>
         <div className="btn-group">
-          <button className="btn-outline"><Download size={18} /> Xuất báo cáo</button>
+          <button className="btn-outline" onClick={exportToExcel} style={{ backgroundColor: '#10b981', color: 'white', borderColor: '#10b981' }}>
+            <Download size={18} /> Xuất báo cáo
+          </button>
         </div>
       </div>
 
@@ -236,6 +264,16 @@ const OrderManagement = () => {
                              Hoàn tất
                           </button>
                         )}
+                        <a 
+                           href={`/invoice/${order.id}`}
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           style={{ padding: '8px 12px', background: '#fff', color: '#64748b', border: '1px solid #e2e8f0', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem', transition: 'all 0.2s', display: 'flex', alignItems: 'center', gap: '5px' }}
+                           onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1e293b'; e.currentTarget.style.color = '#1e293b'; }}
+                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.color = '#64748b'; }}
+                        >
+                           <Download size={14} /> HĐ
+                        </a>
                         <button 
                            onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); }}
                            style={{ padding: '8px 12px', background: '#f8fafc', color: '#2563eb', border: '1px solid #e2e8f0', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem', transition: 'all 0.2s' }}
@@ -262,27 +300,60 @@ const OrderManagement = () => {
               alignItems: 'center', 
               padding: '15px 20px', 
               borderTop: '1px solid #f1f5f9',
-              background: '#f8fafc',
+              background: 'white',
               marginTop: 'auto'
             }}>
-              <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
+              <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
                 Hiển thị {filteredOrders.length > 0 ? (currentPage - 1) * ordersPerPage + 1 : 0} - {Math.min(currentPage * ordersPerPage, filteredOrders.length)} trong {filteredOrders.length} đơn
               </span>
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
                 <button 
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  style={{ padding: '6px 12px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f1f5f9' : 'white', borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: currentPage === 1 ? '#94a3b8' : '#1e293b' }}
+                  style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f8fafc' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
                 >
                   Trước
                 </button>
-                <span style={{ display: 'flex', alignItems: 'center', padding: '0 10px', fontSize: '0.9rem', fontWeight: '600', color: '#1e293b' }}>
-                  Trang {currentPage} / {Math.max(1, totalPages)}
-                </span>
+                
+                {/* Luôn hiển thị ít nhất 10 trang đầu tiên */}
+                {(() => {
+                  const pages = [];
+                  const minPagesToShow = 10;
+                  let start = 1;
+                  let end = Math.max(minPagesToShow, totalPages);
+                  
+                  if (totalPages > minPagesToShow && currentPage > 6) {
+                    start = Math.max(1, currentPage - 5);
+                    end = Math.min(totalPages, start + 9);
+                    if (end - start < 9) start = Math.max(1, end - 9);
+                  } else if (totalPages > minPagesToShow) {
+                    end = 10;
+                  }
+
+                  for (let i = start; i <= end; i++) {
+                    pages.push(
+                      <button
+                        key={i}
+                        onClick={() => setCurrentPage(i)}
+                        style={{ 
+                          minWidth: '40px', height: '40px', borderRadius: '8px', border: '1px solid',
+                          borderColor: currentPage === i ? '#2563eb' : '#e2e8f0',
+                          background: currentPage === i ? '#2563eb' : 'white',
+                          color: currentPage === i ? 'white' : '#64748b',
+                          fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                        }}
+                      >
+                        {i}
+                      </button>
+                    );
+                  }
+                  return pages;
+                })()}
+
                 <button 
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage >= totalPages}
-                  style={{ padding: '6px 12px', border: '1px solid #e2e8f0', background: currentPage >= totalPages ? '#f1f5f9' : 'white', borderRadius: '6px', cursor: currentPage >= totalPages ? 'not-allowed' : 'pointer', color: currentPage >= totalPages ? '#94a3b8' : '#1e293b' }}
+                  onClick={() => setCurrentPage(p => Math.min(Math.max(10, totalPages), p + 1))}
+                  disabled={currentPage >= Math.max(10, totalPages)}
+                  style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage >= Math.max(10, totalPages) ? '#f8fafc' : 'white', cursor: currentPage >= Math.max(10, totalPages) ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
                 >
                   Sau
                 </button>
@@ -331,6 +402,22 @@ const OrderManagement = () => {
                   {(selectedOrder.status === 'pending' || selectedOrder.status === 'processing') && (
                     <button className="btn-cancel" onClick={() => { cancelOrder(selectedOrder.id); setSelectedOrder(null); }} style={{ background: '#fef2f2', color: '#ef4444', border: '1px solid #fee2e2' }}>
                       <XCircle size={18} style={{ marginRight: '5px' }} /> Hủy đơn hàng này
+                    </button>
+                  )}
+                  {selectedOrder.customerInfo?.email && (
+                    <button 
+                      className="btn-deliver" 
+                      onClick={async () => {
+                        try {
+                          await api.post(`/api/admin/orders/${selectedOrder.id}/resend-invoice`);
+                          alert('Đã gửi lại email hóa đơn thành công!');
+                        } catch (err) {
+                          alert('Gửi email thất bại: ' + (err.response?.data?.message || err.message));
+                        }
+                      }} 
+                      style={{ background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0' }}
+                    >
+                      <Download size={18} style={{ marginRight: '5px' }} /> Gửi lại Email HĐ
                     </button>
                   )}
                 </div>

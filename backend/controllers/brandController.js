@@ -34,7 +34,7 @@ export const getAdminBrands = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search } = req.query;
   const skip = (page - 1) * limit;
 
-  const query = {};
+  const query = { isDeleted: { $ne: true } };
   if (search) {
     query.name = { $regex: search, $options: 'i' };
   }
@@ -102,15 +102,20 @@ export const updateAdminBrand = asyncHandler(async (req, res, next) => {
 
 // Admin: Delete brand
 export const deleteAdminBrand = asyncHandler(async (req, res, next) => {
-  const brand = await Brand.findByIdAndDelete(req.params.id);
+  const brand = await Brand.findById(req.params.id);
 
   if (!brand) {
     return next(new AppError('Không tìm thấy thương hiệu', 404));
   }
 
+  brand.isActive = false;
+  brand.isDeleted = true;
+  brand.deletedAt = new Date();
+  await brand.save();
+
   res.json({
     status: 'success',
-    message: 'Xóa thương hiệu thành công',
+    message: 'Chuyển thương hiệu vào trạng thái đã tắt (xoá mềm) thành công',
   });
 });
 
@@ -119,12 +124,12 @@ export const getBrands = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
   const skip = (page - 1) * limit;
 
-  const brands = await Brand.find({ isActive: true })
+  const brands = await Brand.find({ isActive: true, isDeleted: { $ne: true } })
     .limit(limit * 1)
     .skip(skip)
     .sort({ displayOrder: 1, createdAt: -1 });
 
-  const total = await Brand.countDocuments({ isActive: true });
+  const total = await Brand.countDocuments({ isActive: true, isDeleted: { $ne: true } });
 
   res.json({
     status: 'success',
@@ -139,7 +144,7 @@ export const getBrands = asyncHandler(async (req, res) => {
 
 // Public: Get brand detail
 export const getBrandDetail = asyncHandler(async (req, res, next) => {
-  const brand = await Brand.findOne({ _id: req.params.id, isActive: true });
+  const brand = await Brand.findOne({ _id: req.params.id, isActive: true, isDeleted: { $ne: true } });
 
   if (!brand) {
     return next(new AppError('Không tìm thấy thương hiệu', 404));

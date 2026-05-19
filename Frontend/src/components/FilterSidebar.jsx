@@ -127,7 +127,7 @@ const categoryConfigs = {
       '10 đến 15 triệu', '15 đến 20 triệu', '20 đến 25 triệu',
       '25 đến 30 triệu', '30 đến 50 triệu', '50 đến 85 triệu', 'Trên 85 triệu'
     ],
-    sections: ['network', 'rom', 'nfc', 'refreshRate', 'battery', 'screenSize']
+    sections: ['network', 'ram', 'rom', 'nfc', 'refreshRate', 'battery', 'screenSize']
   },
   'laptop': {
     brands: laptopBrands,
@@ -291,12 +291,20 @@ const categoryConfigs = {
       '1 đến 2 triệu'
     ],
     sections: []
+  },
+  'search': {
+    brands: phoneBrands,
+    priceRanges: [
+      'Dưới 1 triệu', '1 đến 3 triệu', '3 đến 5 triệu', '5 đến 10 triệu',
+      '10 đến 20 triệu', '20 đến 30 triệu', 'Trên 30 triệu'
+    ],
+    sections: ['category', 'availability']
   }
 };
 
-const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSingleFilter }) => {
+const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSingleFilter, counts = {} }) => {
   const [expandedSections, setExpandedSections] = React.useState({
-    brand: true, price: true, availability: true, features: true,
+    category: true, brand: true, price: true, availability: true, features: true,
     screenSize: true, gpu: true, cpu: true, ram: true, storage: true, refreshRate: true,
     componentType: true,
     // phone fields
@@ -322,6 +330,11 @@ const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSin
 
   const isActive = (key, value) => filters[key] === value;
 
+  const getDisplayCount = (key, value) => {
+    if (!counts || !counts[key]) return 0;
+    return counts[key][value] || 0;
+  };
+
   const FilterHeader = ({ title, section, isExpanded }) => (
     <div
       className="flex justify-between items-center py-4 cursor-pointer group select-none"
@@ -338,20 +351,24 @@ const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSin
 
   const renderFilterList = (key, options) => (
     <div className="pb-6 space-y-2.5">
-      {options.map((opt) => (
-        <label key={opt} className="flex items-center justify-between cursor-pointer group">
-          <div className="flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={isActive(key, opt)}
-              onChange={() => onSetSingleFilter(key, opt)}
-              className="w-4.5 h-4.5 accent-[#008d71] border-gray-300 rounded"
-            />
-            <span className={`text-[14px] font-medium transition-colors ${isActive(key, opt) ? 'text-[#008d71] font-bold' : 'text-gray-600'}`}>{opt}</span>
-          </div>
-          <span className="text-[12px] text-gray-300 font-medium tracking-tight">[{Math.floor(Math.random() * 90) + 1}]</span>
-        </label>
-      ))}
+      {options.map((opt) => {
+        const count = getDisplayCount(key, opt);
+        const active = isActive(key, opt);
+        return (
+          <label key={opt} className={`flex items-center justify-between cursor-pointer group transition-all ${count === 0 && !active ? 'opacity-40' : 'opacity-100'}`}>
+            <div className="flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={active}
+                onChange={() => onToggleFilter(key, opt)}
+                className="w-4.5 h-4.5 accent-[#008d71] border-gray-300 rounded cursor-pointer"
+              />
+              <span className={`text-[14px] font-medium transition-colors ${active ? 'text-[#008d71] font-bold' : 'text-gray-600 group-hover:text-[#008d71]'}`}>{opt}</span>
+            </div>
+            <span className="text-[12px] text-gray-300 font-medium tracking-tight">[{count}]</span>
+          </label>
+        );
+      })}
     </div>
   );
 
@@ -363,6 +380,36 @@ const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSin
       </button>
 
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 divide-y divide-gray-100">
+
+        {/* Loại sản phẩm */}
+        <div>
+          <FilterHeader title="Loại sản phẩm" section="category" isExpanded={expandedSections.category} />
+          {expandedSections.category && (
+            <div className="pb-6 space-y-2">
+              {[
+                { name: 'Điện thoại', slug: 'dien-thoai' },
+                { name: 'Laptop', slug: 'laptop' },
+                { name: 'Tablet', slug: 'tablet' },
+                { name: 'Đồng hồ', slug: 'dong-ho' },
+                { name: 'Âm thanh', slug: 'am-thanh' },
+                { name: 'Smart Home', slug: 'smart-home' },
+                { name: 'Phụ kiện', slug: 'phu-kien' }
+              ].map((cat) => (
+                <label key={cat.slug} className="flex items-center gap-3 cursor-pointer group py-1">
+                  <input
+                    type="checkbox"
+                    checked={filters.category === cat.slug || category === cat.slug}
+                    onChange={() => onSetSingleFilter('category', cat.slug)}
+                    className="w-4.5 h-4.5 accent-[#008d71] border-gray-300 rounded cursor-pointer"
+                  />
+                  <span className={`text-[14px] font-medium transition-colors ${filters.category === cat.slug || category === cat.slug ? 'text-[#008d71] font-bold' : 'text-gray-600 group-hover:text-[#008d71]'}`}>
+                    {cat.name}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
 
         {/* Hãng */}
         {currentBrands && currentBrands.length > 0 && (
@@ -376,7 +423,7 @@ const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSin
                     return displayedBrands.map((m) => (
                       <div
                         key={m.name}
-                        onClick={() => onSetSingleFilter('brand', m.name)}
+                        onClick={() => onToggleFilter('brand', m.name)}
                         className={`flex items-center justify-center border rounded-lg h-[54px] transition-all cursor-pointer group p-1 ${isActive('brand', m.name) ? 'border-[#008d71] bg-white relative' : 'border-gray-300 hover:border-[#008d71]/60'
                           }`}
                       >
@@ -414,20 +461,10 @@ const FilterSidebar = ({ category, filters, setFilters, onToggleFilter, onSetSin
         <div>
           <FilterHeader title="Mức giá" section="price" isExpanded={expandedSections.price} />
           {expandedSections.price && (
-            <div className="pb-6">
+          <div className="pb-6">
               <div className="flex flex-col gap-2 mt-4">
                 {(() => {
-                  const allRanges = [
-                    'Dưới 5 triệu', 'Dưới 7 triệu', '1 đến 2 triệu', '1 đến 3 triệu',
-                    'Dưới 1 triệu', 'Từ 0-200k', 'Từ 200-500k', 'Từ 500-1000k',
-                    '2 đến 3 triệu', '3 đến 4 triệu', '3 đến 5 triệu', '4 đến 5 triệu',
-                    '5 đến 10 triệu', '5 đến 6 triệu', '5 đến 7 triệu', '5 đến 8 triệu',
-                    'Trên 5 triệu', '6 đến 8 triệu', '7 đến 10 triệu', '7 đến 9 triệu',
-                    '8 đến 10 triệu', '9 đến 12 triệu', '10 đến 12 triệu', '10 đến 15 triệu',
-                    '12 đến 15 triệu', '15 đến 20 triệu', 'Trên 15 triệu', '20 đến 25 triệu',
-                    '20 đến 30 triệu', 'Trên 20 triệu', '25 đến 30 triệu', '30 đến 40 triệu',
-                    '30 đến 50 triệu', 'Trên 30 triệu', '40 đến 100 triệu'
-                  ];
+                  const allRanges = currentConfig.priceRanges || [];
                   const displayedRanges = showAllPrices ? allRanges : allRanges.slice(0, 5);
 
                   return (

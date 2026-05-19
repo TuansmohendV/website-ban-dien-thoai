@@ -3,7 +3,7 @@ import BuyNowModal from './BuyNowModal';
 import api from '../lib/api';
 import { inflateProducts, normalizeProduct } from '../lib/products';
 
-const RecommendedProducts = () => {
+const RecommendedProducts = ({ category = '' }) => {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [products, setProducts] = useState([]);
 
@@ -12,9 +12,12 @@ const RecommendedProducts = () => {
 
     const loadProducts = async () => {
       try {
-        const response = await api.get('/api/products', {
-          params: { limit: 50 },
-        });
+        const params = { limit: 20 };
+        if (category && category !== 'Tất cả') {
+          params.category = category;
+        }
+
+        const response = await api.get('/api/products', { params });
 
         if (!ignore) {
           setProducts((response.data?.data || []).map(normalizeProduct));
@@ -31,7 +34,7 @@ const RecommendedProducts = () => {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [category]);
 
   const displayItems = useMemo(
     () => inflateProducts(products, 12, 'recommended'),
@@ -47,6 +50,14 @@ const RecommendedProducts = () => {
       .replace('₫', 'đ');
   };
 
+  const getTitle = () => {
+    if (category === 'laptop') return 'Bạn đã tìm được laptop phù hợp chưa?';
+    if (category === 'tablet') return 'Bạn đã tìm được máy tính bảng phù hợp chưa?';
+    if (category === 'dong-ho') return 'Bạn đã tìm được đồng hồ phù hợp chưa?';
+    if (category === 'man-hinh') return 'Bạn đã tìm được màn hình phù hợp chưa?';
+    return 'Bạn đã tìm được sản phẩm phù hợp chưa?';
+  };
+
   if (displayItems.length === 0) {
     return null;
   }
@@ -54,7 +65,7 @@ const RecommendedProducts = () => {
   return (
     <div className="mt-8 mb-12 overflow-hidden px-4">
       <h2 className="text-[22px] font-bold text-gray-900 mb-8 px-2">
-        Bạn đã tìm được điện thoại phù hợp chưa?
+        {getTitle()}
       </h2>
 
       <div className="relative group overflow-hidden">

@@ -1,7 +1,10 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+dotenv.config();
 import cors from 'cors';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import addressRoutes from './routes/addressRoutes.js';
@@ -30,14 +33,44 @@ import adminUserRoutes from './routes/adminUserRoutes.js';
 import adminProductRoutes from './routes/adminProductRoutes.js';
 import adminOrderRoutes from './routes/adminOrderRoutes.js';
 import adminReviewRoutes from './routes/adminReviewRoutes.js';
+import bannerRoutes from './routes/bannerRoutes.js';
+import referralRoutes from './routes/referralRoutes.js';
+import tradeInRoutes from './routes/tradeInRoutes.js';
+import { startWeeklyVoucherJob } from './jobs/weeklyVoucherJob.js';
+import Order from './models/Order.js';
+
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
 
-dotenv.config();
-
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: '*', // Adjust this in production
+    methods: ['GET', 'POST']
+  }
+});
 
 app.use(cors());
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: process.env.REQUEST_BODY_LIMIT || '10mb' }));
+app.use(express.urlencoded({ limit: process.env.REQUEST_BODY_LIMIT || '10mb', extended: true }));
+
+// Attach io to req
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
+io.on('connection', (socket) => {
+  console.log('Client connected:', socket.id);
+  
+  socket.on('join_product', (productId) => {
+    socket.join(`product_${productId}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
+  });
+});
 
 app.get('/api/health', (req, res) => {
   res.json({
@@ -65,6 +98,7 @@ app.get('/api/health', (req, res) => {
       'broadcasts',
       'icons',
       'upload',
+      'socket-io'
     ],
   });
 });
@@ -107,6 +141,7 @@ app.use('/api/user/search-history', searchHistoryRoutes);
 // ─── User profile & admin user management ────────
 app.use('/api/user', userRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/referral', referralRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 
 // ─── Address ─────────────────────────────────────
@@ -126,6 +161,7 @@ app.use('/api/admin/brands', brandRoutes);
 
 // ─── Reviews ─────────────────────────────────────
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/trade-in', tradeInRoutes);
 app.use('/api/admin/reviews', adminReviewRoutes);
 
 // ─── Cart ────────────────────────────────────────
@@ -134,6 +170,10 @@ app.use('/api/cart', cartRoutes);
 // ─── Vouchers ────────────────────────────────────
 app.use('/api/voucher', voucherRoutes);
 app.use('/api/admin/vouchers', adminVoucherRoutes);
+
+// ─── Banners ─────────────────────────────────────
+app.use('/api/banners', bannerRoutes);
+
 
 // ─── Orders ──────────────────────────────────────
 app.use('/api/orders', orderRoutes);
@@ -176,6 +216,10 @@ app.use('/api/admin/notifications/broadcasts', broadcastRoutes);
 app.use('/api/icons', iconRoutes);
 app.use('/api/admin/icons', iconRoutes);
 
+import path from 'path';
+const __dirname = path.resolve();
+app.use('/uploads', express.static(path.join(__dirname, '/public/uploads')));
+
 app.use(notFound);
 app.use(errorHandler);
 
@@ -192,7 +236,13 @@ const startServer = async () => {
 
   console.log('MongoDB connected.');
 
-  app.listen(PORT, () => {
+  await Order.createIndexes();
+  console.log('Order indexes ensured.');
+
+  // Khởi chạy job phát voucher tự động hàng tuần
+  startWeeklyVoucherJob();
+
+  httpServer.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
   });
 };
@@ -202,4 +252,6 @@ startServer().catch((error) => {
   process.exit(1);
 });
 
+export { io };
 export default app;
+

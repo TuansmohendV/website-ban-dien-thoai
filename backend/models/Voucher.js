@@ -77,6 +77,29 @@ const voucherSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: Date,
+    isHuntedOnly: {
+      type: Boolean,
+      default: false,
+    },
+    missionTask: {
+      type: String,
+      default: '', // Description of the task/mission
+    },
+    huntLimit: {
+      type: Number,
+      default: 0, // 0 = unlimited, >0 = limited quantity
+      min: 0,
+    },
+    huntedCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
   },
   {
     timestamps: true,

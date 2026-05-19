@@ -39,18 +39,33 @@ const userSchema = new mongoose.Schema(
     dateOfBirth: Date,
     authProvider: {
       type: String,
-      enum: ['local', 'google', 'facebook'],
+      enum: ['local', 'google', 'facebook', 'firebase', 'email_otp'],
       default: 'local',
+    },
+    firebaseUid: {
+      type: String,
+      sparse: true,
+      unique: true,
     },
     role: {
       type: String,
-      enum: ['customer', 'staff', 'admin'],
+      enum: ['customer', 'staff', 'manager', 'admin'],
       default: 'customer',
     },
     isActive: {
       type: Boolean,
       default: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: Date,
+    // Persistent Checkout Information
+    province: { type: String, default: '' },
+    district: { type: String, default: '' },
+    ward: { type: String, default: '' },
+    address: { type: String, default: '' },
     lastLoginAt: Date,
     resetPasswordToken: {
       type: String,
@@ -59,6 +74,37 @@ const userSchema = new mongoose.Schema(
     resetPasswordExpiresAt: {
       type: Date,
       select: false,
+    },
+    linkedAccounts: {
+      banks: [{
+        bankId: String,
+        accountNumber: String,
+        accountName: String,
+        idNumber: String,
+        phone: String,
+        issueDate: String,
+        branch: String,
+        createdAt: { type: Date, default: Date.now }
+      }],
+      wallets: [{
+        walletId: String,
+        phone: String,
+        accountName: String,
+        createdAt: { type: Date, default: Date.now }
+      }]
+    },
+    referralCode: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+    referredBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    referralPoints: {
+      type: Number,
+      default: 0,
     },
   },
   {
@@ -74,7 +120,11 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-userSchema.pre('save', async function savePassword() {
+userSchema.pre('save', async function () {
+  if (this.isNew && !this.referralCode) {
+    this.referralCode = 'PHONESIN' + Math.random().toString(36).substring(2, 8).toUpperCase();
+  }
+  
   if (!this.isModified('password')) {
     return;
   }
