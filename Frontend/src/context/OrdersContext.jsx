@@ -6,6 +6,9 @@ import { useCart } from './CartContext';
 
 const OrdersContext = createContext();
 
+const canAccessAdminOrders = (user) =>
+    ['admin', 'manager', 'staff'].includes(user?.role) || user?.isAdmin === true;
+
 export const OrdersProvider = ({ children }) => {
     const { user } = useAuth();
     const { refreshCart } = useCart();
@@ -31,7 +34,8 @@ export const OrdersProvider = ({ children }) => {
         try {
             if (user?.id) {
                 const response = await api.get(
-                    user.role === 'admin' || user.isAdmin ? '/api/admin/orders' : '/api/orders/user'
+                    canAccessAdminOrders(user) ? '/api/admin/orders' : '/api/orders/user',
+                    canAccessAdminOrders(user) ? { params: { page: 1, limit: 500 } } : undefined
                 );
                 const nextOrders = Array.isArray(response.data?.data)
                     ? response.data.data.map(normalizeOrder)
@@ -113,7 +117,7 @@ export const OrdersProvider = ({ children }) => {
     };
 
     const cancelOrder = async (orderId, reason) => {
-        if (user?.role === 'admin' || user?.isAdmin) {
+        if (canAccessAdminOrders(user)) {
             return updateOrderStatus(orderId, 'cancelled');
         }
 
@@ -132,6 +136,10 @@ export const OrdersProvider = ({ children }) => {
     };
 
     const markDelivered = (orderId) => {
+        if (canAccessAdminOrders(user)) {
+            return updateOrderStatus(orderId, 'delivered');
+        }
+
         startTransition(() => {
             setOrders((prevOrders) =>
                 prevOrders.map((order) =>
@@ -144,7 +152,7 @@ export const OrdersProvider = ({ children }) => {
     };
 
     const updateOrderStatus = async (orderId, newStatus) => {
-        if (user?.role === 'admin' || user?.isAdmin) {
+        if (canAccessAdminOrders(user)) {
             try {
                 const response = await api.put(`/api/admin/orders/${orderId}/status`, {
                     status: newStatus,

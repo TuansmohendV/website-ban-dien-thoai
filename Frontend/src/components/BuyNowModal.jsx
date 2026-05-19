@@ -14,6 +14,15 @@ const getMongoObjectId = (value) => {
 };
 
 const PROFILE_ADDRESS_ID = 'profile-address';
+const OUT_OF_STOCK_MESSAGE = 'Hết Hàng';
+
+const isStockErrorMessage = (message = '') =>
+  /hết hàng|hết chỗ|tồn kho|không đủ hàng/i.test(String(message));
+
+const getOrderErrorMessage = (error) => {
+  const message = error?.message || 'Không thể tạo đơn hàng lúc này.';
+  return isStockErrorMessage(message) ? OUT_OF_STOCK_MESSAGE : message;
+};
 
 const buildAddressLine = (address = {}) =>
   [address.street, address.ward, address.district, address.province]
@@ -84,22 +93,35 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
   const selectedVariant = React.useMemo(() => {
     if (!product?.variants?.length) return null;
 
+    const variants = product.variants;
     const selectedColorName = selectedColor?.name || selectedColor?.color || '';
     const initialStorage = initialVariant?.storage || '';
 
     return (
-      product.variants.find(
+      variants.find(
         (variant) => variant.color === selectedColorName && variant.storage === initialStorage
       ) ||
-      product.variants.find((variant) => variant.id === initialVariant?.id) ||
-      product.variants.find((variant) => !variant.color) ||
-      product.variants[0]
+      variants.find((variant) => variant.id === initialVariant?.id) ||
+      variants.find((variant) => selectedColorName && variant.color === selectedColorName && Number(variant.stock || 0) > 0) ||
+      variants.find((variant) => initialStorage && variant.storage === initialStorage && Number(variant.stock || 0) > 0) ||
+      variants.find((variant) => Number(variant.stock || 0) > 0) ||
+      variants.find((variant) => !variant.color) ||
+      variants[0]
     );
   }, [product?.variants, selectedColor, initialVariant]);
 
-  const availableStock = Number(
-    selectedVariant?.stock ?? product?.countInStock ?? product?.totalStock ?? 0
+  const availableStock = Number(product?.variants?.length
+    ? selectedVariant?.stock ?? 0
+    : product?.countInStock ?? product?.totalStock ?? 0
   );
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setQuantity((currentQuantity) => {
+      if (availableStock <= 0) return 1;
+      return Math.min(Math.max(currentQuantity, 1), availableStock);
+    });
+  }, [availableStock, isOpen]);
 
   useEffect(() => {
     if (isOpen && product) {
@@ -263,7 +285,7 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
         type: 'error',
         message: availableStock > 0
           ? `Chỉ còn ${availableStock} sản phẩm. Vui lòng giảm số lượng hoặc chọn mẫu khác.`
-          : 'Sản phẩm vừa hết chỗ/tồn kho. Vui lòng chọn sản phẩm khác.',
+          : OUT_OF_STOCK_MESSAGE,
       });
       return;
     }
@@ -352,7 +374,7 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
 
       setIsSuccess(order.id);
     } catch (error) {
-      setCouponStatus({ type: 'error', message: error.message });
+      setCouponStatus({ type: 'error', message: getOrderErrorMessage(error) });
     } finally { setIsSubmitting(false); }
   };
 
@@ -461,7 +483,7 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
                <div className={`mb-6 rounded-xl px-4 py-3 text-sm font-black ${
                   availableStock > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
                }`}>
-                  {availableStock > 0 ? `Còn ${availableStock} sản phẩm` : 'Sản phẩm vừa hết chỗ/tồn kho'}
+                  {availableStock > 0 ? `Còn ${availableStock} sản phẩm` : OUT_OF_STOCK_MESSAGE}
                </div>
 
                <div className="space-y-3 mb-6">
@@ -719,7 +741,7 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
                </div>
 
                <button onClick={handleSubmit} disabled={isSubmitting || availableStock <= 0 || quantity > availableStock} className="w-full min-h-16 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-2xl text-base sm:text-xl shadow-xl shadow-emerald-900/20 transition-all active:scale-95 flex items-center justify-center gap-3 text-center leading-tight disabled:opacity-60 disabled:cursor-not-allowed">
-                  {isSubmitting ? <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div> : availableStock <= 0 ? 'HẾT HÀNG' : "HOÀN TẤT ĐẶT HÀNG"}
+                  {isSubmitting ? <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div> : availableStock <= 0 ? OUT_OF_STOCK_MESSAGE : "HOÀN TẤT ĐẶT HÀNG"}
                </button>
             </div>
           </>

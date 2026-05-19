@@ -18,9 +18,11 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useOrders } from '../../context/OrdersContext';
+import api from '../../lib/api';
+import { normalizeOrder } from '../../lib/orders';
 
 const OrderManagement = () => {
-  const { orders, markDelivered, cancelOrder, updateOrderStatus } = useOrders();
+  const { orders, loading, markDelivered, cancelOrder, updateOrderStatus } = useOrders();
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('Tất cả');
@@ -70,23 +72,26 @@ const OrderManagement = () => {
     setCurrentPage(1);
   }, [searchTerm, activeTab]);
 
-  const formatDate = (order) => {
-    try {
-      const dateStr = order.createdAt || order.date || order.id.split('-')[1];
-      const date = new Date(dateStr);
-      return isNaN(date.getTime()) ? 'Mới đặt' : date.toLocaleDateString('vi-VN');
-    } catch (e) {
-      return 'Mới đặt';
-    }
-  };
-
   const formatDateTime = (order) => {
     try {
       const dateStr = order.createdAt || order.date || order.id.split('-')[1];
       const date = new Date(dateStr);
       return isNaN(date.getTime()) ? 'Vừa xong' : date.toLocaleString('vi-VN');
-    } catch (e) {
+    } catch {
       return 'Vừa xong';
+    }
+  };
+
+  const openOrderDetail = async (order) => {
+    setSelectedOrder(order);
+
+    try {
+      const response = await api.get(`/api/admin/orders/${order.id}`);
+      if (response.data?.order) {
+        setSelectedOrder(normalizeOrder(response.data.order));
+      }
+    } catch {
+      // Keep the lightweight list data visible if the detail request fails.
     }
   };
 
@@ -275,7 +280,7 @@ const OrderManagement = () => {
                            <Download size={14} /> HĐ
                         </a>
                         <button 
-                           onClick={(e) => { e.stopPropagation(); setSelectedOrder(order); }}
+                           onClick={(e) => { e.stopPropagation(); openOrderDetail(order); }}
                            style={{ padding: '8px 12px', background: '#f8fafc', color: '#2563eb', border: '1px solid #e2e8f0', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem', transition: 'all 0.2s' }}
                            onMouseEnter={(e) => { e.currentTarget.style.background = '#2563eb'; e.currentTarget.style.color = 'white'; }}
                            onMouseLeave={(e) => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.color = '#2563eb'; }}
@@ -285,9 +290,13 @@ const OrderManagement = () => {
                       </td>
                     </tr>
                   );
-                }) : (
+                }) : loading ? (
                   <tr>
-                    <td colSpan="4" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>Không có đơn hàng nào</td>
+                    <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>Đang tải danh sách đơn hàng...</td>
+                  </tr>
+                ) : (
+                  <tr>
+                    <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>Không có đơn hàng nào</td>
                   </tr>
                 )}
               </tbody>

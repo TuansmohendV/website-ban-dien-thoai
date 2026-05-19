@@ -1070,14 +1070,30 @@ export const getAdminOrders = asyncHandler(async (req, res) => {
     query.user = req.query.user;
   }
 
-  const orders = await Order.find(query)
-    .sort({ createdAt: -1 })
-    .populate('items.product', 'name slug image')
-    .populate('items.variant', 'color storage image')
-    .populate('user', 'fullName email phone');
+  const page = Math.max(Number(req.query.page) || 1, 1);
+  const requestedLimit = Math.max(Number(req.query.limit) || 200, 1);
+  const limit = Math.min(requestedLimit, 500);
+  const skip = (page - 1) * limit;
+
+  const [orders, total] = await Promise.all([
+    Order.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select('-items.image')
+      .populate('user', 'fullName email phone')
+      .lean(),
+    Order.countDocuments(query),
+  ]);
 
   res.json({
     data: orders,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.max(Math.ceil(total / limit), 1),
+    },
   });
 });
 

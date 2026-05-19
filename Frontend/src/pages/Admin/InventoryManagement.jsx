@@ -19,9 +19,58 @@ import {
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import api from '../../lib/api';
-import { normalizeProduct } from '../../lib/products';
+import { normalizeProduct, slugifyValue } from '../../lib/products';
 
 const MAX_TABLE_THUMBNAIL_LENGTH = 200000;
+
+const CATEGORY_LABELS = {
+  'dien-thoai': 'Điện thoại',
+  smartphone: 'Điện thoại',
+  mobile: 'Điện thoại',
+  laptop: 'Laptop',
+  tablet: 'Máy tính bảng',
+  ipad: 'Máy tính bảng',
+  'dong-ho': 'Đồng hồ',
+  smartwatch: 'Đồng hồ',
+  'am-thanh': 'Âm thanh',
+  audio: 'Âm thanh',
+  headphone: 'Âm thanh',
+  speaker: 'Âm thanh',
+  'man-hinh': 'Màn hình',
+  monitor: 'Màn hình',
+  'linh-kien-may-tinh': 'Linh kiện máy tính',
+  'linh-kien': 'Linh kiện máy tính',
+  component: 'Linh kiện máy tính',
+  'phu-kien': 'Phụ kiện',
+  accessory: 'Phụ kiện',
+  'smart-home': 'Smart home',
+  'tivi-dien-may': 'Tivi, điện máy',
+  tv: 'Tivi, điện máy',
+  tivi: 'Tivi, điện máy',
+  'dien-may': 'Tivi, điện máy',
+  'dich-vu': 'Dịch vụ',
+  service: 'Dịch vụ',
+};
+
+const getCategoryValue = (category) => {
+  if (!category) return '';
+  if (typeof category === 'string') return category.trim();
+  if (typeof category === 'object') {
+    return category.name || category.title || category.slug || category.label || '';
+  }
+  return String(category).trim();
+};
+
+const getInventoryCategoryLabel = (product = {}, normalized = {}) => {
+  const rawCategory =
+    getCategoryValue(product.categoryRef) ||
+    getCategoryValue(product.category) ||
+    getCategoryValue(normalized.backendCategory) ||
+    getCategoryValue(normalized.category);
+  const categoryKey = slugifyValue(rawCategory);
+
+  return CATEGORY_LABELS[categoryKey] || rawCategory || 'Chưa phân loại';
+};
 
 const getTableThumbnail = (image = '') => {
   const value = String(image || '');
@@ -56,7 +105,7 @@ const mapProductForInventory = (product) => {
     id: normalized.backendId || normalized.id,
     name: normalized.name,
     sku: normalized.sku || `PS-${normalized.id.slice(-6).toUpperCase()}`,
-    category: normalized.backendCategory || normalized.category || 'Chưa phân loại',
+    category: getInventoryCategoryLabel(product, normalized),
     price: normalized.price || 0,
     priceDisplay: normalized.priceDisplay,
     stock: stock,
@@ -309,7 +358,7 @@ const InventoryManagement = () => {
                       </div>
                     </td>
                     <td><code className="inventory-sku">{p.sku}</code></td>
-                    <td><span className="badge inventory-category">{p.category}</span></td>
+                    <td><span className="inventory-category">{p.category}</span></td>
                     <td><span className="inventory-price">{p.priceDisplay}</span></td>
                     <td>
                       <div className="inventory-stock">
@@ -533,10 +582,17 @@ const InventoryManagement = () => {
         .inventory-category {
           display: inline-block;
           max-width: 100%;
+          padding: 5px 10px;
+          border-radius: 8px;
+          background: #f1f5f9;
+          color: #475569;
+          font-size: 0.78rem;
+          font-weight: 700;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
           vertical-align: middle;
+          position: static;
         }
         .inventory-price {
           display: inline-block;

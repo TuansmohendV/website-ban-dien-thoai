@@ -477,7 +477,7 @@ const CartPage = () => {
                       <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2">
                         <Zap size={16} className="text-red-500" fill="currentColor" />
                         <span className="text-[12px] font-bold text-red-600">
-                          {item.maxStock === 0 ? 'Sản phẩm vừa hết hàng!' : `Chỉ còn ${item.maxStock} sản phẩm!`}
+                          {item.maxStock === 0 ? 'Sản phẩm đã hết hàng' : `Chỉ còn ${item.maxStock} sản phẩm!`}
                         </span>
                       </div>
                     )}

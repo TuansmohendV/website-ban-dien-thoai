@@ -209,14 +209,14 @@ const ProductManagement = () => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa sản phẩm này? (Sản phẩm sẽ bị ẩn khỏi cửa hàng nhưng vẫn lưu trong DB)')) {
+    if (window.confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) {
       try {
         setIsLoading(true);
         await api.delete(`/api/admin/products/${id}`);
         // Cập nhật lại trạng thái trong local state thành inactive thay vì xóa hẳn khỏi mảng
         setLocalProducts(localProducts.map(p => p.id === id ? { ...p, status: 'inactive', isHidden: true } : p));
         setSelectedIds(selectedIds.filter(item => item !== id));
-        alert('Đã xóa mềm sản phẩm thành công!');
+        alert('Đã xóa sản phẩm');
       } catch (error) {
         alert('Lỗi khi xóa sản phẩm: ' + getApiErrorMessage(error));
       } finally {
@@ -674,14 +674,24 @@ const ProductManagement = () => {
       {/* Product Table */}
       <div className="card table-card">
         <div className="table-responsive">
-          <table className="admin-table">
+          <table className="admin-table product-table">
+            <colgroup>
+              <col className="product-col-select" />
+              <col className="product-col-info" />
+              <col className="product-col-category" />
+              <col className="product-col-price" />
+              <col className="product-col-stock" />
+              <col className="product-col-status" />
+              <col className="product-col-quick" />
+              <col className="product-col-actions" />
+            </colgroup>
             <thead>
               <tr>
                 <th><input type="checkbox" checked={selectedIds.length === currentProducts.length && currentProducts.length > 0} onChange={toggleSelectAll} /></th>
                 <th>Sản phẩm</th>
                 <th>Danh mục</th>
                 <th>Giá bán</th>
-                <th>Tôn kho</th>
+                <th>Tồn kho</th>
                 <th>Trạng thái</th>
                 <th>Thao tác nhanh</th>
                 <th>Hành động</th>
@@ -1327,10 +1337,42 @@ const ProductManagement = () => {
           overflow: hidden;
         }
 
+        .table-responsive {
+          width: 100%;
+          overflow-x: auto;
+        }
+
+        .product-table {
+          min-width: 1210px;
+          table-layout: fixed;
+        }
+
+        .product-table th {
+          white-space: nowrap;
+          font-size: 0.84rem;
+          line-height: 1.2;
+          padding: 16px 18px;
+        }
+
+        .product-table td {
+          vertical-align: middle;
+          padding: 18px;
+        }
+
+        .product-col-select { width: 56px; }
+        .product-col-info { width: 330px; }
+        .product-col-category { width: 130px; }
+        .product-col-price { width: 130px; }
+        .product-col-stock { width: 96px; }
+        .product-col-status { width: 128px; }
+        .product-col-quick { width: 220px; }
+        .product-col-actions { width: 120px; }
+
         .product-info-cell {
           display: flex;
           align-items: center;
           gap: 12px;
+          min-width: 0;
         }
 
         .product-thumb {
@@ -1342,27 +1384,47 @@ const ProductManagement = () => {
           align-items: center;
           justify-content: center;
           font-size: 20px;
+          flex: 0 0 40px;
+          overflow: hidden;
+        }
+
+        .product-text {
+          min-width: 0;
         }
 
         .product-name-bold {
           display: block;
           font-weight: 600;
           color: #1e293b;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .product-sku {
+          display: block;
           font-size: 0.75rem;
           color: #94a3b8;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .price-bold {
+          display: inline-block;
           font-weight: 700;
           color: #1e293b;
+          white-space: nowrap;
+        }
+
+        .product-table .status-badge {
+          white-space: nowrap;
         }
 
         .quick-actions {
           display: flex;
           gap: 8px;
+          flex-wrap: nowrap;
         }
 
         .qa-btn {

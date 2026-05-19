@@ -28,6 +28,30 @@ import {
 import * as XLSX from 'xlsx';
 import api, { getApiErrorMessage } from '../../lib/api';
 
+const ROLE_LABELS = {
+  customer: 'Khách hàng',
+  staff: 'Nhân viên',
+  manager: 'Quản lý',
+  admin: 'Admin',
+};
+
+const ROLE_CLASS_NAMES = {
+  customer: 'customer',
+  staff: 'staff',
+  manager: 'manager',
+  admin: 'admin',
+};
+
+const ROLE_OPTIONS = [
+  { value: 'customer', label: 'Khách hàng' },
+  { value: 'staff', label: 'Nhân viên' },
+  { value: 'manager', label: 'Quản lý' },
+  { value: 'admin', label: 'Admin' },
+];
+
+const getRoleLabel = (role = 'customer') => ROLE_LABELS[role] || ROLE_LABELS.customer;
+const getRoleClassName = (role = 'customer') => ROLE_CLASS_NAMES[role] || ROLE_CLASS_NAMES.customer;
+
 const UserManagement = () => {
   const [usersData, setUsersData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -68,6 +92,7 @@ const UserManagement = () => {
     fullName: '',
     email: '',
     phone: '',
+    role: 'customer',
     isActive: true,
   });
 
@@ -89,7 +114,9 @@ const UserManagement = () => {
         rawEmail: user.email || '',
         phone: user.phone || 'Chưa có',
         rawPhone: user.phone || '',
-        role: user.role === 'admin' ? 'Admin' : (user.role === 'staff' ? 'Nhân viên' : 'Khách hàng'),
+        rawRole: user.role || 'customer',
+        role: getRoleLabel(user.role),
+        roleClass: getRoleClassName(user.role),
         status: user.isActive ? 'Hoạt động' : 'Bị khóa',
         isActive: user.isActive,
         joinedDate: new Date(user.createdAt).toLocaleDateString('vi-VN'),
@@ -206,6 +233,7 @@ const UserManagement = () => {
       fullName: user.name === 'Khách hàng' ? '' : user.name,
       email: user.rawEmail,
       phone: user.rawPhone,
+      role: user.rawRole || 'customer',
       isActive: user.isActive,
     });
     setActiveMenuId(null);
@@ -235,6 +263,12 @@ const UserManagement = () => {
     if (!selectedUser) return;
     setIsSavingUser(true);
     try {
+      if (editUserForm.role !== selectedUser.rawRole) {
+        await api.patch(`/api/admin/users/${selectedUser.id}/role`, {
+          role: editUserForm.role,
+        });
+      }
+
       await api.put(`/api/users/admin/${selectedUser.id}`, {
         fullName: editUserForm.fullName,
         email: editUserForm.email,
@@ -484,7 +518,13 @@ const UserManagement = () => {
               </tr>
             </thead>
             <tbody>
-              {isLoading ? (
+              {loadError ? (
+                <tr>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '50px', color: '#ef4444', fontWeight: 700 }}>
+                    {loadError}
+                  </td>
+                </tr>
+              ) : isLoading ? (
                 <tr>
                   <td colSpan="7" style={{ textAlign: 'center', padding: '50px', color: '#64748b' }}>
                     Đang tải dữ liệu...
@@ -511,7 +551,7 @@ const UserManagement = () => {
                       </div>
                     </td>
                     <td>
-                      <span className={`role-badge ${user.role.toLowerCase()}`}>
+                      <span className={`role-badge ${user.roleClass}`}>
                         {user.role}
                       </span>
                     </td>
@@ -664,7 +704,7 @@ const UserManagement = () => {
                   </div>
                   <div>
                      <h2 style={{ margin: 0, fontSize: '1.5rem', color: '#0f172a' }}>{selectedUser.name}</h2>
-                     <span className={`role-badge ${selectedUser.role.toLowerCase()}`}>{selectedUser.role}</span>
+                     <span className={`role-badge ${selectedUser.roleClass}`}>{selectedUser.role}</span>
                   </div>
                </div>
                <button onClick={() => setShowDetailModal(false)} style={{ border: 'none', background: '#fff', borderRadius: '50%', width: '40px', height: '40px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -793,6 +833,14 @@ const UserManagement = () => {
               <label style={{ display: 'grid', gap: '8px', fontWeight: 700, color: '#334155' }}>
                 Số điện thoại
                 <input name="phone" value={editUserForm.phone} onChange={handleEditUserFormChange} style={{ padding: '12px 14px', borderRadius: '10px', border: '1px solid #e2e8f0', outline: 'none' }} />
+              </label>
+              <label style={{ display: 'grid', gap: '8px', fontWeight: 700, color: '#334155' }}>
+                Vai trò / quyền truy cập
+                <select name="role" value={editUserForm.role} onChange={handleEditUserFormChange} style={{ padding: '12px 14px', borderRadius: '10px', border: '1px solid #e2e8f0', outline: 'none', background: 'white', fontWeight: 700, color: '#1e293b' }}>
+                  {ROLE_OPTIONS.map(role => (
+                    <option key={role.value} value={role.value}>{role.label}</option>
+                  ))}
+                </select>
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#334155' }}>
                 <input name="isActive" type="checkbox" checked={editUserForm.isActive} onChange={handleEditUserFormChange} style={{ width: '18px', height: '18px', accentColor: '#2563eb' }} />
@@ -1260,8 +1308,9 @@ const UserManagement = () => {
         }
 
         .role-badge.admin { background: #fee2e2; color: #ef4444; }
-        .role-badge.nhân viên { background: #fef9c3; color: #a16207; }
-        .role-badge.khách hàng { background: #dcfce7; color: #166534; }
+        .role-badge.manager { background: #ede9fe; color: #7c3aed; }
+        .role-badge.staff { background: #fef9c3; color: #a16207; }
+        .role-badge.customer { background: #dcfce7; color: #166534; }
 
         .status-dot {
           width: 8px;
