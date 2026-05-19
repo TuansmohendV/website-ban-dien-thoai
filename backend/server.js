@@ -37,6 +37,7 @@ import bannerRoutes from './routes/bannerRoutes.js';
 import referralRoutes from './routes/referralRoutes.js';
 import tradeInRoutes from './routes/tradeInRoutes.js';
 import { startWeeklyVoucherJob } from './jobs/weeklyVoucherJob.js';
+import Order from './models/Order.js';
 
 import { errorHandler, notFound } from './middleware/errorMiddleware.js';
 
@@ -234,6 +235,9 @@ const startServer = async () => {
   });
 
   console.log('MongoDB connected.');
+
+  await Order.createIndexes();
+  console.log('Order indexes ensured.');
 
   // Khởi chạy job phát voucher tự động hàng tuần
   startWeeklyVoucherJob();

@@ -180,10 +180,6 @@ const ProductManagement = () => {
     const matchesCategory = categoryFilter === 'Tất cả danh mục' || p.category === categoryFilter;
     
     // Status logic
-    const stock = p.stock || 24;
-    const isOutOfStock = stock <= 0;
-    const isHidden = p.isHidden || false;
-    
     let matchesStatus = true;
     if (statusFilter === 'Đang hiển thị') matchesStatus = !p.isHidden && p.stock > 0 && p.status !== 'inactive';
     if (statusFilter === 'Đang ẩn') matchesStatus = p.isHidden && p.status !== 'inactive';
@@ -452,7 +448,13 @@ const ProductManagement = () => {
       return;
     }
 
-    if (!formData.description) {
+    const finalDescription = editorRef.current ? editorRef.current.innerHTML.trim() : formData.description.trim();
+    const finalDescriptionText = editorRef.current
+      ? (editorRef.current.innerText || editorRef.current.textContent || '').replace(/\u00a0/g, ' ').trim()
+      : finalDescription.replace(/<[^>]*>/g, '').replace(/\u00a0/g, ' ').trim();
+    const hasEmbeddedContent = /<(img|iframe|video|source|embed|object)\b/i.test(finalDescription);
+
+    if (!finalDescriptionText && !hasEmbeddedContent) {
       alert('Vui lòng nhập mô tả sản phẩm');
       return;
     }
@@ -469,8 +471,6 @@ const ProductManagement = () => {
 
     setIsLoading(true);
     try {
-      const finalDescription = editorRef.current ? editorRef.current.innerHTML : formData.description;
-      
       // Collect dynamic specifications based on category
       const specFields = {
         'dien-thoai': ['screen', 'cpu', 'ram', 'storage'],

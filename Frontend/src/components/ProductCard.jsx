@@ -3,11 +3,53 @@ import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import BuyNowModal from './BuyNowModal';
 
+const IMAGE_FRAME_BY_CATEGORY = {
+  'dien-thoai': {
+    frame: 'w-[72%] max-w-[128px] aspect-[3/4]',
+    image: 'max-h-full max-w-full',
+  },
+  tablet: {
+    frame: 'w-[80%] max-w-[150px] aspect-[4/3]',
+    image: 'max-h-full max-w-full',
+  },
+  laptop: {
+    frame: 'w-[88%] max-w-[180px] aspect-[16/10]',
+    image: 'max-h-full max-w-full',
+  },
+  'man-hinh': {
+    frame: 'w-[90%] max-w-[188px] aspect-[16/9]',
+    image: 'max-h-full max-w-full',
+  },
+  'am-thanh': {
+    frame: 'w-[76%] max-w-[140px] aspect-square',
+    image: 'max-h-full max-w-full',
+  },
+  'phu-kien': {
+    frame: 'w-[74%] max-w-[136px] aspect-square',
+    image: 'max-h-full max-w-full',
+  },
+  'linh-kien-may-tinh': {
+    frame: 'w-[82%] max-w-[150px] aspect-square',
+    image: 'max-h-full max-w-full',
+  },
+  'smart-home': {
+    frame: 'w-[82%] max-w-[154px] aspect-square',
+    image: 'max-h-full max-w-full',
+  },
+};
+
+const getProductImageFrame = (category = '') =>
+  IMAGE_FRAME_BY_CATEGORY[category] || {
+    frame: 'w-[78%] max-w-[146px] aspect-square',
+    image: 'max-h-full max-w-full',
+  };
+
 const ProductCard = ({ product }) => {
   const { formatPrice } = useLanguage();
   const [showBuyModal, setShowBuyModal] = useState(false);
   const productId = product.id || product.routeId || product.backendId;
   const productDiscount = String(product.discount || '').replace(/^-+/, '');
+  const imageFrame = getProductImageFrame(product.category);
   
   return (
     <div className="bg-white rounded-xl p-3 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col relative group border border-gray-100 hover:border-[#009981]/20 h-full">
@@ -31,12 +73,14 @@ const ProductCard = ({ product }) => {
       
       {/* Image + Specs */}
       <Link to={`/product/${productId}`} className="flex items-center h-[180px] mb-3 relative">
-        <div className="flex-1 h-full flex items-center justify-center p-2">
-          <img 
-            src={product.image || product.img} 
-            alt={product.name} 
-            className="max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-500" 
-          />
+        <div className="flex-1 h-full flex items-center justify-center p-2 pr-14 overflow-hidden">
+          <div className={`${imageFrame.frame} flex items-center justify-center`}>
+            <img 
+              src={product.image || product.img} 
+              alt={product.name} 
+              className={`${imageFrame.image} object-contain group-hover:scale-105 transition-transform duration-500`} 
+            />
+          </div>
         </div>
         
         {/* Specs column (Retail Style) - Dynamic based on category */}

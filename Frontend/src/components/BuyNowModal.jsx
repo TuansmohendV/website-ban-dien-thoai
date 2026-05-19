@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 import { useOrders } from '../context/OrdersContext';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api, { getApiErrorMessage } from '../lib/api';
-import { CreditCard, Ticket, Truck, Wallet } from 'lucide-react';
+import { CreditCard, Plus, Ticket, Truck, Wallet } from 'lucide-react';
 
 const MONGO_OBJECT_ID_PATTERN = /^[a-f\d]{24}$/i;
 
@@ -13,12 +13,44 @@ const getMongoObjectId = (value) => {
   return MONGO_OBJECT_ID_PATTERN.test(id) ? id : undefined;
 };
 
+const PROFILE_ADDRESS_ID = 'profile-address';
+
+const buildAddressLine = (address = {}) =>
+  [address.street, address.ward, address.district, address.province]
+    .filter(Boolean)
+    .join(', ');
+
+const buildProfileAddress = (profile) => {
+  if (
+    !profile?.address ||
+    !profile?.province ||
+    !profile?.district ||
+    !profile?.ward ||
+    !(profile.fullName || profile.name) ||
+    !profile.phone
+  ) {
+    return null;
+  }
+
+  return {
+    _id: PROFILE_ADDRESS_ID,
+    label: 'Địa chỉ hồ sơ',
+    recipientName: profile.fullName || profile.name,
+    phone: profile.phone,
+    province: profile.province,
+    district: profile.district,
+    ward: profile.ward,
+    street: profile.address,
+    note: '',
+    isDefault: false,
+    isProfileAddress: true,
+  };
+};
+
 const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialColor = null }) => {
   const { formatPrice } = useLanguage();
   const { createOrder, processPayment } = useOrders();
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
   const modalRef = useRef(null);
 
   // Form states
@@ -28,12 +60,12 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [deliveryMethod, setDeliveryMethod] = useState('store'); // 'store' | 'home'
-  const [selectedCity, setSelectedCity] = useState('');
-  const [district, setDistrict] = useState('');
-  const [ward, setWard] = useState('');
-  const [street, setStreet] = useState('');
-  const [selectedStore, setSelectedStore] = useState('');
+  const [deliveryMethod, setDeliveryMethod] = useState('home'); // 'store' | 'home'
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [selectedAddressId, setSelectedAddressId] = useState('');
+  const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
+  const [addressError, setAddressError] = useState('');
+  const [storePickupAddress, setStorePickupAddress] = useState('');
   const [note, setNote] = useState('');
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
@@ -41,15 +73,13 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
   const [availableVouchers, setAvailableVouchers] = useState([]);
   const [showVoucherList, setShowVoucherList] = useState(false);
   const [discountAmount, setDiscountAmount] = useState(0);
-  const [isVAT, setIsVAT] = useState(false);
-  const [companyName, setCompanyName] = useState('');
-  const [taxCode, setTaxCode] = useState('');
-  const [companyAddress, setCompanyAddress] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [deliveryEstimate, setDeliveryEstimate] = useState('');
   const [errors, setErrors] = useState({});
   const [isLookingUp, setIsLookingUp] = useState(false);
+  const selectedAddress =
+    savedAddresses.find((address) => address._id === selectedAddressId) || null;
+  const isStorePickup = deliveryMethod === 'store';
 
   const selectedVariant = React.useMemo(() => {
     if (!product?.variants?.length) return null;
@@ -71,15 +101,6 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
     selectedVariant?.stock ?? product?.countInStock ?? product?.totalStock ?? 0
   );
 
-  const cities = [
-    "An Giang", "Bà Rịa - Vũng Tàu", "Bắc Giang", "Bắc Kạn", "Bạc Liêu", "Bắc Ninh", "Bến Tre", "Bình Định", "Bình Dương", "Bình Phước", "Bình Thuận", "Cà Mau", "Cần Thơ", "Cao Bằng", "Đà Nẵng", "Đắk Lắk", "Đắk Nông", "Điện Biên", "Đồng Nai", "Đồng Tháp", "Gia Lai", "Hà Giang", "Hà Nam", "Hà Nội", "Hà Tĩnh", "Hải Dương", "Hải Phòng", "Hậu Giang", "Hòa Bình", "Hưng Yên", "Khánh Hòa", "Kiên Giang", "Kon Tum", "Lai Châu", "Lâm Đồng", "Lạng Sơn", "Lào Cai", "Long An", "Nam Định", "Nghệ An", "Ninh Bình", "Ninh Thuận", "Phú Thọ", "Phú Yên", "Quảng Bình", "Quảng Nam", "Quảng Ngãi", "Quảng Ninh", "Quảng Trị", "Sóc Trăng", "Sơn La", "Tây Ninh", "Thái Bình", "Thái Nguyên", "Thanh Hóa", "Thừa Thiên Huế", "Tiền Giang", "TP Hồ Chí Minh", "Trà Vinh", "Tuyên Quang", "Vĩnh Long", "Vĩnh Phúc", "Yên Bái"
-  ];
-
-  const stores = {
-    'Hồ Chí Minh': ['Cửa hàng 1 - 123 Nguyễn Trãi, Q.1', 'Cửa hàng 2 - 456 Lê Văn Sỹ, Q.3'],
-    'Hà Nội': ['Cửa hàng 1 - 348 Hồ Tùng Mậu, Cầu Giấy', 'Cửa hàng 2 - 122 Thái Hà, Đống Đa'],
-  };
-
   useEffect(() => {
     if (isOpen && product) {
       setSelectedColor(initialColor || product.colors?.[0] || { name: 'Mặc định', price: product.priceNum, image: product.image });
@@ -87,15 +108,85 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
       setIsSuccess(false);
       setErrors({});
       setPaymentMethod('COD');
-      setDeliveryMethod('store');
+      setDeliveryMethod('home');
       setFullName(user?.fullName || '');
       setPhone(user?.phone || '');
       setEmail(user?.email || '');
+      setStorePickupAddress('');
+      setNote('');
       
       document.body.style.overflow = 'hidden';
     }
     return () => { document.body.style.overflow = ''; };
   }, [isOpen, product, user, initialColor]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    if (!user) {
+      setSavedAddresses([]);
+      setSelectedAddressId('');
+      setAddressError('');
+      return;
+    }
+
+    let isMounted = true;
+
+    const fetchSavedAddresses = async () => {
+      setIsLoadingAddresses(true);
+      setAddressError('');
+
+      try {
+        const response = await api.get('/api/address');
+        const profileAddress = buildProfileAddress(user);
+        const nextAddresses = [
+          ...(response.data?.data || []),
+          ...(profileAddress ? [profileAddress] : []),
+        ];
+
+        if (!isMounted) return;
+
+        setSavedAddresses(nextAddresses);
+        setSelectedAddressId((currentId) => {
+          if (currentId && nextAddresses.some((address) => address._id === currentId)) {
+            return currentId;
+          }
+
+          const defaultAddress = nextAddresses.find((address) => address.isDefault);
+          return (defaultAddress || nextAddresses[0])?._id || '';
+        });
+      } catch (error) {
+        if (!isMounted) return;
+
+        const profileAddress = buildProfileAddress(user);
+        setSavedAddresses(profileAddress ? [profileAddress] : []);
+        setSelectedAddressId(profileAddress?._id || '');
+        setAddressError(getApiErrorMessage(error, 'Không tải được sổ địa chỉ đã lưu.'));
+      } finally {
+        if (isMounted) {
+          setIsLoadingAddresses(false);
+        }
+      }
+    };
+
+    fetchSavedAddresses();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, user]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    setFullName(selectedAddress?.recipientName || user?.fullName || user?.name || '');
+    setPhone(selectedAddress?.phone || user?.phone || '');
+    setEmail((currentEmail) => currentEmail || user?.email || '');
+  }, [isOpen, selectedAddressId, selectedAddress, user]);
 
   useEffect(() => {
     const fetchVouchers = async () => {
@@ -124,8 +215,12 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
     const newErrors = {};
     if (!fullName.trim()) newErrors.fullName = 'Vui lòng nhập họ tên';
     if (!phone.trim()) newErrors.phone = 'Vui lòng nhập số điện thoại';
-    if (!selectedCity) newErrors.city = 'Vui lòng chọn tỉnh/thành phố';
-    if (deliveryMethod === 'store' && !selectedStore) newErrors.store = 'Vui lòng chọn cửa hàng';
+    if (!isStorePickup && !selectedAddress) {
+      newErrors.address = 'Vui lòng chọn địa chỉ đã lưu';
+    }
+    if (isStorePickup && !storePickupAddress.trim()) {
+      newErrors.store = 'Vui lòng nhập địa chỉ cửa hàng nhận hàng';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -189,16 +284,38 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
         throw new Error('Không xác định được sản phẩm để đặt hàng.');
       }
 
+      const shippingAddress = isStorePickup
+        ? {
+          label: 'Nhận tại cửa hàng',
+          recipientName: fullName.trim(),
+          phone: phone.trim(),
+          province: 'Nhận tại cửa hàng',
+          district: 'Nhận tại cửa hàng',
+          ward: 'Nhận tại cửa hàng',
+          street: storePickupAddress.trim(),
+          note: note.trim(),
+        }
+        : selectedAddress?.isProfileAddress
+          ? {
+            label: selectedAddress.label,
+            recipientName: selectedAddress.recipientName,
+            phone: selectedAddress.phone,
+            province: selectedAddress.province,
+            district: selectedAddress.district,
+            ward: selectedAddress.ward,
+            street: selectedAddress.street,
+            note: note.trim() || selectedAddress.note || '',
+          }
+          : undefined;
+
       const order = await createOrder({
-        customerInfo: { fullName, phone, email },
-        shippingAddress: {
-          recipientName: fullName,
-          phone,
-          province: selectedCity,
-          district: deliveryMethod === 'store' ? 'Nhận tại cửa hàng' : district,
-          ward: deliveryMethod === 'store' ? 'Nhận tại cửa hàng' : ward,
-          street: deliveryMethod === 'store' ? (selectedStore || 'Cửa hàng PhoneSin') : street,
+        customerInfo: {
+          fullName: isStorePickup ? fullName.trim() : selectedAddress?.recipientName || fullName.trim(),
+          phone: isStorePickup ? phone.trim() : selectedAddress?.phone || phone.trim(),
+          email: email.trim(),
         },
+        addressId: isStorePickup || selectedAddress?.isProfileAddress ? undefined : selectedAddress?._id,
+        shippingAddress,
         paymentMethod: backendPaymentMethod,
         items: [{
           productId,
@@ -206,6 +323,7 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
           quantity,
         }],
         voucherCode: appliedCoupon || undefined,
+        notes: note.trim(),
       });
 
       if (backendPaymentMethod !== 'COD') {
@@ -222,10 +340,10 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
             fullName: fullName.trim(),
             phone: phone.trim(),
             email: email.trim(),
-            province: selectedCity,
-            district: deliveryMethod === 'store' ? '' : district,
-            ward: deliveryMethod === 'store' ? '' : ward,
-            address: deliveryMethod === 'store' ? '' : street
+            province: isStorePickup ? '' : selectedAddress?.province || '',
+            district: isStorePickup ? '' : selectedAddress?.district || '',
+            ward: isStorePickup ? '' : selectedAddress?.ward || '',
+            address: isStorePickup ? '' : selectedAddress?.street || ''
           });
         } catch (dbErr) {
           console.error("Failed to sync BuyNow info to DB:", dbErr);
@@ -374,31 +492,73 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
 
                <div className="mb-6 space-y-3">
                   <p className="text-xs font-black text-gray-400 mb-1 uppercase tracking-widest">Địa chỉ nhận hàng</p>
-                  <select 
-                    value={selectedCity} 
-                    onChange={(e)=>{setSelectedCity(e.target.value); setSelectedStore('');}} 
-                    className={`w-full h-11 px-4 bg-gray-100 rounded-xl outline-none text-sm font-bold appearance-none transition-all ${errors.city ? 'ring-2 ring-red-400' : 'focus:bg-white focus:ring-2 focus:ring-emerald-500'}`}
-                  >
-                     <option value="">Chọn Tỉnh / Thành phố *</option>
-                     {cities.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  {deliveryMethod === 'store' ? (
-                    <select 
-                        value={selectedStore} 
-                        onChange={(e)=>setSelectedStore(e.target.value)} 
-                        className={`w-full h-11 px-4 bg-gray-100 rounded-xl outline-none text-sm font-bold appearance-none transition-all ${errors.store ? 'ring-2 ring-red-400' : 'focus:bg-white focus:ring-2 focus:ring-emerald-500'}`}
-                    >
-                        <option value="">Chọn cửa hàng *</option>
-                        {(stores[selectedCity] || stores['Hồ Chí Minh']).map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                  {isStorePickup ? (
+                    <>
+                      <input
+                        type="text"
+                        value={storePickupAddress}
+                        onChange={(e)=>setStorePickupAddress(e.target.value)}
+                        placeholder="Nhập địa chỉ cửa hàng nhận hàng"
+                        className={`w-full h-11 px-4 bg-gray-100 rounded-xl outline-none text-sm font-bold transition-all ${errors.store ? 'ring-2 ring-red-400' : 'focus:bg-white focus:ring-2 focus:ring-emerald-500'}`}
+                      />
+                      {errors.store && <p className="text-[10px] font-bold text-red-500">{errors.store}</p>}
+                    </>
                   ) : (
-                    <div className="space-y-3 animate-fadeIn">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <input type="text" placeholder="Quận / Huyện *" value={district} onChange={(e)=>setDistrict(e.target.value)} className="w-full h-11 px-4 bg-gray-100 rounded-xl outline-none text-sm font-bold focus:bg-white focus:ring-2 focus:ring-emerald-500 transition-all" />
-                            <input type="text" placeholder="Phường / Xã *" value={ward} onChange={(e)=>setWard(e.target.value)} className="w-full h-11 px-4 bg-gray-100 rounded-xl outline-none text-sm font-bold focus:bg-white focus:ring-2 focus:ring-emerald-500 transition-all" />
+                    <>
+                      {addressError && (
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-700">
+                          {addressError}
                         </div>
-                        <input type="text" placeholder="Số nhà, tên đường *" value={street} onChange={(e)=>setStreet(e.target.value)} className="w-full h-11 px-4 bg-gray-100 rounded-xl outline-none text-sm font-bold focus:bg-white focus:ring-2 focus:ring-emerald-500 transition-all" />
-                    </div>
+                      )}
+                      {isLoadingAddresses ? (
+                        <div className="h-11 px-4 bg-gray-100 rounded-xl flex items-center justify-center text-xs font-black uppercase text-slate-600">
+                          Đang tải địa chỉ...
+                        </div>
+                      ) : savedAddresses.length > 0 ? (
+                        <div className="space-y-3 animate-fadeIn">
+                          <select
+                            value={selectedAddressId}
+                            onChange={(e)=>setSelectedAddressId(e.target.value)}
+                            className={`w-full h-11 px-4 bg-gray-100 rounded-xl outline-none text-sm font-bold appearance-none transition-all ${errors.address ? 'ring-2 ring-red-400' : 'focus:bg-white focus:ring-2 focus:ring-emerald-500'}`}
+                          >
+                            {savedAddresses.map((address) => (
+                              <option key={address._id} value={address._id}>
+                                {address.label || 'Địa chỉ'} - {address.recipientName} - {address.phone}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="text"
+                            value={selectedAddress ? buildAddressLine(selectedAddress) : ''}
+                            readOnly
+                            placeholder="Chọn địa chỉ nhận hàng"
+                            className="w-full h-11 px-4 bg-gray-100 rounded-xl outline-none text-sm font-bold text-slate-800"
+                          />
+                          {errors.address && <p className="text-[10px] font-bold text-red-500">{errors.address}</p>}
+                          <Link
+                            to="/profile?tab=addresses"
+                            onClick={onClose}
+                            className="inline-flex h-10 items-center gap-2 rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50 px-4 text-xs font-black uppercase text-emerald-700 transition-all hover:border-emerald-500 hover:bg-emerald-100"
+                          >
+                            <Plus size={16} strokeWidth={3} />
+                            Thêm địa chỉ
+                          </Link>
+                        </div>
+                      ) : (
+                        <div className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 p-4 text-center">
+                          <p className="text-xs font-black uppercase text-slate-800">Chưa có địa chỉ đã lưu</p>
+                          {errors.address && <p className="mt-2 text-[10px] font-bold text-red-500">{errors.address}</p>}
+                          <Link
+                            to="/profile?tab=addresses"
+                            onClick={onClose}
+                            className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2 text-xs font-black uppercase text-white transition-all hover:bg-emerald-700"
+                          >
+                            <Plus size={16} strokeWidth={3} />
+                            Thêm địa chỉ
+                          </Link>
+                        </div>
+                      )}
+                    </>
                   )}
                </div>
 
@@ -438,7 +598,6 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
                       return valB - valA;
                     });
                     const maxCode = sorted[0]?.code;
-                    const minCode = sorted[availableVouchers.length - 1]?.code;
 
                     return (
                       <div className="mt-4 space-y-2">
@@ -455,7 +614,6 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
                           <div className="grid grid-cols-1 gap-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar animate-fadeIn">
                             {availableVouchers.map(v => {
                               const isMax = v.code === maxCode;
-                              const isMin = v.code === minCode && v.code !== maxCode;
                               return (
                                 <div 
                                   key={v.code} 
@@ -501,7 +659,7 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
                         id: 'COD',
                         label: 'Tiền mặt',
                         description: 'Thanh toán khi nhận hàng',
-                        Icon: Truck,
+                        iconElement: <Truck size={22} strokeWidth={2.5} />,
                         active: 'border-emerald-500 bg-white shadow-lg text-slate-900',
                         icon: 'bg-emerald-600 text-white',
                       },
@@ -509,7 +667,7 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
                         id: 'VNPAY',
                         label: 'VNPay',
                         description: 'Thanh toán qua VNPay',
-                        Icon: CreditCard,
+                        iconElement: <CreditCard size={22} strokeWidth={2.5} />,
                         active: 'border-blue-500 bg-white shadow-lg text-slate-900',
                         icon: 'bg-blue-600 text-white',
                       },
@@ -517,11 +675,11 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
                         id: 'MOMO',
                         label: 'MoMo',
                         description: 'Thanh toán ví MoMo',
-                        Icon: Wallet,
+                        iconElement: <Wallet size={22} strokeWidth={2.5} />,
                         active: 'border-[#A50064] bg-white shadow-lg text-slate-900',
                         icon: 'bg-[#A50064] text-white',
                       },
-                    ].map(({ id, label, description, Icon, active, icon }) => {
+                    ].map(({ id, label, description, iconElement, active, icon }) => {
                       const isActive = paymentMethod === id;
 
                       return (
@@ -534,7 +692,7 @@ const BuyNowModal = ({ product, isOpen, onClose, initialVariant = null, initialC
                           }`}
                         >
                           <span className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors ${isActive ? icon : 'bg-slate-100 text-slate-400'}`}>
-                            <Icon size={22} strokeWidth={2.5} />
+                            {iconElement}
                           </span>
                           <span className="text-[12px] font-black uppercase text-center leading-tight">{label}</span>
                           <span className="text-[9px] font-bold text-center leading-tight opacity-70">{description}</span>

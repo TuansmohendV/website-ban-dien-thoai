@@ -21,6 +21,18 @@ import * as XLSX from 'xlsx';
 import api from '../../lib/api';
 import { normalizeProduct } from '../../lib/products';
 
+const MAX_TABLE_THUMBNAIL_LENGTH = 200000;
+
+const getTableThumbnail = (image = '') => {
+  const value = String(image || '');
+
+  if (!value.startsWith('data:')) {
+    return value;
+  }
+
+  return value.length <= MAX_TABLE_THUMBNAIL_LENGTH ? value : '';
+};
+
 const mapProductForInventory = (product) => {
   const normalized = normalizeProduct(product);
   const stock = normalized.countInStock || 0;
@@ -51,7 +63,7 @@ const mapProductForInventory = (product) => {
     status,
     statusColor,
     statusBg,
-    thumbnail: normalized.image
+    thumbnail: getTableThumbnail(normalized.image)
   };
 };
 
@@ -120,6 +132,16 @@ const InventoryManagement = () => {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter, categoryFilter]);
+
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const requestSort = (key) => {
     let direction = 'asc';
@@ -240,50 +262,63 @@ const InventoryManagement = () => {
 
       {/* Inventory Table */}
       <div className="card table-card" style={{ overflow: 'visible' }}>
-        <div className="table-responsive">
-          <table className="admin-table">
+        <div className="table-responsive inventory-table-wrap">
+          <table className="admin-table inventory-table">
+            <colgroup>
+              <col className="inventory-col-product" />
+              <col className="inventory-col-sku" />
+              <col className="inventory-col-category" />
+              <col className="inventory-col-price" />
+              <col className="inventory-col-stock" />
+              <col className="inventory-col-status" />
+              <col className="inventory-col-action" />
+            </colgroup>
             <thead>
               <tr>
-                <th style={{ paddingLeft: '25px' }}>Sản phẩm</th>
+                <th className="inventory-product-header">Sản phẩm</th>
                 <th>SKU</th>
                 <th>Danh mục</th>
                 <th onClick={() => requestSort('price')} style={{ cursor: 'pointer' }}>
-                  Giá bán <ArrowUpDown size={14} style={{ opacity: 0.5, marginLeft: '4px' }} />
+                  <span className="sortable-header">Giá bán <ArrowUpDown size={14} /></span>
                 </th>
                 <th onClick={() => requestSort('stock')} style={{ cursor: 'pointer' }}>
-                  Số lượng tồn <ArrowUpDown size={14} style={{ opacity: 0.5, marginLeft: '4px' }} />
+                  <span className="sortable-header">Số lượng tồn <ArrowUpDown size={14} /></span>
                 </th>
                 <th>Trạng thái</th>
-                <th style={{ textAlign: 'right', paddingRight: '25px' }}>Thao tác</th>
+                <th className="inventory-action-header">Thao tác</th>
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 Array(5).fill(0).map((_, i) => (
-                  <tr key={i}><td colSpan="6" style={{ padding: '20px' }}><div className="skeleton-line" style={{ height: '40px', background: '#f1f5f9', borderRadius: '8px', animation: 'pulse 2s infinite' }}></div></td></tr>
+                  <tr key={i}><td colSpan="7" style={{ padding: '20px' }}><div className="skeleton-line" style={{ height: '40px', background: '#f1f5f9', borderRadius: '8px', animation: 'pulse 2s infinite' }}></div></td></tr>
                 ))
               ) : displayedProducts.length > 0 ? (
                 displayedProducts.map((p) => (
                   <tr key={p.id}>
-                    <td style={{ paddingLeft: '25px', minWidth: '300px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ width: '45px', height: '45px', borderRadius: '8px', overflow: 'hidden', background: '#f8fafc', border: '1px solid #f1f5f9', flexShrink: 0 }}>
-                          <img src={p.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    <td className="inventory-product-cell">
+                      <div className="inventory-product-info">
+                        <div className="inventory-product-thumb">
+                          {p.thumbnail ? (
+                            <img src={p.thumbnail} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                          ) : (
+                            <Package size={18} color="#94a3b8" />
+                          )}
                         </div>
-                        <span style={{ fontWeight: '700', color: '#1e293b' }}>{p.name}</span>
+                        <span className="inventory-product-name">{p.name}</span>
                       </div>
                     </td>
-                    <td><code style={{ background: '#f1f5f9', padding: '4px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: '600' }}>{p.sku}</code></td>
-                    <td><span className="badge">{p.category}</span></td>
-                    <td><span style={{ fontWeight: '600' }}>{p.priceDisplay}</span></td>
+                    <td><code className="inventory-sku">{p.sku}</code></td>
+                    <td><span className="badge inventory-category">{p.category}</span></td>
+                    <td><span className="inventory-price">{p.priceDisplay}</span></td>
                     <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div className="inventory-stock">
                         <span style={{ fontWeight: '800', fontSize: '1.1rem', color: p.stock <= 10 ? '#ef4444' : '#1e293b' }}>{p.stock}</span>
                         {p.stock <= 10 ? <TrendingDown size={14} color="#ef4444" /> : <TrendingUp size={14} color="#10b981" />}
                       </div>
                     </td>
                     <td>
-                      <span style={{ 
+                      <span className="inventory-status" style={{ 
                         display: 'inline-flex', alignItems: 'center', gap: '6px',
                         padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700',
                         backgroundColor: p.statusBg, color: p.statusColor
@@ -292,7 +327,7 @@ const InventoryManagement = () => {
                         {p.status === 'In Stock' ? 'Còn hàng' : p.status === 'Low Stock' ? 'Sắp hết' : 'Hết hàng'}
                       </span>
                     </td>
-                    <td style={{ textAlign: 'right', paddingRight: '25px' }}>
+                    <td className="inventory-action-cell">
                       <button 
                         onClick={() => navigate(`/admin/products?search=${encodeURIComponent(p.name)}`)}
                         className="btn-icon"
@@ -313,7 +348,7 @@ const InventoryManagement = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>
                     <Package size={48} style={{ opacity: 0.1, marginBottom: '15px' }} />
                     <p>Không tìm thấy sản phẩm nào phù hợp.</p>
                   </td>
@@ -371,7 +406,8 @@ const InventoryManagement = () => {
 
             <button 
               onClick={() => setCurrentPage(p => p + 1)}
-              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', cursor: 'pointer', color: '#64748b', fontWeight: '600' }}
+              disabled={totalPages === 0 || currentPage >= totalPages}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: totalPages === 0 || currentPage >= totalPages ? '#f8fafc' : 'white', cursor: totalPages === 0 || currentPage >= totalPages ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
             >
               Sau
             </button>
@@ -403,6 +439,128 @@ const InventoryManagement = () => {
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        .inventory-table-wrap {
+          width: 100%;
+          overflow-x: auto;
+          overflow-y: visible;
+        }
+        .inventory-table {
+          min-width: 1120px;
+          table-layout: fixed;
+        }
+        .inventory-table th,
+        .inventory-table td {
+          vertical-align: middle;
+        }
+        .inventory-table th {
+          white-space: nowrap;
+          font-size: 0.82rem;
+          line-height: 1.2;
+          padding: 16px 18px;
+        }
+        .inventory-table td {
+          font-size: 0.92rem;
+          padding: 18px;
+        }
+        .inventory-col-product { width: 39%; }
+        .inventory-col-sku { width: 11%; }
+        .inventory-col-category { width: 12%; }
+        .inventory-col-price { width: 12%; }
+        .inventory-col-stock { width: 12%; }
+        .inventory-col-status { width: 10%; }
+        .inventory-col-action { width: 4%; }
+        .inventory-product-header,
+        .inventory-product-cell {
+          padding-left: 25px !important;
+        }
+        .inventory-action-header,
+        .inventory-action-cell {
+          padding-right: 25px !important;
+          text-align: right;
+        }
+        .sortable-header {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          white-space: nowrap;
+        }
+        .sortable-header svg {
+          opacity: 0.5;
+          flex-shrink: 0;
+        }
+        .inventory-product-info {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-width: 0;
+        }
+        .inventory-product-thumb {
+          width: 45px;
+          height: 45px;
+          border-radius: 8px;
+          overflow: hidden;
+          background: #f8fafc;
+          border: 1px solid #f1f5f9;
+          flex: 0 0 45px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .inventory-product-name {
+          min-width: 0;
+          font-weight: 700;
+          color: #1e293b;
+          line-height: 1.35;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .inventory-sku {
+          display: inline-block;
+          max-width: 100%;
+          background: #f1f5f9;
+          padding: 5px 8px;
+          border-radius: 6px;
+          font-size: 0.74rem;
+          font-weight: 700;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          vertical-align: middle;
+        }
+        .inventory-category {
+          display: inline-block;
+          max-width: 100%;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          vertical-align: middle;
+        }
+        .inventory-price {
+          display: inline-block;
+          font-weight: 700;
+          white-space: nowrap;
+        }
+        .inventory-stock,
+        .inventory-status {
+          white-space: nowrap;
+        }
+        .inventory-stock {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+        @media (max-width: 1200px) {
+          .inventory-table {
+            min-width: 1040px;
+          }
+          .inventory-table th,
+          .inventory-table td {
+            padding-left: 14px;
+            padding-right: 14px;
+          }
         }
       `}</style>
     </div>
