@@ -168,10 +168,10 @@ const ProductDetailPage = () => {
                 const targetProductId = String(data.productId || '');
                 const currentProductId = String(prev.backendId || prev._id || id);
                 if (targetProductId !== currentProductId) return prev;
-                
+
                 const next = { ...prev };
                 if (data.variantId) {
-                    next.variants = next.variants.map(v => 
+                    next.variants = next.variants.map(v =>
                         String(v.id) === String(data.variantId) ? { ...v, stock: data.newStock } : v
                     );
                 } else {
@@ -775,8 +775,8 @@ const ProductDetailPage = () => {
                                         key={tab}
                                         onClick={() => setCrossSellTab(tab)}
                                         className={`px-4 py-1.5 rounded-lg text-[13px] font-bold transition-all border ${crossSellTab === tab
-                                                ? 'bg-[#00917a] text-white border-[#00917a]'
-                                                : 'bg-white text-gray-400 border-gray-100 hover:border-[#00917a] hover:text-[#00917a]'
+                                            ? 'bg-[#00917a] text-white border-[#00917a]'
+                                            : 'bg-white text-gray-400 border-gray-100 hover:border-[#00917a] hover:text-[#00917a]'
                                             }`}
                                     >
                                         {tab}
@@ -1090,8 +1090,8 @@ const ProductDetailPage = () => {
                                             key={idx}
                                             onClick={() => setSelectedPayment(idx)}
                                             className={`relative h-[55px] border rounded-lg p-1.5 flex items-center justify-center transition-all ${selectedPayment === idx
-                                                    ? 'border-[#00917a] bg-emerald-50/30'
-                                                    : 'border-gray-200 hover:border-[#00917a]'
+                                                ? 'border-[#00917a] bg-emerald-50/30'
+                                                : 'border-gray-200 hover:border-[#00917a]'
                                                 }`}
                                         >
                                             <img src={offer.logo} alt={offer.name} className="max-w-full max-h-full object-contain" />
@@ -1791,8 +1791,8 @@ const ProductDetailPage = () => {
             {reviewNotice.message && (
                 <div
                     className={`fixed top-40 right-6 z-[210] px-4 py-2 rounded-xl shadow-lg text-sm font-bold ${reviewNotice.type === 'success'
-                            ? 'bg-white border border-[#008d71]/30 text-[#008d71]'
-                            : 'bg-white border border-[#ef4444]/30 text-[#ef4444]'
+                        ? 'bg-white border border-[#008d71]/30 text-[#008d71]'
+                        : 'bg-white border border-[#ef4444]/30 text-[#ef4444]'
                         }`}
                 >
                     {reviewNotice.message}
