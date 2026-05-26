@@ -3,21 +3,37 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
-import { Search, MapPin, User, ShoppingCart } from 'lucide-react';
+import { Search, MapPin, User, Ticket, Zap } from 'lucide-react';
 import api from '../lib/api';
 import { normalizeProduct } from '../lib/products';
+import NotificationBell from './NotificationBell';
 
 const Navbar = () => {
     const { t } = useLanguage();
     const { user } = useAuth();
     const { cartCount } = useCart();
-    const [unreadCount, setUnreadCount] = useState(0);
+
     const [searchQuery, setSearchQuery] = useState('');
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
+    const [trendingCategories, setTrendingCategories] = useState([]);
+    const [logo, setLogo] = useState(localStorage.getItem('adminLogo') || null);
     const navigate = useNavigate();
     const suggestionRef = useRef(null);
 
+    // Sync logo from localStorage
+    useEffect(() => {
+        const checkLogo = () => {
+            const savedLogo = localStorage.getItem('adminLogo');
+            if (savedLogo !== logo) setLogo(savedLogo);
+        };
+        window.addEventListener('storage', checkLogo);
+        const interval = setInterval(checkLogo, 2000);
+        return () => {
+            window.removeEventListener('storage', checkLogo);
+            clearInterval(interval);
+        };
+    }, [logo]);
     useEffect(() => {
         if (searchQuery.trim().length < 1) {
             setSuggestions([]);
@@ -57,23 +73,22 @@ const Navbar = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    useEffect(() => {
-        const loadUnreadCount = async () => {
-            if (!user?.id) {
-                setUnreadCount(0);
-                return;
-            }
 
+
+    useEffect(() => {
+        const loadCategories = async () => {
             try {
-                const response = await api.get('/api/notifications/unread-count');
-                setUnreadCount(Number(response.data?.data?.count || 0));
-            } catch {
-                setUnreadCount(0);
+                const response = await api.get('/api/categories');
+                // Only take first 6 active categories for trending section
+                const activeCats = (response.data?.data || []).slice(0, 6);
+                setTrendingCategories(activeCats);
+            } catch (error) {
+                // Fallback to minimal if API fails
+                setTrendingCategories([]);
             }
         };
-
-        loadUnreadCount();
-    }, [user?.id]);
+        loadCategories();
+    }, []);
 
     const handleSearch = (e) => {
         if (e) e.preventDefault();
@@ -126,19 +141,29 @@ const Navbar = () => {
 
     return (
         <nav className="w-full z-50 flex flex-col font-sans sticky top-10 sm:top-11 bg-[#f0f2f5] py-2.5 md:py-4">
-            <div className="max-w-[1200px] mx-auto px-4 w-full">
+            <div className="max-w-[1400px] mx-auto px-4 w-full">
                 
                 {/* Main Row */}
-                <div className="flex flex-wrap lg:flex-nowrap items-center gap-2.5 lg:gap-x-10 h-auto lg:h-[46px]">
+                <div className="flex flex-wrap lg:flex-nowrap items-center gap-2.5 lg:gap-x-6 h-auto lg:h-[46px]">
                     
-                    {/* 1. Logo (Simple Dark Green) */}
-                    <Link to="/" className="flex items-center gap-2 shrink-0 group h-full min-w-0">
-                        <div className="text-[#004f44]">
-                             <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor"><path d="M17,19H7V5H17M17,1H7C5.89,1 5,1.89 5,3V21C5,22.11 5.89,23 7,23H17C18.11,23 19,22.11 19,21V3C19,1.89 18.11,1 17,1Z" /></svg>
-                        </div>
-                        <div className="flex flex-col leading-[0.9]">
-                            <span className="text-[18px] sm:text-[22px] font-black text-[#004f44] tracking-tighter uppercase">PhoneSin</span>
-                            <span className="text-[10px] sm:text-[11px] font-black text-[#004f44]/80 tracking-[0.22em] uppercase">MOBILE.COM</span>
+                    {/* 1. Logo (Customizable) */}
+                    <Link to="/" className="flex items-center gap-2 shrink-0 group h-full">
+                        <div className="flex items-center gap-2">
+                            {logo ? (
+                                <div className="h-[36px] w-[36px] flex items-center justify-center overflow-hidden rounded-lg">
+                                    <img src={logo} alt="Logo" className="w-full h-full object-contain" />
+                                </div>
+                            ) : (
+                                <div className="text-[#004f44]">
+                                    <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor"><path d="M17,19H7V5H17M17,1H7C5.89,1 5,1.89 5,3V21C5,22.11 5.89,23 7,23H17C18.11,23 19,22.11 19,21V3C19,1.89 18.11,1 17,1Z" /></svg>
+                                </div>
+                            )}
+                            <div className="flex flex-col leading-[0.9]">
+                                <span className="text-[22px] font-black text-[#004f44] tracking-tighter uppercase">
+                                    {localStorage.getItem('websiteName')?.split(' ')[0] || 'PhoneSin'}
+                                </span>
+                                <span className="text-[11px] font-black text-[#004f44]/80 tracking-[0.22em] uppercase">MOBILE.COM</span>
+                            </div>
                         </div>
                     </Link>
 
@@ -146,7 +171,7 @@ const Navbar = () => {
                     <div className="w-full lg:flex-1 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 lg:gap-x-6 h-auto lg:h-full min-w-0">
                         
                         {/* Search Bar Wrapper */}
-                        <div className="w-full lg:max-w-[680px] lg:flex-1 flex flex-col relative h-[42px] sm:h-[44px] lg:h-full min-w-0" ref={suggestionRef}>
+                        <div className="w-full lg:flex-1 flex flex-col relative h-[42px] sm:h-[44px] lg:h-full min-w-0" ref={suggestionRef}>
                             <div className="relative group flex items-center h-full">
                                 <input 
                                     type="text" 
@@ -203,44 +228,60 @@ const Navbar = () => {
                         </div>
 
                         {/* Right Actions */}
-                        <div className="flex items-center justify-end gap-2 sm:gap-4 lg:gap-7 shrink-0 h-9 sm:h-11 lg:h-full min-w-0">
-                            {/* Location */}
-                            <Link to="/store-locator" className="flex items-center gap-1.5 cursor-pointer group h-full focus-within:ring-2 ring-[#008d71] rounded-md transition-shadow">
-                                <MapPin size={20} className="text-[#008d71]" strokeWidth={1.5} />
-                                <span className="hidden md:inline text-[15px] font-semibold text-[#008d71] whitespace-nowrap">Tìm siêu thị</span>
+                        <div className="flex items-center justify-end gap-1 sm:gap-2 shrink-0 h-9 sm:h-11 lg:h-full min-w-0">
+
+                            {/* 1. Location */}
+                            <Link to="/store-locator" className="hidden md:flex items-center gap-1.5 px-2 py-1.5 hover:bg-gray-100 rounded-lg transition-all group">
+                                <MapPin size={18} className="text-[#008d71]" strokeWidth={1.5} />
+                                <span className="text-[14px] font-semibold text-[#008d71] whitespace-nowrap">Tìm siêu thị</span>
                             </Link>
 
-                            {/* User Profile */}
-                            <Link to={user ? "/profile" : "/login"} className="flex items-center gap-1.5 cursor-pointer group h-full">
-                                <div className="relative">
-                                    <User size={20} className="text-[#008d71]" strokeWidth={1.5} />
-                                    {unreadCount > 0 && (
-                                        <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 bg-[#ff424e] text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                                            {unreadCount > 99 ? '99+' : unreadCount}
-                                        </span>
-                                    )}
-                                </div>
-                                <span className="hidden md:inline text-[15px] font-semibold text-[#008d71] whitespace-nowrap">
-                                    {user ? `Chào, ${user.name.split(' ')[0]}` : 'Tài khoản'}
+                            <div className="hidden md:block w-px h-5 bg-gray-200 mx-1" />
+
+                            {/* 2. Notification Bell */}
+                            <NotificationBell />
+
+                            {/* 3. User Profile */}
+                            <Link to={user ? "/profile" : "/login"} className="flex items-center gap-1.5 px-2 py-1.5 hover:bg-gray-100 rounded-lg transition-all group">
+                                <User size={18} className="text-[#008d71]" strokeWidth={1.5} />
+                                <span className="hidden md:inline text-[14px] font-semibold text-[#008d71] whitespace-nowrap">
+                                    {user ? `Chào, ${user.name?.split(' ')[0]}` : 'Tài khoản'}
                                 </span>
                             </Link>
 
-                            {/* Admin Shortcut (Temporary for testing) */}
-                            {(user?.role === 'admin' || user?.isAdmin) && (
-                                <Link to="/admin" className="hidden xl:flex items-center gap-1.5 px-3 py-1 bg-[#008d71]/10 rounded-full hover:bg-[#008d71]/20 transition-all">
-                                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                                    <span className="text-[13px] font-bold text-[#008d71]">Admin Panel</span>
+                            <div className="w-px h-5 bg-gray-200 mx-1" />
+
+                            {/* 4. Voucher group: Ví + Săn */}
+                            {user && (
+                                <Link to="/my-vouchers" className="flex items-center gap-1 px-2 py-1.5 hover:bg-gray-100 rounded-lg transition-all" title="Ví Voucher">
+                                    <Ticket size={18} className="text-slate-600" strokeWidth={1.5} />
+                                    <span className="hidden lg:inline text-[13px] font-semibold text-slate-600">Ví</span>
                                 </Link>
                             )}
 
-                            {/* Simple Cart Bag */}
-                            <Link to="/cart" className="flex items-center gap-1.5 p-1 group">
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#111" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:stroke-[#008d71] transition-colors">
+                            <Link to="/hunt-vouchers" className="flex items-center gap-1 px-2.5 py-1.5 bg-amber-400 hover:bg-amber-500 rounded-full transition-all shadow-sm group" title="Săn Voucher">
+                                <Zap size={14} className="text-white" fill="white" />
+                                <span className="text-[11px] font-black text-white whitespace-nowrap uppercase hidden sm:inline">Săn</span>
+                            </Link>
+
+                            {/* Admin Shortcut */}
+                            {(user?.role === 'admin' || user?.isAdmin) && (
+                                <Link to="/admin" className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 bg-[#008d71]/10 rounded-full hover:bg-[#008d71]/20 transition-all ml-1">
+                                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                                    <span className="text-[12px] font-bold text-[#008d71]">Admin</span>
+                                </Link>
+                            )}
+
+                            <div className="w-px h-5 bg-gray-200 mx-1" />
+
+                            {/* 5. Cart */}
+                            <Link to="/cart" className="relative flex items-center p-2 hover:bg-gray-100 rounded-lg transition-all group">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#333" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="group-hover:stroke-[#008d71] transition-colors">
                                     <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/>
                                 </svg>
-                                <div className="bg-[#ff424e] text-white text-[12px] font-semibold w-[20px] h-[20px] rounded-full flex items-center justify-center">
+                                <span className="absolute -top-0.5 -right-0.5 bg-[#ff424e] text-white text-[10px] font-bold min-w-[17px] h-[17px] px-0.5 rounded-full flex items-center justify-center leading-none">
                                     {cartCount}
-                                </div>
+                                </span>
                             </Link>
 
                         </div>
@@ -252,16 +293,26 @@ const Navbar = () => {
                 <div className="flex items-center gap-2 sm:gap-3 mt-2 lg:ml-[200px] overflow-x-auto no-scrollbar pb-1">
                     <span className="text-[12px] sm:text-[14px] font-black text-[#008d71] uppercase whitespace-nowrap">Từ khóa xu hướng</span>
                     <div className="flex gap-3 sm:gap-4 flex-nowrap">
-                        {[
-                            { name: 'iPhone', link: '/category/iphone' },
-                            { name: 'Samsung', link: '/category/samsung' },
-                            { name: 'Xiaomi', link: '/category/xiaomi' },
-                            { name: 'Laptop', link: '/category/laptop' },
-                            { name: 'Màn hình', link: '/category/man-hinh' },
-                            { name: 'Đồng hồ', link: '/category/dong-ho' }
-                        ].map(kw => (
-                            <Link key={kw.name} to={kw.link} className="text-[13px] sm:text-[14px] font-bold text-gray-500/80 hover:text-[#008d71] transition-colors whitespace-nowrap">{kw.name}</Link>
-                        ))}
+                        {trendingCategories.length > 0 ? (
+                            trendingCategories.map(kw => (
+                                <Link 
+                                    key={kw.id || kw._id} 
+                                    to={`/category/${kw.slug}`} 
+                                    className={`text-[13px] sm:text-[14px] font-bold transition-colors whitespace-nowrap ${
+                                        kw.isFeatured 
+                                        ? 'text-yellow-500 hover:text-yellow-400' 
+                                        : 'text-gray-500/80 hover:text-[#008d71]'
+                                    }`}
+                                >
+                                    {kw.name}
+                                </Link>
+                            ))
+                        ) : (
+                            // Fallback if no categories yet
+                            ['iPhone', 'Xiaomi', 'Laptop', 'Phụ kiện'].map(kw => (
+                                <span key={kw} className="text-[13px] sm:text-[14px] font-bold text-gray-500/80 whitespace-nowrap">{kw}</span>
+                            ))
+                        )}
                     </div>
                 </div>
 

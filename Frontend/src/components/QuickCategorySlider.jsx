@@ -2,15 +2,31 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 
 const QuickCategorySlider = () => {
-    const items = [
-        { name: 'Redmi Note 15', img: 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?q=80&w=200&auto=format&fit=crop', link: '/category/xiaomi' },
-        { name: 'iPhone 16 Pro', img: 'https://images.unsplash.com/photo-1616348436168-de43ad0db179?q=80&w=200&auto=format&fit=crop', link: '/category/iphone' },
-        { name: 'S24 Ultra', img: 'https://images.unsplash.com/photo-1610945265064-0e34e5519bbf?q=80&w=200&auto=format&fit=crop', link: '/category/samsung' },
-        { name: 'Xiaomi 15 Ultra', img: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?q=80&w=200&auto=format&fit=crop', link: '/category/xiaomi' },
-        { name: 'iPad Pro M4', img: 'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?q=80&w=200&auto=format&fit=crop', link: '/category/tablet' },
-        { name: 'MacBook Air', img: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?q=80&w=200&auto=format&fit=crop', link: '/category/laptop' },
-        { name: 'ROG Phone 8', img: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=200&auto=format&fit=crop', link: '/category/gaming' },
-    ];
+    const [items, setItems] = React.useState([]);
+
+    React.useEffect(() => {
+        const fetchCategories = async () => {
+            try {
+                const response = await fetch('/api/categories');
+                const data = await response.json();
+                // Map top 8 categories that are active
+                const activeCats = (data.data || [])
+                    .filter(cat => !data.inactiveSlugs?.includes(cat.slug))
+                    .slice(0, 8)
+                    .map(cat => ({
+                        name: cat.name,
+                        img: cat.icon || 'https://images.unsplash.com/photo-1598327105666-5b89351aff97?q=80&w=200&auto=format&fit=crop',
+                        link: `/category/${cat.slug}`
+                    }));
+                setItems(activeCats);
+            } catch (error) {
+                console.error('Error fetching categories for slider:', error);
+            }
+        };
+        fetchCategories();
+    }, []);
+
+    if (items.length === 0) return null;
 
     return (
         <div className="w-full py-8 overflow-x-auto no-scrollbar">

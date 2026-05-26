@@ -12,10 +12,21 @@ const wishlistSchema = new mongoose.Schema(
       ref: 'Product',
       required: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: Date,
   },
   { timestamps: true }
 );
 
-wishlistSchema.index({ userId: 1, productId: 1 }, { unique: true });
+wishlistSchema.index(
+  { userId: 1, productId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isDeleted: { $ne: true } },
+  }
+);
 
 export default mongoose.model('Wishlist', wishlistSchema);

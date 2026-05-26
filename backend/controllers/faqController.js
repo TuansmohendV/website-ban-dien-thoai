@@ -21,11 +21,14 @@ export const createAdminFaq = asyncHandler(async (req, res, next) => {
 
 // Admin: Get all FAQs
 export const getAdminFaqs = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, category } = req.query;
+  const { page = 1, limit = 10, category, includeInactive } = req.query;
   const skip = (page - 1) * limit;
 
   const query = {};
   if (category) query.category = category;
+  if (String(includeInactive) !== 'true') {
+    query.isActive = true;
+  }
 
   const faqs = await FAQ.find(query)
     .limit(limit * 1)
@@ -61,15 +64,18 @@ export const updateAdminFaq = asyncHandler(async (req, res, next) => {
 
 // Admin: Delete FAQ
 export const deleteAdminFaq = asyncHandler(async (req, res, next) => {
-  const faq = await FAQ.findByIdAndDelete(req.params.id);
+  const faq = await FAQ.findById(req.params.id);
 
   if (!faq) {
     return next(new AppError('Không tìm thấy FAQ', 404));
   }
 
+  faq.isActive = false;
+  await faq.save();
+
   res.json({
     status: 'success',
-    message: 'Xóa FAQ thành công',
+    message: 'Chuyển FAQ vào trạng thái đã tắt (xoá mềm) thành công',
   });
 });
 

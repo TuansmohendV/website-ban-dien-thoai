@@ -1,7 +1,7 @@
 export const isVoucherActive = (voucher) => {
   const now = new Date();
 
-  if (!voucher || !voucher.isActive) {
+  if (!voucher || !voucher.isActive || voucher.isDeleted) {
     return false;
   }
 

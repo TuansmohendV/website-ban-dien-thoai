@@ -15,6 +15,7 @@ import ProductDetailPage from './pages/User/ProductDetailPage';
 import CartPage from './pages/User/CartPage';
 import CategoryPage from './pages/User/CategoryPage';
 import CheckoutPage from './pages/User/CheckoutPage';
+import CheckoutResultPage from './pages/User/CheckoutResultPage';
 import AboutPage from './pages/User/AboutPage';
 import ContactPage from './pages/User/ContactPage';
 import ProfilePage from './pages/User/ProfilePage';
@@ -28,9 +29,13 @@ import ReturnRequestPage from './pages/User/ReturnRequestPage';
 import ReferralPage from './pages/User/ReferralPage';
 import FlashVoucherPage from './pages/User/FlashVoucherPage';
 import InvoicePage from './pages/User/InvoicePage';
+import MockPaymentPage from './pages/User/MockPaymentPage';
 import StoreLocatorPage from './pages/User/StoreLocatorPage';
 import CustomerSupportPage from './pages/User/CustomerSupportPage';
 import ChangePasswordPage from './pages/User/ChangePasswordPage';
+import VoucherHuntingPage from './pages/User/VoucherHuntingPage';
+import MyVouchersPage from './pages/User/MyVouchersPage';
+import NotificationsPage from './pages/User/NotificationsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import ScrollToTop from './components/ScrollToTop';
 
@@ -48,8 +53,48 @@ import UserManagement from './pages/Admin/UserManagement';
 import FeedbackManagement from './pages/Admin/FeedbackManagement';
 import PromotionManagement from './pages/Admin/PromotionManagement';
 import IconManagement from './pages/Admin/IconManagement';
+import BannerManagement from './pages/Admin/BannerManagement';
+import SystemSettings from './pages/Admin/SystemSettings';
+import MediaManagement from './pages/Admin/MediaManagement';
+import NotificationManagement from './pages/Admin/NotificationManagement';
+import HashtagManagement from './pages/Admin/HashtagManagement';
+import InventoryManagement from './pages/Admin/InventoryManagement';
+import LibraryManagement from './pages/Admin/LibraryManagement';
 
 function App() {
+  // Sync Brand Assets (Logo, Favicon, Title) from localStorage
+  React.useEffect(() => {
+    const updateGlobalBrand = () => {
+      // 1. Update Favicon
+      const savedFavicon = localStorage.getItem('adminFavicon');
+      if (savedFavicon) {
+        let link = document.querySelector("link[rel~='icon']");
+        if (!link) {
+          link = document.createElement('link');
+          link.rel = 'icon';
+          document.getElementsByTagName('head')[0].appendChild(link);
+        }
+        link.href = savedFavicon;
+      }
+
+      // 2. Update Document Title (SEO)
+      const savedTitle = localStorage.getItem('websiteName');
+      if (savedTitle && !window.location.pathname.startsWith('/admin')) {
+        document.title = savedTitle;
+      } else if (window.location.pathname.startsWith('/admin')) {
+        document.title = 'PhoneSin Admin';
+      }
+    };
+
+    updateGlobalBrand();
+    window.addEventListener('storage', updateGlobalBrand);
+    const interval = setInterval(updateGlobalBrand, 1000); 
+    return () => {
+      window.removeEventListener('storage', updateGlobalBrand);
+      clearInterval(interval);
+    };
+  }, []);
+
   return (
     <LanguageProvider>
       <AuthProvider>
@@ -64,6 +109,8 @@ function App() {
               <Route path="category" element={<CategoryPage />} />
               <Route path="category/:id" element={<CategoryPage />} />
               <Route path="checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
+              <Route path="checkout-result" element={<ProtectedRoute><CheckoutResultPage /></ProtectedRoute>} />
+              <Route path="mock-payment" element={<ProtectedRoute><MockPaymentPage /></ProtectedRoute>} />
               <Route path="store-locator" element={<StoreLocatorPage />} />
               <Route path="about" element={<AboutPage />} />
               <Route path="contact" element={<ContactPage />} />
@@ -80,6 +127,9 @@ function App() {
               <Route path="flash-voucher" element={<FlashVoucherPage />} />
               <Route path="invoice/:orderId" element={<ProtectedRoute><InvoicePage /></ProtectedRoute>} />
               <Route path="customer-support" element={<ProtectedRoute><CustomerSupportPage /></ProtectedRoute>} />
+              <Route path="hunt-vouchers" element={<VoucherHuntingPage />} />
+              <Route path="my-vouchers" element={<ProtectedRoute><MyVouchersPage /></ProtectedRoute>} />
+              <Route path="notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
             </Route>
 
             {/* Các trang không dùng chung Layout (Trang đăng nhập/đăng ký/giỏ hàng) */}
@@ -94,10 +144,17 @@ function App() {
               <Route path="products" element={<ProductManagement />} />
               <Route path="categories" element={<CategoryManagement />} />
               <Route path="orders" element={<OrderManagement />} />
+              <Route path="inventory" element={<InventoryManagement />} />
               <Route path="users" element={<UserManagement />} />
               <Route path="promotions" element={<PromotionManagement />} />
               <Route path="feedback" element={<FeedbackManagement />} />
               <Route path="icons" element={<IconManagement />} />
+              <Route path="banners" element={<BannerManagement />} />
+              <Route path="media" element={<MediaManagement />} />
+              <Route path="library" element={<LibraryManagement />} />
+              <Route path="settings" element={<SystemSettings />} />
+              <Route path="notifications" element={<NotificationManagement />} />
+              <Route path="hashtags" element={<HashtagManagement />} />
             </Route>
           </Routes>
         </OrdersProvider>
@@ -108,4 +165,3 @@ function App() {
 }
 
 export default App;
-

@@ -11,7 +11,9 @@ import {
   Zap,
   Tag,
   Percent,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../lib/api';
 
@@ -43,9 +45,13 @@ const mapVoucherForAdmin = (voucher = {}) => ({
   used: Number(voucher.usedCount || 0),
   total: Number(voucher.usageLimit || 0),
   usageLimitPerUser: Number(voucher.usageLimitPerUser || 1),
+  huntLimit: Number(voucher.huntLimit || 0),
+  huntedCount: Number(voucher.huntedCount || 0),
   expiry: toDateInput(voucher.expiresAt),
   status: voucher.status || (voucher.isActive === false ? 'Tạm tắt' : 'Hoạt động'),
   isActive: voucher.isActive !== false,
+  isHuntedOnly: voucher.isHuntedOnly === true,
+  missionTask: voucher.missionTask || '',
 });
 
 const PromotionManagement = () => {
@@ -56,29 +62,53 @@ const PromotionManagement = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingPromo, setEditingPromo] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [pendingProofs, setPendingProofs] = useState([]);
+  const [isLoadingProofs, setIsLoadingProofs] = useState(false);
+  const [reviewNote, setReviewNote] = useState('');
+  const [isProcessingReview, setIsProcessingReview] = useState(false);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const promosPerPage = 10;
   
   const [formData, setFormData] = useState({
-    code: '', type: 'Giảm tiền', value: '', minSpend: '', total: '', expiry: '', isActive: true
+    code: '', type: 'Giảm tiền', value: '', minSpend: '', total: '', expiry: '', isActive: true,
+    isHuntedOnly: false, missionTask: '', huntLimit: 0
   });
 
   const loadPromos = useCallback(async () => {
     setIsLoading(true);
-
+    setLoadError('');
     try {
       const response = await api.get('/api/voucher/admin');
-      setPromos((response.data?.data || []).map(mapVoucherForAdmin));
-      setLoadError('');
+      const mappedPromos = (response.data?.data || []).map(mapVoucherForAdmin);
+      setPromos(mappedPromos);
     } catch (error) {
-      setPromos([]);
-      setLoadError(getApiErrorMessage(error, 'Không thể tải mã khuyến mãi từ database.'));
+      const msg = getApiErrorMessage(error) || 'Failed to load promotions';
+      setLoadError(msg);
+      console.error(msg);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
+  const loadPendingProofs = useCallback(async () => {
+    setIsLoadingProofs(true);
+    try {
+      const response = await api.get('/api/voucher/admin/pending-proofs');
+      setPendingProofs(response.data?.data || []);
+    } catch (error) {
+      console.error('Failed to load pending proofs:', error);
+    } finally {
+      setIsLoadingProofs(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadPromos();
-  }, [loadPromos]);
+    loadPendingProofs();
+  }, [loadPromos, loadPendingProofs]);
 
   // Derived Stats
   const stats = useMemo(() => {
@@ -96,6 +126,17 @@ const PromotionManagement = () => {
     p.type.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredPromos.length / promosPerPage);
+  const currentPromos = filteredPromos.slice(
+    (currentPage - 1) * promosPerPage,
+    currentPage * promosPerPage
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   const handleOpenModal = (promo = null) => {
     if (promo) {
       setEditingPromo(promo);
@@ -107,10 +148,16 @@ const PromotionManagement = () => {
         total: promo.total,
         expiry: promo.expiry,
         isActive: promo.isActive,
+        isHuntedOnly: promo.isHuntedOnly,
+        missionTask: promo.missionTask,
+        huntLimit: promo.huntLimit || 0,
       });
     } else {
       setEditingPromo(null);
-      setFormData({ code: '', type: 'Giảm tiền', value: '', minSpend: 0, total: 0, expiry: '', isActive: true });
+      setFormData({ 
+        code: '', type: 'Giảm tiền', value: '', minSpend: 0, total: 0, expiry: '', isActive: true,
+        isHuntedOnly: false, missionTask: '', huntLimit: 0
+      });
     }
     setShowModal(true);
   };
@@ -136,6 +183,9 @@ const PromotionManagement = () => {
       usageLimit: cleanData.total,
       expiresAt: cleanData.expiry,
       isActive: cleanData.isActive,
+      isHuntedOnly: cleanData.isHuntedOnly,
+      missionTask: cleanData.missionTask,
+      huntLimit: Math.max(0, Number(cleanData.huntLimit) || 0),
     };
 
     setIsSaving(true);
@@ -144,7 +194,10 @@ const PromotionManagement = () => {
       if (editingPromo) {
         await api.put(`/api/voucher/admin/${editingPromo.id}`, payload);
       } else {
-        await api.post('/api/voucher/admin', payload);
+        const response = await api.post('/api/voucher/admin', payload);
+        if (response.data?.notifiedUsers > 0) {
+          alert(`Đã tạo voucher và gửi thông báo đến ${response.data.notifiedUsers} khách hàng.`);
+        }
       }
 
       await loadPromos();
@@ -157,13 +210,27 @@ const PromotionManagement = () => {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa mã khuyến mãi này?')) {
+    if (window.confirm('Bạn có chắc chắn muốn xóa mã khuyến mãi này khỏi giao diện? (Dữ liệu trong database vẫn còn)')) {
       try {
         await api.delete(`/api/voucher/admin/${id}`);
         setPromos(promos.filter(p => p.id !== id));
       } catch (error) {
         alert(getApiErrorMessage(error, 'Không thể xóa mã khuyến mãi.'));
       }
+    }
+  };
+
+  const handleReview = async (id, status) => {
+    setIsProcessingReview(true);
+    try {
+      await api.post(`/api/voucher/admin/review-proof/${id}`, { status, adminNote: reviewNote });
+      alert(`Đã ${status === 'approved' ? 'duyệt' : 'từ chối'} thành công!`);
+      setReviewNote('');
+      loadPendingProofs();
+    } catch (error) {
+      alert(getApiErrorMessage(error));
+    } finally {
+      setIsProcessingReview(false);
     }
   };
 
@@ -179,10 +246,12 @@ const PromotionManagement = () => {
           <h1 className="page-title">Quản lý Khuyến mãi</h1>
           <p className="page-subtitle">Tạo mã giảm giá, chương trình ưu đãi và voucher cho khách hàng.</p>
         </div>
-        <button className="btn-primary" onClick={() => handleOpenModal()}>
-          <Plus size={20} />
-          Tạo mã mới
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button className="btn-primary" onClick={() => handleOpenModal()}>
+            <Plus size={20} />
+            Tạo mã mới
+          </button>
+        </div>
       </div>
 
       <div className="promo-stats-grid">
@@ -235,7 +304,7 @@ const PromotionManagement = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredPromos.length > 0 ? filteredPromos.map((promo) => (
+              {currentPromos.length > 0 ? currentPromos.map((promo) => (
                 <tr key={promo.id}>
                   <td>
                     <div className="promo-code-container">
@@ -294,6 +363,75 @@ const PromotionManagement = () => {
             </tbody>
           </table>
         </div>
+
+        {filteredPromos.length > 0 && (
+          <div className="table-footer" style={{
+            padding: '15px 25px',
+            borderTop: '1px solid #f1f5f9',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'white',
+            borderBottomLeftRadius: '16px',
+            borderBottomRightRadius: '16px'
+          }}>
+            <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
+              Hiển thị {(currentPage - 1) * promosPerPage + 1}-{Math.min(currentPage * promosPerPage, filteredPromos.length)} trên {filteredPromos.length} mã
+            </span>
+            <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f8fafc' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
+              >
+                Trước
+              </button>
+              
+              {/* Luôn hiển thị ít nhất 10 trang đầu tiên */}
+              {(() => {
+                const pages = [];
+                const minPagesToShow = 10;
+                let start = 1;
+                let end = Math.max(minPagesToShow, totalPages);
+                
+                if (totalPages > minPagesToShow && currentPage > 6) {
+                  start = Math.max(1, currentPage - 5);
+                  end = Math.min(totalPages, start + 9);
+                  if (end - start < 9) start = Math.max(1, end - 9);
+                } else if (totalPages > minPagesToShow) {
+                  end = 10;
+                }
+
+                for (let i = start; i <= end; i++) {
+                  pages.push(
+                    <button
+                      key={i}
+                      onClick={() => setCurrentPage(i)}
+                      style={{ 
+                        minWidth: '40px', height: '40px', borderRadius: '8px', border: '1px solid',
+                        borderColor: currentPage === i ? '#2563eb' : '#e2e8f0',
+                        background: currentPage === i ? '#2563eb' : 'white',
+                        color: currentPage === i ? 'white' : '#64748b',
+                        fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                      }}
+                    >
+                      {i}
+                    </button>
+                  );
+                }
+                return pages;
+              })()}
+
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(Math.max(10, totalPages), p + 1))}
+                disabled={currentPage >= Math.max(10, totalPages)}
+                style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage >= Math.max(10, totalPages) ? '#f8fafc' : 'white', cursor: currentPage >= Math.max(10, totalPages) ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
+              >
+                Sau
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Promotion Modal */}
@@ -359,15 +497,55 @@ const PromotionManagement = () => {
                     onChange={e => setFormData({...formData, expiry: e.target.value})}
                   />
                 </div>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#334155' }}>
-                  <input
-                    type="checkbox"
-                    checked={formData.isActive}
-                    onChange={e => setFormData({...formData, isActive: e.target.checked})}
-                    style={{ width: '18px', height: '18px', accentColor: '#2563eb' }}
-                  />
-                  Kích hoạt mã
-                </label>
+                <div style={{ gridColumn: 'span 2', display: 'flex', gap: '30px', background: '#f8fafc', padding: '15px', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#334155', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={formData.isActive}
+                      onChange={e => setFormData({...formData, isActive: e.target.checked})}
+                      style={{ width: '18px', height: '18px', accentColor: '#2563eb' }}
+                    />
+                    Kích hoạt mã
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '10px', fontWeight: 700, color: '#ef4444', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={formData.isHuntedOnly}
+                      onChange={e => setFormData({...formData, isHuntedOnly: e.target.checked})}
+                      style={{ width: '18px', height: '18px', accentColor: '#ef4444' }}
+                    />
+                    Mã dành cho Săn Voucher
+                  </label>
+                </div>
+
+                {formData.isHuntedOnly && (
+                  <>
+                    <div className="input-group" style={{ gridColumn: 'span 2' }}>
+                      <label style={{ color: '#ef4444' }}>Mô tả nhiệm vụ (Dành cho thợ săn)</label>
+                      <textarea 
+                        placeholder="VD: Chia sẻ sản phẩm lên Facebook và tag bạn bè để nhận voucher..." 
+                        value={formData.missionTask}
+                        onChange={e => setFormData({...formData, missionTask: e.target.value})}
+                        style={{ width: '100%', height: '80px', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', outline: 'none' }}
+                      />
+                    </div>
+                    <div className="input-group">
+                      <label style={{ color: '#ef4444' }}>Giới hạn số lượt săn (0 = không giới hạn)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="VD: 100"
+                        value={formData.huntLimit}
+                        onChange={e => setFormData({...formData, huntLimit: e.target.value})}
+                      />
+                      {formData.huntLimit > 0 && (
+                        <p style={{ fontSize: '11px', color: '#64748b', marginTop: '6px', fontWeight: 600 }}>
+                          ⚡ Chỉ {formData.huntLimit} người đầu tiên hoàn thành nhiệm vụ sẽ nhận được voucher này.
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
             <div className="modal-footer">
@@ -379,6 +557,7 @@ const PromotionManagement = () => {
           </div>
         </div>
       )}
+
     </div>
   );
 };

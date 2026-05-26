@@ -36,22 +36,42 @@ const buildVariantSummaryMap = (variants) => {
 
 export const getProducts = asyncHandler(async (req, res) => {
   const page = Math.max(Number(req.query.page) || 1, 1);
-  const isAdminRequest = req.user?.role === 'admin' || req.user?.isAdmin === true;
-  const maxLimit = isAdminRequest ? 200 : 50;
+  const isAdminRequest = ['admin', 'manager', 'staff'].includes(req.user?.role) || req.user?.isAdmin === true;
+  const maxLimit = isAdminRequest ? 500 : 200;
   const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), maxLimit);
   const skip = (page - 1) * limit;
 
   const keyword = req.query.keyword || req.query.search || '';
-  const brands = parseList(req.query.brand);
-  const categories = parseList(req.query.category);
+  const brands = parseList(req.query.brand || req.query.brands);
+  const categories = parseList(req.query.category || req.query.categories);
   const features = parseList(req.query.features || req.query.feature);
-  const storage = req.query.storage || '';
+  
+  // New Filter Fields
+  const ram = req.query.ram || '';
+  const rom = req.query.rom || req.query.storage || '';
+  const network = req.query.network || '';
+  const battery = req.query.battery || '';
+  const nfc = req.query.nfc || '';
+  const refreshRate = req.query.refreshRate || '';
+  const screenSize = req.query.screenSize || '';
+  const os = req.query.os || '';
+  const camera = req.query.camera || '';
+  const screenStandard = req.query.screenStandard || '';
+  const memoryCard = req.query.memoryCard || '';
+  const specialFeatures = req.query.specialFeatures || '';
+  
   const minPrice = Number(req.query.minPrice);
   const maxPrice = Number(req.query.maxPrice);
 
   const includeInactive =
     isAdminRequest && String(req.query.includeInactive) === 'true';
-  const filters = includeInactive ? [] : [{ status: 'active' }];
+  const includeDeleted =
+    isAdminRequest && String(req.query.includeDeleted) === 'true';
+  const filters = includeInactive ? [] : [{ $or: [{ status: 'active' }, { status: { $exists: false } }] }];
+
+  if (!includeDeleted) {
+    filters.push({ isDeleted: { $ne: true } });
+  }
 
   if (keyword) {
     const keywordRegex = buildRegex(keyword);
@@ -76,9 +96,31 @@ export const getProducts = asyncHandler(async (req, res) => {
   }
 
   if (categories.length) {
+    const categoryMapping = {
+      'dien-thoai': ['Smartphone', 'Điện thoại', 'Dien thoai', 'Mobile', 'dien-thoai'],
+      'laptop': ['Laptop', 'Máy tính xách tay', 'Notebook', 'laptop'],
+      'tablet': ['Tablet', 'Máy tính bảng', 'iPad', 'tablet'],
+      'dong-ho': ['Watch', 'Đồng hồ', 'Smartwatch', 'dong-ho'],
+      'am-thanh': ['Audio', 'Sound', 'Earphone', 'Speaker', 'Loa', 'Tai nghe', 'am-thanh'],
+      'man-hinh': ['Monitor', 'Màn hình', 'Screen', 'man-hinh'],
+      'linh-kien-may-tinh': ['Component', 'Linh kiện', 'Linh kien', 'PC Component', 'linh-kien-may-tinh'],
+      'phu-kien': ['Accessory', 'Phụ kiện', 'Phu kien', 'phu-kien'],
+      'smart-home': ['Smart Home', 'Gia dụng', 'Gia dung', 'Camera', 'Robot', 'smart-home'],
+      'tivi-dien-may': ['TV', 'Tivi', 'TiVi', 'Điện máy', 'Appliance', 'Gia dụng', 'tivi-dien-may'],
+      'tivi,-dien-may': ['TV', 'Tivi', 'TiVi', 'Điện máy', 'Appliance', 'Gia dụng', 'tivi-dien-may'],
+    };
+
+    const expandedCategories = [];
+    categories.forEach(cat => {
+      expandedCategories.push(cat);
+      if (categoryMapping[cat.toLowerCase()]) {
+        expandedCategories.push(...categoryMapping[cat.toLowerCase()]);
+      }
+    });
+
     filters.push({
       category: {
-        $in: categories.map(
+        $in: [...new Set(expandedCategories)].map(
           (category) => new RegExp(`^${escapeRegex(category)}$`, 'i')
         ),
       },
@@ -93,15 +135,168 @@ export const getProducts = asyncHandler(async (req, res) => {
     });
   }
 
-  if (storage) {
-    const storageRegex = buildRegex(storage);
+  // Spec-specific filters with multi-value support
+  if (ram && ram !== 'Tất cả') {
+    const rams = parseList(ram);
+    const ramRegexes = rams.map((r) => buildRegex(r));
+    filters.push({
+      $or: [
+        { ram: { $in: ramRegexes } },
+        { 'specifications.ram': { $in: ramRegexes } },
+      ],
+    });
+  }
+
+  if (rom && rom !== 'Tất cả') {
+    const roms = parseList(rom);
+    const romRegexes = roms.map((r) => buildRegex(r));
     const variantMatchedIds = await ProductVariant.distinct('product', {
-      storage: storageRegex,
+      storage: { $in: romRegexes },
       isActive: true,
     });
-
     filters.push({
-      $or: [{ storage: storageRegex }, { _id: { $in: variantMatchedIds } }],
+      $or: [
+        { storage: { $in: romRegexes } },
+        { 'specifications.storage': { $in: romRegexes } },
+        { 'specifications.rom': { $in: romRegexes } },
+        { _id: { $in: variantMatchedIds } },
+      ],
+    });
+  }
+
+  if (network && network !== 'Tất cả') {
+    const networks = parseList(network);
+    const networkRegexes = networks.map((n) => buildRegex(n));
+    filters.push({
+      $or: [
+        { features: { $in: networkRegexes } },
+        { specifications: { $in: networkRegexes } },
+        { 'specifications.network': { $in: networkRegexes } },
+        { 'specifications.sim': { $in: networkRegexes } },
+        { 'specifications.connectivity': { $in: networkRegexes } },
+        { name: { $in: networkRegexes } },
+      ],
+    });
+  }
+
+  if (battery && battery !== 'Tất cả') {
+    const batteryOptions = parseList(battery);
+    const batteryFilters = [];
+
+    batteryOptions.forEach((opt) => {
+      if (opt.includes('Dưới')) {
+        // Matches 0000-3999
+        batteryFilters.push({ battery: { $regex: new RegExp(`[0-3]\\d{3}`, 'i') } });
+      } else if (opt.includes('Trên')) {
+        // Matches 5000-9999
+        batteryFilters.push({ battery: { $regex: new RegExp(`[5-9]\\d{3}`, 'i') } });
+      } else if (opt.includes('-')) {
+        // Matches ranges like 4000mAh - 5000mAh (heuristic for 4xxx)
+        const digits = opt.match(/\d+/);
+        if (digits) {
+          const firstDigit = digits[0][0];
+          batteryFilters.push({ battery: { $regex: new RegExp(`${firstDigit}\\d{3}`, 'i') } });
+        }
+      } else {
+        batteryFilters.push({ battery: buildRegex(opt) });
+      }
+    });
+
+    if (batteryFilters.length > 0) {
+      filters.push({ $or: batteryFilters });
+    }
+  }
+
+  if (nfc && nfc !== 'Tất cả') {
+    if (nfc.includes('Có')) {
+      filters.push({
+        $or: [
+          { features: buildRegex('nfc') },
+          { specifications: buildRegex('nfc') },
+        ],
+      });
+    }
+  }
+
+  if (refreshRate && refreshRate !== 'Tất cả') {
+    const rates = parseList(refreshRate);
+    const rateRegexes = rates.map((r) => buildRegex(r));
+    filters.push({
+      $or: [
+        { screen: { $in: rateRegexes } },
+        { specifications: { $in: rateRegexes } },
+      ],
+    });
+  }
+
+  if (screenSize && screenSize !== 'Tất cả') {
+    const sizes = parseList(screenSize);
+    const sizeRegexes = sizes.map((s) => buildRegex(s));
+    filters.push({
+      $or: [
+        { screen: { $in: sizeRegexes } },
+        { 'specifications.screen': { $in: sizeRegexes } },
+        { 'specifications.screenSize': { $in: sizeRegexes } },
+      ],
+    });
+  }
+
+  if (os && os !== 'Tất cả') {
+    const osList = parseList(os);
+    const osRegexes = osList.map((o) => buildRegex(o));
+    filters.push({
+      $or: [
+        { 'specifications.os': { $in: osRegexes } },
+        { 'specifications.operatingSystem': { $in: osRegexes } },
+        { description: { $in: osRegexes } },
+      ],
+    });
+  }
+
+  if (camera && camera !== 'Tất cả') {
+    const cameras = parseList(camera);
+    const cameraRegexes = cameras.map((c) => buildRegex(c));
+    filters.push({
+      $or: [
+        { camera: { $in: cameraRegexes } },
+        { 'specifications.camera': { $in: cameraRegexes } },
+        { 'specifications.rearCamera': { $in: cameraRegexes } },
+        { 'specifications.frontCamera': { $in: cameraRegexes } },
+      ],
+    });
+  }
+
+  if (screenStandard && screenStandard !== 'Tất cả') {
+    const standards = parseList(screenStandard);
+    const standardRegexes = standards.map((s) => buildRegex(s));
+    filters.push({
+      $or: [
+        { screen: { $in: standardRegexes } },
+        { 'specifications.screen': { $in: standardRegexes } },
+        { 'specifications.resolution': { $in: standardRegexes } },
+      ],
+    });
+  }
+
+  if (memoryCard && memoryCard !== 'Tất cả') {
+    const cards = parseList(memoryCard);
+    const cardRegexes = cards.map((c) => buildRegex(c));
+    filters.push({
+      $or: [
+        { 'specifications.memoryCard': { $in: cardRegexes } },
+        { features: { $in: cardRegexes } },
+      ],
+    });
+  }
+
+  if (specialFeatures && specialFeatures !== 'Tất cả') {
+    const specFeatures = parseList(specialFeatures);
+    const specFeatureRegexes = specFeatures.map((f) => buildRegex(f));
+    filters.push({
+      $or: [
+        { features: { $in: specFeatureRegexes } },
+        { 'specifications.specialFeatures': { $in: specFeatureRegexes } },
+      ],
     });
   }
 
@@ -130,14 +325,17 @@ export const getProducts = asyncHandler(async (req, res) => {
     filters.length > 1 ? { $and: filters } : filters[0] || {};
 
   const sortMap = {
-    newest: { createdAt: -1 },
-    priceAsc: { price: 1 },
-    priceDesc: { price: -1 },
-    rating: { rating: -1, numReviews: -1 },
-    popular: { soldCount: -1, rating: -1 },
+    newest: { isFeatured: -1, createdAt: -1 },
+    priceAsc: { isFeatured: -1, price: 1 },
+    priceDesc: { isFeatured: -1, price: -1 },
+    rating: { isFeatured: -1, rating: -1, numReviews: -1 },
+    popular: { isFeatured: -1, soldCount: -1, rating: -1 },
+    bestseller: { isFeatured: -1, soldCount: -1 },
   };
 
-  const sort = sortMap[req.query.sort] || { createdAt: -1 };
+  const sort = sortMap[req.query.sort] || sortMap[req.query.sortBy] || { isFeatured: -1, createdAt: -1 };
+
+
 
   const total = await Product.countDocuments(query);
   const products = await Product.find(query)
@@ -212,6 +410,7 @@ export const getProductSuggestions = asyncHandler(async (req, res) => {
 
   const suggestions = await Product.find({
     status: 'active',
+    isDeleted: { $ne: true },
     name: buildRegex(keyword),
   })
     .select('name slug image price brand')
@@ -227,8 +426,8 @@ export const getProductById = asyncHandler(async (req, res) => {
   const identifier = req.params.id;
 
   const product = mongoose.isValidObjectId(identifier)
-    ? await Product.findOne({ _id: identifier, status: 'active' }).lean()
-    : await Product.findOne({ slug: identifier, status: 'active' }).lean();
+    ? await Product.findOne({ _id: identifier, status: 'active', isDeleted: { $ne: true } }).lean()
+    : await Product.findOne({ slug: identifier, status: 'active', isDeleted: { $ne: true } }).lean();
 
   if (!product) {
     throw new AppError(404, 'Không tìm thấy điện thoại.');
@@ -272,7 +471,7 @@ export const getProductById = asyncHandler(async (req, res) => {
 });
 
 export const getProductSpecs = asyncHandler(async (req, res) => {
-  const product = await Product.findById(req.params.id).lean();
+  const product = await Product.findOne({ _id: req.params.id, isDeleted: { $ne: true } }).lean();
 
   if (!product) {
     throw new AppError(404, 'Không tìm thấy sản phẩm.');
@@ -321,7 +520,7 @@ export const compareProductSpecs = asyncHandler(async (req, res) => {
     throw new AppError(400, 'Cần ít nhất 2 sản phẩm để so sánh.');
   }
 
-  const products = await Product.find({ _id: { $in: ids } }).lean();
+  const products = await Product.find({ _id: { $in: ids }, isDeleted: { $ne: true } }).lean();
 
   if (products.length < 2) {
     throw new AppError(404, 'Không tìm đủ sản phẩm để so sánh.');
@@ -356,11 +555,14 @@ export const compareProductSpecs = asyncHandler(async (req, res) => {
 
 // Admin: Create product
 export const createAdminProduct = asyncHandler(async (req, res, next) => {
-  const { name, description, brand, categoryId, price, countInStock, image, images } =
-    req.body;
+  const { 
+    name, description, brand, categoryId, price, countInStock, image, images,
+    tags, features, colors, screen, battery, camera, ram, storage, isHot, specifications,
+    isFeatured, isBestSeller, isRecommended, videoUrl
+  } = req.body;
 
-  if (!name || !brand || !categoryId || !price) {
-    return next(new AppError('Vui lòng nhập đầy đủ thông tin bắt buộc', 400));
+  if (!name || !brand || !categoryId || !price || !description || !image) {
+    return next(new AppError('Vui lòng nhập đầy đủ thông tin bắt buộc (Tên, Thương hiệu, Danh mục, Giá, Mô tả và Ảnh)', 400));
   }
 
   const product = await Product.create({
@@ -372,6 +574,20 @@ export const createAdminProduct = asyncHandler(async (req, res, next) => {
     countInStock: countInStock || 0,
     image,
     images: images || [],
+    tags: tags || [],
+    features: features || [],
+    colors: colors || [],
+    screen,
+    battery,
+    camera,
+    ram,
+    storage,
+    isHot: isHot || false,
+    isFeatured: isFeatured || false,
+    isBestSeller: isBestSeller || false,
+    isRecommended: isRecommended || false,
+    videoUrl: videoUrl || [],
+    specifications: specifications || {},
     status: 'active',
   });
 
@@ -387,7 +603,7 @@ export const getAdminProducts = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, search, status } = req.query;
   const skip = (page - 1) * limit;
 
-  const query = {};
+  const query = { isDeleted: { $ne: true } };
   if (search) {
     query.name = { $regex: search, $options: 'i' };
   }
@@ -431,8 +647,11 @@ export const getAdminProductDetail = asyncHandler(async (req, res, next) => {
 
 // Admin: Update product
 export const updateAdminProduct = asyncHandler(async (req, res, next) => {
-  const { name, description, brand, categoryId, price, countInStock, image, images, status } =
-    req.body;
+  const { 
+    name, description, brand, categoryId, price, countInStock, image, images, status,
+    tags, features, colors, screen, battery, camera, ram, storage, isHot, specifications,
+    isFeatured, isBestSeller, isRecommended, videoUrl
+  } = req.body;
 
   let product = await Product.findById(req.params.id);
 
@@ -440,15 +659,29 @@ export const updateAdminProduct = asyncHandler(async (req, res, next) => {
     return next(new AppError('Không tìm thấy sản phẩm', 404));
   }
 
-  if (name) product.name = name;
-  if (description) product.description = description;
-  if (brand) product.brand = brand;
-  if (categoryId) product.category = categoryId;
-  if (price) product.price = price;
+  if (name !== undefined) product.name = name;
+  if (description !== undefined) product.description = description;
+  if (brand !== undefined) product.brand = brand;
+  if (categoryId !== undefined) product.category = categoryId;
+  if (price !== undefined) product.price = price;
   if (countInStock !== undefined) product.countInStock = countInStock;
-  if (image) product.image = image;
-  if (images) product.images = images;
-  if (status) product.status = status;
+  if (image !== undefined) product.image = image;
+  if (images !== undefined) product.images = images;
+  if (status !== undefined) product.status = status;
+  if (tags !== undefined) product.tags = tags;
+  if (features !== undefined) product.features = features;
+  if (colors !== undefined) product.colors = colors;
+  if (screen !== undefined) product.screen = screen;
+  if (battery !== undefined) product.battery = battery;
+  if (camera !== undefined) product.camera = camera;
+  if (ram !== undefined) product.ram = ram;
+  if (storage !== undefined) product.storage = storage;
+  if (isHot !== undefined) product.isHot = isHot;
+  if (isFeatured !== undefined) product.isFeatured = isFeatured;
+  if (isBestSeller !== undefined) product.isBestSeller = isBestSeller;
+  if (isRecommended !== undefined) product.isRecommended = isRecommended;
+  if (videoUrl !== undefined) product.videoUrl = videoUrl;
+  if (specifications !== undefined) product.specifications = specifications;
 
   product = await product.save();
 
@@ -461,17 +694,26 @@ export const updateAdminProduct = asyncHandler(async (req, res, next) => {
 
 // Admin: Delete product
 export const deleteAdminProduct = asyncHandler(async (req, res, next) => {
-  const product = await Product.findByIdAndDelete(req.params.id);
+  const product = await Product.findById(req.params.id);
 
   if (!product) {
     return next(new AppError('Không tìm thấy sản phẩm', 404));
   }
 
-  // Delete related variants
-  await ProductVariant.deleteMany({ product: product._id });
+  // Soft delete: update status to inactive
+  product.status = 'inactive';
+  product.isDeleted = true;
+  product.deletedAt = new Date();
+  await product.save();
+
+  // Also soft delete related variants
+  await ProductVariant.updateMany(
+    { product: product._id },
+    { isActive: false, isDeleted: true, deletedAt: new Date() }
+  );
 
   res.json({
     status: 'success',
-    message: 'Xóa sản phẩm thành công',
+    message: 'Chuyển sản phẩm vào trạng thái đã xóa (xoá mềm) thành công',
   });
 });

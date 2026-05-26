@@ -26,13 +26,18 @@ const normalizeIconUrl = (url = '') => {
   return `https://${value}`;
 };
 
-const IconManagement = () => {
+const IconManagement = ({ isEmbedded = false, uploadTrigger = 0 }) => {
   const [icons, setIcons] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const fileInputRef = React.useRef(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedId, setCopiedId] = useState(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   useEffect(() => {
     const loadIcons = async () => {
@@ -61,6 +66,13 @@ const IconManagement = () => {
     loadIcons();
   }, []);
 
+  // React to parent's upload trigger
+  useEffect(() => {
+    if (uploadTrigger > 0 && fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  }, [uploadTrigger]);
+
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
     const uploadTasks = files.map((file) => new Promise((resolve, reject) => {
@@ -88,14 +100,9 @@ const IconManagement = () => {
     }
   };
 
-  const deleteIcon = async (id) => {
-    if (window.confirm('Xóa biểu tượng này khỏi thư viện?')) {
-      try {
-        await api.delete(`/api/admin/icons/${id}`);
-        setIcons((prev) => prev.filter((icon) => icon.id !== id));
-      } catch (error) {
-        alert(getApiErrorMessage(error, 'Không thể xóa icon.'));
-      }
+  const deleteIcon = (id) => {
+    if (window.confirm('Xóa biểu tượng này khỏi giao diện? (Dữ liệu gốc vẫn còn)')) {
+      setIcons((prev) => prev.filter((icon) => icon.id !== id));
     }
   };
 
@@ -109,21 +116,47 @@ const IconManagement = () => {
     icon.id.includes(searchTerm) || icon.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  return (
-    <div className="management-container">
-      <div className="header-actions">
-        <div>
-          <h1 className="page-title">Thư viện Biểu tượng</h1>
-          <p className="page-subtitle">Quản lý và cấp mã 4 số cho các icon sử dụng toàn hệ thống.</p>
-        </div>
-        <label className="btn-primary" style={{ cursor: 'pointer' }}>
-          <Upload size={20} />
-          Tải lên icon mới
-          <input type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleFileUpload} />
-        </label>
-      </div>
+  const totalPages = Math.ceil(filteredIcons.length / itemsPerPage);
+  const displayedIcons = filteredIcons.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-      <div className="filters-bar card">
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  return (
+    <div className={`management-container ${isEmbedded ? 'embedded-mode' : ''}`}>
+      {!isEmbedded && (
+        <div className="header-actions">
+          <div>
+            <h1 className="page-title">Thư viện Biểu tượng</h1>
+            <p className="page-subtitle">Quản lý và cấp mã 4 số cho các icon sử dụng toàn hệ thống.</p>
+          </div>
+          <label className="btn-primary" style={{ cursor: 'pointer' }}>
+            <Upload size={20} />
+            Tải lên icon mới
+            <input type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={handleFileUpload} />
+          </label>
+        </div>
+      )}
+
+      {/* Hidden file input for remote trigger */}
+      <input 
+        type="file" 
+        ref={fileInputRef} 
+        multiple 
+        accept="image/*" 
+        style={{ display: 'none' }} 
+        onChange={handleFileUpload} 
+      />
+
+      <div className="filters-bar card" style={{ 
+        padding: '20px 25px !important',
+        marginBottom: '25px',
+        background: 'white',
+        border: '1px solid #f1f5f9',
+        boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)'
+      }}>
         <div className="search-box">
           <Search size={18} />
           <input 
@@ -153,7 +186,7 @@ const IconManagement = () => {
           </div>
         )}
 
-        {filteredIcons.map((icon) => (
+        {displayedIcons.map((icon) => (
           <div key={icon.id} className="card" style={{ 
             padding: '20px', 
             textAlign: 'center', 
@@ -174,14 +207,29 @@ const IconManagement = () => {
               <img
                 src={normalizeIconUrl(icon.url)}
                 alt={icon.name}
-                style={{ maxWidth: '40px', maxHeight: '40px' }}
+                style={{ maxWidth: '40px', maxHeight: '40px', display: 'block' }}
                 onError={(event) => {
                   event.currentTarget.style.display = 'none';
+                  const parent = event.currentTarget.parentElement;
+                  if (parent) {
+                    const fallback = document.createElement('div');
+                    fallback.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>';
+                    parent.appendChild(fallback);
+                  }
                 }}
               />
             </div>
             
-            <div style={{ fontWeight: '800', fontSize: '1.2rem', color: '#2563eb', marginBottom: '5px' }}>
+            <div style={{ 
+              fontWeight: '800', 
+              fontSize: '1rem', 
+              color: '#2563eb', 
+              marginBottom: '5px',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              width: '100%'
+            }} title={`#${icon.id}`}>
               #{icon.id}
             </div>
             
@@ -234,6 +282,73 @@ const IconManagement = () => {
             <p>Không tìm thấy biểu tượng nào. Háy tải lên để bắt đầu!</p>
           </div>
         )}
+      </div>
+
+      {/* Smart Pagination Bar */}
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        padding: '15px 25px', 
+        borderTop: '1px solid #f1f5f9',
+        background: 'white',
+        borderRadius: '16px',
+        marginTop: '25px'
+      }}>
+        <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
+          Hiển thị {Math.min((currentPage - 1) * itemsPerPage + 1, filteredIcons.length)} - {Math.min(currentPage * itemsPerPage, filteredIcons.length)} trên {filteredIcons.length} icon
+        </span>
+        <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+          <button 
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f8fafc' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
+          >
+            Trước
+          </button>
+          
+          {(() => {
+            const pages = [];
+            const minPagesToShow = 10;
+            let start = 1;
+            let end = Math.max(minPagesToShow, totalPages);
+            
+            if (totalPages > minPagesToShow && currentPage > 6) {
+              start = Math.max(1, currentPage - 5);
+              end = Math.min(totalPages, start + 9);
+              if (end - start < 9) start = Math.max(1, end - 9);
+            } else if (totalPages > minPagesToShow) {
+              end = 10;
+            }
+
+            for (let i = start; i <= end; i++) {
+              pages.push(
+                <button
+                  key={i}
+                  onClick={() => setCurrentPage(i)}
+                  style={{ 
+                    minWidth: '40px', height: '40px', borderRadius: '8px', border: '1px solid',
+                    borderColor: currentPage === i ? '#2563eb' : '#e2e8f0',
+                    background: currentPage === i ? '#2563eb' : 'white',
+                    color: currentPage === i ? 'white' : '#64748b',
+                    fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                  }}
+                >
+                  {i}
+                </button>
+              );
+            }
+            return pages;
+          })()}
+
+          <button 
+            onClick={() => setCurrentPage(p => Math.min(Math.max(10, totalPages), p + 1))}
+            disabled={currentPage >= Math.max(10, totalPages)}
+            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage >= Math.max(10, totalPages) ? '#f8fafc' : 'white', cursor: currentPage >= Math.max(10, totalPages) ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
+          >
+            Sau
+          </button>
+        </div>
       </div>
     </div>
   );

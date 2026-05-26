@@ -17,25 +17,73 @@ import {
   Search,
   ChevronRight,
   User,
-  Image as ImageIcon
+  Image as ImageIcon,
+  LayoutTemplate,
+  Hash,
+  Dna,
+  Settings
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const AdminLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [logo, setLogo] = useState(localStorage.getItem('adminLogo') || null);
+  const [primaryColor, setPrimaryColor] = useState(localStorage.getItem('primaryColor') || '#2563eb');
+  const [sidebarTheme, setSidebarTheme] = useState(localStorage.getItem('sidebarTheme') || 'dark');
+  const [adminSearchTerm, setAdminSearchTerm] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const location = useLocation();
   const { user, logout } = useAuth();
+
+  // Listen for changes in localStorage to update assets and theme instantly
+  React.useEffect(() => {
+    const syncTheme = () => {
+      const savedLogo = localStorage.getItem('adminLogo');
+      const savedColor = localStorage.getItem('primaryColor');
+      const savedTheme = localStorage.getItem('sidebarTheme');
+      
+      if (savedLogo !== logo) setLogo(savedLogo);
+      if (savedColor && savedColor !== primaryColor) setPrimaryColor(savedColor);
+      if (savedTheme && savedTheme !== sidebarTheme) setSidebarTheme(savedTheme);
+    };
+    window.addEventListener('storage', syncTheme);
+    const interval = setInterval(syncTheme, 1000); 
+    return () => {
+      window.removeEventListener('storage', syncTheme);
+      clearInterval(interval);
+    };
+  }, [logo, primaryColor, sidebarTheme]);
+
+  // Handle click outside search
+  React.useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.header-search')) {
+        setIsSearchFocused(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const menuItems = [
     { path: '/admin', icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
     { path: '/admin/products', icon: <Package size={20} />, label: 'Sản phẩm' },
     { path: '/admin/categories', icon: <ListTree size={20} />, label: 'Danh mục' },
     { path: '/admin/orders', icon: <ShoppingBag size={20} />, label: 'Đơn hàng' },
+    { path: '/admin/inventory', icon: <Package size={20} />, label: 'Quản lý tồn kho' },
     { path: '/admin/users', icon: <Users size={20} />, label: 'Khách hàng' },
     { path: '/admin/promotions', icon: <Ticket size={20} />, label: 'Khuyến mãi' },
+    { path: '/admin/banners', icon: <LayoutTemplate size={20} />, label: 'Quản lý Banner' },
     { path: '/admin/feedback', icon: <MessageSquare size={20} />, label: 'Phản hồi' },
-    { path: '/admin/icons', icon: <ImageIcon size={20} />, label: 'Thư viện Icon' },
+    { path: '/admin/library', icon: <ImageIcon size={20} />, label: 'Quản lý Thư viện' },
+    { path: '/admin/hashtags', icon: <Hash size={20} />, label: 'Hashtags' },
+    { path: '/admin/settings', icon: <Settings size={20} />, label: 'Cài đặt hệ thống' },
   ];
+
+  const filteredMenuItems = menuItems.filter(item => 
+    item.label.toLowerCase().includes(adminSearchTerm.toLowerCase())
+  );
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
@@ -45,7 +93,9 @@ const AdminLayout = () => {
       <aside className={`admin-sidebar ${isSidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
           <div className="logo">
-            <span className="logo-icon">📱</span>
+            <div className="logo-icon-wrapper" style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', borderRadius: '6px' }}>
+              {logo ? <img src={logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <span className="logo-icon">📱</span>}
+            </div>
             {isSidebarOpen && <span className="logo-text">PhoneSin Admin</span>}
           </div>
           <button className="mobile-toggle" onClick={toggleSidebar}>
@@ -54,7 +104,7 @@ const AdminLayout = () => {
         </div>
 
         <nav className="sidebar-nav">
-          {menuItems.map((item) => (
+          {filteredMenuItems.map((item) => (
             <Link 
               key={item.path} 
               to={item.path} 
@@ -65,6 +115,11 @@ const AdminLayout = () => {
               {isSidebarOpen && location.pathname === item.path && <ChevronRight size={16} className="active-indicator" />}
             </Link>
           ))}
+          {filteredMenuItems.length === 0 && (
+            <div style={{ padding: '20px', color: '#94a3b8', fontSize: '13px', textAlign: 'center' }}>
+              Không tìm thấy mục nào
+            </div>
+          )}
         </nav>
 
         <div className="sidebar-footer">
@@ -72,10 +127,19 @@ const AdminLayout = () => {
             <span className="nav-icon"><Home size={20} /></span>
             {isSidebarOpen && <span className="nav-label">Quay lại trang chủ</span>}
           </Link>
-          <Link to="/" className="nav-item" onClick={logout}>
+          <button 
+            className="nav-item logout-btn" 
+            onClick={() => {
+              if(window.confirm('Bạn có chắc chắn muốn đăng xuất?')) {
+                logout();
+                window.location.href = '/login';
+              }
+            }}
+            style={{ width: '100%', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', padding: '12px 15px' }}
+          >
             <span className="nav-icon"><LogOut size={20} /></span>
             {isSidebarOpen && <span className="nav-label">Đăng xuất</span>}
-          </Link>
+          </button>
         </div>
       </aside>
 
@@ -87,17 +151,115 @@ const AdminLayout = () => {
             <button className="desktop-toggle" onClick={toggleSidebar}>
               <Menu size={24} />
             </button>
-            <div className="header-search">
+            <div className="header-search" style={{ position: 'relative' }}>
               <Search size={18} className="search-icon" />
-              <input type="text" placeholder="Tìm kiếm nhanh..." />
+              <input 
+                type="text" 
+                placeholder="Tìm kiếm nhanh..." 
+                value={adminSearchTerm}
+                onChange={(e) => setAdminSearchTerm(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+              />
+              {adminSearchTerm && (
+                <button 
+                  onClick={() => setAdminSearchTerm('')}
+                  style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#94a3b8', display: 'flex', alignItems: 'center' }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+
+              {/* Search Results Dropdown */}
+              {isSearchFocused && adminSearchTerm && (
+                <div className="admin-search-dropdown" style={{
+                  position: 'absolute', top: 'calc(100% + 10px)', left: 0, width: '100%',
+                  background: 'white', borderRadius: '12px', boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1)',
+                  border: '1px solid #e2e8f0', zIndex: 1002, overflow: 'hidden'
+                }}>
+                  <div style={{ padding: '10px 15px', borderBottom: '1px solid #f1f5f9', fontSize: '12px', fontWeight: '700', color: '#64748b', background: '#f8fafc' }}>
+                    KẾT QUẢ TÌM KIẾM
+                  </div>
+                  <div style={{ maxHieght: '300px', overflowY: 'auto' }}>
+                    {filteredMenuItems.map(item => (
+                      <Link 
+                        key={item.path} 
+                        to={item.path} 
+                        onClick={() => {
+                          setAdminSearchTerm('');
+                          setIsSearchFocused(false);
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 15px', textDecoration: 'none', color: '#1e293b', borderBottom: '1px solid #f8fafc' }}
+                      >
+                        <div style={{ color: primaryColor }}>{item.icon}</div>
+                        <span style={{ fontSize: '14px', fontWeight: '500' }}>{item.label}</span>
+                      </Link>
+                    ))}
+                    {filteredMenuItems.length === 0 && (
+                      <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>
+                        Không tìm thấy trang nào khớp
+                      </div>
+                    )}
+                  </div>
+                  <Link 
+                    to={`/admin/categories?q=${adminSearchTerm}`}
+                    onClick={() => {
+                      setAdminSearchTerm('');
+                      setIsSearchFocused(false);
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px', background: '#eff6ff', color: primaryColor, textDecoration: 'none', fontSize: '13px', fontWeight: '700' }}
+                  >
+                    Tìm "{adminSearchTerm}" trong Danh mục &rarr;
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
 
           <div className="header-right">
-            <button className="header-icon-btn">
-              <Bell size={20} />
-              <span className="badge">3</span>
-            </button>
+            <div style={{ position: 'relative' }}>
+              <button className="header-icon-btn" onClick={() => setIsNotificationOpen(!isNotificationOpen)}>
+                <Bell size={20} />
+                <span className="badge">3</span>
+              </button>
+
+              {isNotificationOpen && (
+                <div className="notification-dropdown">
+                  <div className="notification-header">
+                    <h3>Thông báo hệ thống</h3>
+                    <span>Đánh dấu tất cả đã đọc</span>
+                  </div>
+                  <div className="notification-list">
+                    <div className="notification-item urgent">
+                      <div className="notif-icon"><Bell size={16} color="#ef4444" /></div>
+                      <div className="notif-content">
+                        <p className="notif-title">CẢNH BÁO LỪA ĐẢO!</p>
+                        <p className="notif-text">Phát hiện hành vi gian lận thanh toán từ địa chỉ IP: 192.168.1.45. Cần kiểm tra ngay!</p>
+                        <span className="notif-time">2 phút trước</span>
+                      </div>
+                    </div>
+                    <div className="notification-item">
+                      <div className="notif-icon"><ShoppingBag size={16} color="#2563eb" /></div>
+                      <div className="notif-content">
+                        <p className="notif-title">Đơn hàng mới #1294</p>
+                        <p className="notif-text">Khách hàng Nguyễn Văn A vừa đặt mua iPhone 15 Pro Max.</p>
+                        <span className="notif-time">15 phút trước</span>
+                      </div>
+                    </div>
+                    <div className="notification-item">
+                      <div className="notif-icon"><Users size={16} color="#10b981" /></div>
+                      <div className="notif-content">
+                        <p className="notif-title">Thành viên mới</p>
+                        <p className="notif-text">Có thêm 5 người dùng vừa đăng ký tài khoản mới trong hôm nay.</p>
+                        <span className="notif-time">1 giờ trước</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="notification-footer">
+                    <Link to="/admin/notifications">Xem tất cả thông báo</Link>
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="admin-profile">
               <div className="admin-avatar">
                 <User size={20} />
@@ -131,13 +293,14 @@ const AdminLayout = () => {
           left: 0;
           top: 0;
           bottom: 0;
-          background: #0f172a;
-          color: white;
+          background: ${sidebarTheme === 'dark' ? '#0f172a' : 'white'};
+          color: ${sidebarTheme === 'dark' ? 'white' : '#1e293b'};
           width: 260px;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           z-index: 1000;
           display: flex;
           flex-direction: column;
+          border-right: ${sidebarTheme === 'light' ? '1px solid #e2e8f0' : 'none'};
         }
 
         .admin-sidebar.closed {
@@ -194,8 +357,13 @@ const AdminLayout = () => {
         }
 
         .nav-item.active {
-          background: #2563eb;
+          background: ${primaryColor};
           color: white;
+        }
+
+        .logout-btn:hover {
+          background: rgba(239, 68, 68, 0.1) !important;
+          color: #ef4444 !important;
         }
 
         .nav-icon {
@@ -332,7 +500,7 @@ const AdminLayout = () => {
           width: 40px;
           height: 40px;
           border-radius: 50%;
-          background: linear-gradient(135deg, #2563eb, #a855f7);
+          background: ${primaryColor};
           color: white;
           display: flex;
           align-items: center;
@@ -364,6 +532,86 @@ const AdminLayout = () => {
         .mobile-toggle {
           display: none;
         }
+
+        /* Notification Dropdown */
+        .notification-dropdown {
+          position: absolute;
+          top: 50px;
+          right: 0;
+          width: 350px;
+          background: white;
+          border-radius: 16px;
+          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+          border: 1px solid #e2e8f0;
+          z-index: 1001;
+          overflow: hidden;
+          animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .notification-header {
+          padding: 15px 20px;
+          border-bottom: 1px solid #f1f5f9;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .notification-header h3 { font-size: 1rem; margin: 0; font-weight: 700; }
+        .notification-header span { font-size: 12px; color: ${primaryColor}; cursor: pointer; }
+
+        .notification-list { max-height: 400px; overflow-y: auto; }
+
+        .notification-item {
+          padding: 15px 20px;
+          display: flex;
+          gap: 15px;
+          border-bottom: 1px solid #f8fafc;
+          transition: background 0.2s;
+          cursor: pointer;
+        }
+
+        .notification-item:hover { background: #f8fafc; }
+
+        .notification-item.urgent { background: #fff1f2; }
+        .notification-item.urgent:hover { background: #ffe4e6; }
+
+        .notif-icon {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: #f1f5f9;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .notification-item.urgent .notif-icon { background: #fecdd3; }
+
+        .notif-content { flex: 1; }
+        .notif-title { font-size: 13px; font-weight: 700; margin: 0; }
+        .notif-text { font-size: 12px; color: #64748b; margin: 4px 0; line-height: 1.4; }
+        .notif-time { font-size: 11px; color: #94a3b8; }
+
+        .notification-footer {
+          padding: 12px;
+          text-align: center;
+          border-top: 1px solid #f1f5f9;
+        }
+
+        .notification-footer a {
+          font-size: 13px;
+          color: #64748b;
+          text-decoration: none;
+          font-weight: 600;
+        }
+
+        .notification-footer a:hover { color: ${primaryColor}; }
 
         @media (max-width: 768px) {
           .admin-sidebar {

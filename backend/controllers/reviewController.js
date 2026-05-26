@@ -88,8 +88,8 @@ export const getReviewsByProductId = asyncHandler(async (req, res) => {
   }
 
   const [total, reviews] = await Promise.all([
-    Review.countDocuments({ product: req.params.productId }),
-    Review.find({ product: req.params.productId })
+    Review.countDocuments({ product: req.params.productId, isActive: true }),
+    Review.find({ product: req.params.productId, isActive: true })
       .populate('user', 'fullName avatar')
       .sort({ createdAt: -1 })
       .skip(skip)
@@ -114,14 +114,60 @@ export const getAdminReviews = asyncHandler(async (req, res) => {
   const skip = (page - 1) * limit;
 
   const [total, reviews] = await Promise.all([
-    Review.countDocuments({}),
-    Review.find({})
-      .populate('user', 'fullName avatar email')
-      .populate('product', 'name slug image')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
+    Review.countDocuments({ isActive: true }),
+    Review.aggregate([
+      { $match: { isActive: true } },
+      { $sort: { createdAt: -1 } },
+      { $skip: skip },
+      { $limit: limit },
+      // Join with product
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'product',
+          foreignField: '_id',
+          as: 'product'
+        }
+      },
+      { $unwind: { path: '$product', preserveNullAndEmptyArrays: true } },
+      // Join with user
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'user',
+          foreignField: '_id',
+          as: 'user'
+        }
+      },
+      { $unwind: { path: '$user', preserveNullAndEmptyArrays: true } },
+      // Join with orders to check VIP status
+      {
+        $lookup: {
+          from: 'orders',
+          let: { userId: '$user._id' },
+          pipeline: [
+            { $match: { $expr: { $eq: ['$user', '$$userId'] }, status: 'delivered' } },
+            { $group: { _id: null, totalSpent: { $sum: '$total' }, count: { $sum: 1 } } }
+          ],
+          as: 'userStats'
+        }
+      },
+      { $unwind: { path: '$userStats', preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          'user.isVIP': {
+            $or: [
+              { $gte: ['$userStats.totalSpent', 20000000] },
+              { $gte: ['$userStats.count', 2] }
+            ]
+          },
+          'user.totalSpent': { $ifNull: ['$userStats.totalSpent', 0] },
+          'user.orderCount': { $ifNull: ['$userStats.count', 0] }
+        }
+      },
+      // Cleanup sensitive data
+      { $project: { 'user.password': 0, 'user.resetPasswordToken': 0, 'user.resetPasswordExpiresAt': 0 } }
+    ])
   ]);
 
   res.json({
@@ -136,7 +182,7 @@ export const getAdminReviews = asyncHandler(async (req, res) => {
 });
 
 export const getMyReviews = asyncHandler(async (req, res) => {
-  const reviews = await Review.find({ user: req.user._id })
+  const reviews = await Review.find({ user: req.user._id, isActive: true })
     .populate('product', 'name slug image')
     .sort({ createdAt: -1 })
     .lean();
@@ -195,11 +241,12 @@ export const deleteMyReview = asyncHandler(async (req, res) => {
   }
 
   const productId = review.product;
-  await Review.findByIdAndDelete(review._id);
+  review.isActive = false;
+  await review.save();
   await syncProductReviewStats(productId);
 
   res.json({
-    message: 'Xóa đánh giá thành công.',
+    message: 'Đã ẩn đánh giá của bạn (xoá mềm) thành công.',
   });
 });
 
@@ -218,6 +265,11 @@ export const updateAdminReview = asyncHandler(async (req, res) => {
     review.moderationNote = req.body.moderationNote;
   }
 
+  if (req.body.reply !== undefined) {
+    review.reply = req.body.reply;
+    review.replyDate = new Date();
+  }
+
   await review.save();
 
   res.json({
@@ -227,15 +279,17 @@ export const updateAdminReview = asyncHandler(async (req, res) => {
 });
 
 export const deleteAdminReview = asyncHandler(async (req, res) => {
-  const review = await Review.findByIdAndDelete(req.params.id);
+  const review = await Review.findById(req.params.id);
 
   if (!review) {
     throw new AppError(404, 'Không tìm thấy đánh giá.');
   }
 
+  review.isActive = false;
+  await review.save();
   await syncProductReviewStats(review.product);
 
   res.json({
-    message: 'Xóa đánh giá thành công.',
+    message: 'Chuyển đánh giá vào trạng thái đã ẩn (xoá mềm) thành công.',
   });
 });

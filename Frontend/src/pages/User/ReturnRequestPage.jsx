@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../context/LanguageContext';
 import Breadcrumbs from '../../components/Breadcrumbs';
+import api from '../../lib/api';
 
 const ArrowLeftIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>);
 const UploadIcon = ({ className }) => (<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>);
@@ -32,16 +33,26 @@ const ReturnRequestPage = () => {
         'Thay đổi ý định / không còn nhu cầu'
     ];
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
         
-        // Giả lập gửi yêu cầu (simulation)
-        setTimeout(() => {
-            setIsSubmitting(false);
+        try {
+            await api.post('/api/support-tickets', {
+                title: `Yêu cầu ${formData.requestType === 'exchange' ? 'Đổi hàng' : 'Trả hàng'} - Đơn #${formData.orderCode}`,
+                description: `Lý do: ${formData.reason}\n\nChi tiết: ${formData.note}\n\nSĐT liên hệ: ${formData.contactPhone}`,
+                category: 'return',
+                orderId: formData.orderCode, // Might be order ID or Code
+                priority: 'high'
+            });
             setIsSuccess(true);
             window.scrollTo({ top: 0, behavior: 'smooth' });
-        }, 1500);
+        } catch (err) {
+            console.error('Failed to submit return request:', err);
+            alert('Có lỗi xảy ra khi gửi yêu cầu. Vui lòng thử lại sau.');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     if (isSuccess) {

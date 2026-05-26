@@ -7,6 +7,8 @@ import {
   getAdminUsers,
   getUserProfile,
   getUserStats,
+  linkAccount,
+  lookupBankAccount,
   updateAdminUser,
   updateAdminUserPassword,
   updateAdminUserRole,
@@ -19,6 +21,8 @@ const router = express.Router();
 // User routes
 router.get('/profile', protect, getUserProfile);
 router.put('/profile', protect, updateUserProfile);
+router.post('/link-account', protect, linkAccount);
+router.post('/lookup-bank-account', protect, lookupBankAccount);
 router.get('/stats', protect, getUserStats);
 
 // Admin routes (mounted at /api/user/admin/* AND /api/admin/users via server.js)

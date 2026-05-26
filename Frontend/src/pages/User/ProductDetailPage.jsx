@@ -1,6 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, Star, Heart, Share2, ShieldCheck, Truck, RefreshCw, MapPin, Video, Image as ImageIcon, Info, Plus, ShoppingCart, Settings, FileText, Wallet, Check } from 'lucide-react';
+import { 
+    ChevronRight, ChevronLeft, Star, Heart, Share2, ShieldCheck, Truck, RefreshCw, 
+    MapPin, Video, Image as ImageIcon, Info, Plus, ShoppingCart, Settings, 
+    FileText, Wallet, Check, Cpu, Monitor, HardDrive, Smartphone, X, Box
+} from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
@@ -8,6 +12,7 @@ import Breadcrumbs from '../../components/Breadcrumbs';
 import ProductCard from '../../components/ProductCard';
 import BuyNowModal from '../../components/BuyNowModal';
 import api, { getApiErrorMessage } from '../../lib/api';
+import socket from '../../lib/socket';
 import {
     inflateProducts,
     normalizeProduct,
@@ -27,6 +32,7 @@ const ProductDetailPage = () => {
     const resultRef = useRef(null);
     const specsRef = useRef(null);
     const descriptionRef = useRef(null);
+    const videoRef = useRef(null);
 
     const [product, setProduct] = useState(null);
     const [relatedProducts, setRelatedProducts] = useState([]);
@@ -46,14 +52,17 @@ const ProductDetailPage = () => {
     const [isPromoExpanded, setIsPromoExpanded] = useState(false);
     const [selectedPayment, setSelectedPayment] = useState(0);
     const [showBuyModal, setShowBuyModal] = useState(false);
-    const [reviewRating, setReviewRating] = useState(0);
+
+    const [reviewRating, setReviewRating] = useState(5);
     const [reviewContent, setReviewContent] = useState('');
+    const [reviewImages, setReviewImages] = useState([]);
     const [isSubmittingReview, setIsSubmittingReview] = useState(false);
     const [editingReviewId, setEditingReviewId] = useState('');
     const [editingReviewContent, setEditingReviewContent] = useState('');
     const [editingReviewRating, setEditingReviewRating] = useState(0);
     const [reviewActionLoadingId, setReviewActionLoadingId] = useState('');
     const [reviewNotice, setReviewNotice] = useState({ type: '', message: '' });
+    const [showSpecsModal, setShowSpecsModal] = useState(false);
 
     const loadProductReviews = async (productId) => {
         try {
@@ -146,10 +155,45 @@ const ProductDetailPage = () => {
 
         loadProduct();
 
+        // Load Vouchers
+
+
+        // Socket.io Real-time Stock Update
+        socket.emit('join_product', id);
+        
+        const handleStockUpdate = (data) => {
+            setProduct(prev => {
+                if (!prev) return prev;
+
+                const targetProductId = String(data.productId || '');
+                const currentProductId = String(prev.backendId || prev._id || id);
+                if (targetProductId !== currentProductId) return prev;
+                
+                const next = { ...prev };
+                if (data.variantId) {
+                    next.variants = next.variants.map(v => 
+                        String(v.id) === String(data.variantId) ? { ...v, stock: data.newStock } : v
+                    );
+                } else {
+                    next.countInStock = data.newStock;
+                }
+                return next;
+            });
+        };
+
+        socket.on('stock_update', handleStockUpdate);
+
         return () => {
             ignore = true;
+            socket.off('stock_update', handleStockUpdate);
         };
     }, [id]);
+
+    useEffect(() => {
+        if (product?.backendId) {
+            socket.emit('join_product', product.backendId);
+        }
+    }, [product?.backendId]);
 
     useEffect(() => {
         if (!product?.backendId) {
@@ -172,7 +216,7 @@ const ProductDetailPage = () => {
             filtered = relatedProducts.filter((item) => item.category === 'dong-ho');
         }
 
-        const source = filtered.length > 0 ? filtered : relatedProducts;
+        const source = filtered;
         return inflateProducts(source, 4, `detail-cross-sell-${crossSellTab}`);
     }, [crossSellTab, relatedProducts]);
 
@@ -193,6 +237,43 @@ const ProductDetailPage = () => {
             ),
         [searchQuery, tradeInProducts]
     );
+
+    const videoUrls = useMemo(() => {
+        let urls = [];
+        
+        // Priority 1: Use dedicated videoUrl array field
+        if (Array.isArray(product?.videoUrl) && product.videoUrl.length > 0) {
+            product.videoUrl.forEach(url => {
+                let embedId = '';
+                if (url.includes('v=')) {
+                    embedId = url.split('v=')[1].split('&')[0];
+                } else if (url.includes('be/')) {
+                    embedId = url.split('be/')[1].split('?')[0];
+                } else if (url.includes('embed/')) {
+                    embedId = url.split('embed/')[1].split('?')[0];
+                }
+                
+                if (embedId) urls.push(`https://www.youtube-nocookie.com/embed/${embedId}`);
+                else if (url.includes('youtube') && url.includes('embed')) urls.push(url);
+            });
+        }
+
+        // Priority 2: Fallback to extracting from description if array is empty
+        if (urls.length === 0 && product?.description) {
+            const matches = [...product.description.matchAll(/src="([^"]+youtube(?:-nocookie)?\.com\/embed\/([^"\s?]+)[^"]*)"/gi)];
+            matches.forEach(match => {
+                urls.push(match[1].replace('youtube.com', 'youtube-nocookie.com'));
+            });
+        }
+        
+        return [...new Set(urls)]; // Remove duplicates
+    }, [product?.videoUrl, product?.description]);
+
+    const cleanDescription = useMemo(() => {
+        if (!product?.description) return '';
+        // Remove iframe tags to avoid double video display and link-leak issues
+        return product.description.replace(/<iframe[^>]*>.*?<\/iframe>/gi, '');
+    }, [product?.description]);
 
     // Auto-slide for cross-sell
     useEffect(() => {
@@ -227,17 +308,43 @@ const ProductDetailPage = () => {
         }
     }, [product]);
 
-    const handleAddToCart = () => {
-        addToCart(product, selectedStorage, selectedColor);
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
+    const currentStock = useMemo(() => {
+        if (!product || !selectedStorage || !selectedColor) return 0;
+        
+        const exactVariant = product.variants.find(
+            v => v.storage === selectedStorage.storage && v.color === selectedColor.name
+        );
+        if (exactVariant) return exactVariant.stock;
+
+        return selectedStorage.stock || product.countInStock || 0;
+    }, [product, selectedStorage, selectedColor]);
+
+    const handleAddToCart = async () => {
+        try {
+            await addToCart(product, selectedStorage, selectedColor);
+            setShowToast(true);
+            setTimeout(() => setShowToast(false), 3000);
+        } catch (error) {
+            if (error.message === 'AUTH_REQUIRED') {
+                navigate('/login', { state: { from: { pathname: `/product/${id}` } } });
+                return;
+            }
+            // Optional: show error message for other errors
+        }
     };
 
-    const handleAddCrossSellToCart = (p) => {
-        // For cross-sell products, we use default variants/colors if not specified
-        addToCart(p, { id: 'default', storage: '', price: p.priceNum }, { name: 'Mặc định', image: p.image });
-        setShowToast(true);
-        setTimeout(() => setShowToast(false), 3000);
+    const handleAddCrossSellToCart = async (p) => {
+        try {
+            // For cross-sell products, we use default variants/colors if not specified
+            await addToCart(p, { id: 'default', storage: '', price: p.priceNum }, { name: 'Mặc định', image: p.image });
+            setShowToast(true);
+            setTimeout(() => setShowToast(false), 3000);
+        } catch (error) {
+            if (error.message === 'AUTH_REQUIRED') {
+                navigate('/login', { state: { from: { pathname: `/product/${id}` } } });
+                return;
+            }
+        }
     };
 
     const handleAddWishlist = async () => {
@@ -263,22 +370,38 @@ const ProductDetailPage = () => {
         }
     };
 
+    const handleImageChange = (e) => {
+        const files = Array.from(e.target.files);
+        if (reviewImages.length + files.length > 3) {
+            alert('Bạn chỉ có thể tải lên tối đa 3 hình ảnh.');
+            return;
+        }
+
+        files.forEach(file => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setReviewImages(prev => [...prev, reader.result]);
+            };
+            reader.readAsDataURL(file);
+        });
+    };
+
     const showReviewNotice = (type, message) => {
         setReviewNotice({ type, message });
         setTimeout(() => setReviewNotice({ type: '', message: '' }), 3000);
     };
 
-    const submitReview = async ({ comment, rating }) => {
-        const trimmedComment = String(comment || '').trim();
-        const safeRating = Number(rating || 0);
+    const submitReview = async () => {
+        const trimmedComment = String(reviewContent || '').trim();
+        const safeRating = Number(reviewRating || 0);
 
         if (!product?.backendId) {
             showReviewNotice('error', 'Không tìm thấy sản phẩm để gửi đánh giá.');
             return;
         }
 
-        if (trimmedComment.length < 3) {
-            showReviewNotice('error', 'Vui lòng nhập nội dung tối thiểu 3 ký tự.');
+        if (trimmedComment.length < 15) {
+            showReviewNotice('error', 'Vui lòng nhập nội dung tối thiểu 15 ký tự.');
             return;
         }
 
@@ -294,10 +417,12 @@ const ProductDetailPage = () => {
                 rating: safeRating,
                 title: `Đánh giá ${safeRating} sao`,
                 comment: trimmedComment,
+                images: reviewImages
             });
-            showReviewNotice('success', 'Gửi đánh giá thành công.');
+            showReviewNotice('success', 'Gửi đánh giá thành công! Đánh giá của bạn đang được chờ duyệt.');
             setReviewContent('');
-            setReviewRating(0);
+            setReviewRating(5);
+            setReviewImages([]);
             await loadProductReviews(product.backendId);
         } catch (error) {
             if (error?.response?.status === 401) {
@@ -442,8 +567,23 @@ const ProductDetailPage = () => {
             <div className="max-w-[1600px] mx-auto px-4 pt-4">
                 
                 {/* Product Title Banner */}
-                <div className="mb-6">
-                    <h1 className="text-[26px] font-bold text-[#333] tracking-tight">{product.name}</h1>
+                <div className="mb-4">
+                    <h1 className="text-[26px] font-bold text-[#333] tracking-tight mb-2">{product.name}</h1>
+                    
+                    {/* Product Tags (Hashtags) */}
+                    {product.tags && product.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-2">
+                            {product.tags.map((tag, idx) => (
+                                <Link 
+                                    key={idx} 
+                                    to={`/search?keyword=${encodeURIComponent(tag)}`}
+                                    className="text-[13px] font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                                >
+                                    #{tag}
+                                </Link>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex flex-col lg:flex-row gap-6">
@@ -486,7 +626,23 @@ const ProductDetailPage = () => {
                             
                             {/* Action Buttons below image */}
                             <div className="flex justify-center gap-4 mt-6">
-                                <button className="flex flex-col items-center gap-1 group">
+                                <button 
+                                    onClick={() => {
+                                        if (videoRef.current) {
+                                            videoRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        } else {
+                                            const videoElement = descriptionRef.current?.querySelector('.video-wrapper');
+                                            if (videoElement) {
+                                                videoElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                if (!isDescriptionExpanded) setIsDescriptionExpanded(true);
+                                            } else {
+                                                descriptionRef.current?.scrollIntoView({ behavior: 'smooth' });
+                                            }
+                                        }
+                                    }}
+                                    className="flex flex-col items-center gap-1 group"
+                                    style={{ display: videoUrls.length > 0 ? 'flex' : 'none' }}
+                                >
                                     <div className="w-12 h-12 rounded-xl border border-gray-200 flex items-center justify-center group-hover:border-[#00917a] group-hover:text-[#00917a] transition-all">
                                         <Video size={20} />
                                     </div>
@@ -696,6 +852,7 @@ const ProductDetailPage = () => {
                                 <span className="text-[#cc0000] text-[28px] font-black">{formatPrice(selectedStorage.price)}</span>
                                 <span className="text-gray-400 line-through text-[14px] mb-1">{formatPrice(selectedStorage.price * 1.2)}</span>
                             </div>
+
                             
                             <div className="space-y-4">
                                 <h4 className="text-[13px] font-bold">Lựa chọn phiên bản</h4>
@@ -742,6 +899,22 @@ const ProductDetailPage = () => {
                                         </button>
                                     ))}
                                 </div>
+                                
+                                {/* DYNAMIC STOCK INDICATOR */}
+                                <div className="mt-4 p-3 rounded-lg bg-gray-50 border border-gray-100 flex items-center justify-between">
+                                    <span className="text-[13px] font-bold text-gray-600">Tình trạng kho:</span>
+                                    {currentStock > 0 ? (
+                                        <div className="flex items-center gap-1.5 text-[#00917a] bg-emerald-50 px-3 py-1 rounded-full font-black text-[13px]">
+                                            <ShieldCheck size={14} />
+                                            <span>Còn {currentStock} sản phẩm</span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-1.5 text-[#cc0000] bg-red-50 px-3 py-1 rounded-full font-black text-[13px]">
+                                            <Info size={14} />
+                                            <span>Tạm hết hàng</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
 
                             {/* PRICE BOXES (Member & Trade-in) */}
@@ -755,7 +928,13 @@ const ProductDetailPage = () => {
                                             <span className="text-[12px] font-bold text-gray-700">+26,000 Điểm thưởng</span>
                                         </div>
                                      </div>
-                                     <Link to="/login" className="absolute top-2 right-4 text-[12px] text-blue-600 font-bold hover:underline">Đăng nhập ngay</Link>
+                                     {!user ? (
+                                        <Link to="/login" className="absolute top-2 right-4 text-[12px] text-blue-600 font-bold hover:underline">Đăng nhập ngay</Link>
+                                     ) : (
+                                        <div className="absolute top-2 right-4 flex items-center gap-1.5 text-[11px] text-[#008d71] font-black uppercase bg-emerald-100/50 px-2 py-0.5 rounded-full">
+                                            <ShieldCheck size={14} /> Member
+                                        </div>
+                                     )}
                                 </div>
 
                                 <div className="bg-gray-50 border border-gray-100 rounded-xl p-5 flex justify-between items-center">
@@ -772,13 +951,18 @@ const ProductDetailPage = () => {
                             <div className="flex gap-3">
                                 <button 
                                     onClick={handleAddToCart}
-                                    className="flex-1 bg-white border-2 border-[#cc0000] text-[#cc0000] p-4 rounded-xl flex items-center justify-center transition-all hover:bg-red-50"
+                                    disabled={currentStock <= 0}
+                                    className={`flex-1 bg-white border-2 p-4 rounded-xl flex items-center justify-center transition-all ${currentStock > 0 ? 'border-[#cc0000] text-[#cc0000] hover:bg-red-50' : 'border-gray-300 text-gray-400 cursor-not-allowed opacity-50'}`}
                                 >
                                     <ShoppingCart size={24} />
                                 </button>
-                                <button onClick={() => setShowBuyModal(true)} className="flex-[4] bg-[#cc0000] text-white p-4 rounded-xl font-black text-[18px] uppercase shadow-lg shadow-red-200 active:scale-95 transition-all">
-                                    Mua ngay
-                                    <span className="block text-[11px] font-medium normal-case opacity-80">(Giao tận nhà hoặc nhận tại cửa hàng)</span>
+                                <button 
+                                    onClick={() => currentStock > 0 && setShowBuyModal(true)} 
+                                    disabled={currentStock <= 0}
+                                    className={`flex-[4] p-4 rounded-xl font-black text-[18px] uppercase transition-all ${currentStock > 0 ? 'bg-[#cc0000] text-white shadow-lg shadow-red-200 active:scale-95' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+                                >
+                                    {currentStock > 0 ? 'Mua ngay' : 'Hết hàng'}
+                                    {currentStock > 0 && <span className="block text-[11px] font-medium normal-case opacity-80">(Giao tận nhà hoặc nhận tại cửa hàng)</span>}
                                 </button>
                             </div>
 
@@ -928,33 +1112,123 @@ const ProductDetailPage = () => {
                              </div>
                         </div>
 
-                        {/* TECHNICAL SPECS TABLE - HIGH FIDELITY DESIGN */}
-                        <div ref={specsRef} className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-                            <div className="bg-[#f2f2f2] px-6 py-3 flex items-center gap-3 border-b border-gray-200">
-                                <Settings size={20} className="text-[#333]" />
-                                <h4 className="font-extrabold text-[15px] uppercase text-[#333] tracking-wide">Thông số kỹ thuật</h4>
+                        {/* TECHNICAL SPECS SECTION - REDESIGNED */}
+                        <div ref={specsRef} className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100 flex flex-col">
+                            <div className="bg-[#f8fafc] px-6 py-4 flex items-center justify-between border-b border-gray-100">
+                                <div className="flex items-center gap-3">
+                                    <div className="bg-[#00917a] p-2 rounded-lg text-white shadow-sm">
+                                        <Settings size={18} />
+                                    </div>
+                                    <h4 className="font-black text-[16px] uppercase text-[#333] tracking-tight">Thông số kỹ thuật</h4>
+                                </div>
                             </div>
-                            <div className="p-4">
-                                <div className="border border-gray-100 rounded-xl overflow-hidden shadow-sm">
-                                    {product.specs_detailed.map((spec, i) => (
-                                        <div key={i} className={`flex items-start px-6 py-3.5 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} border-b border-gray-50 last:border-0`}>
-                                            <span className="text-[13px] font-bold text-[#333] w-[180px] shrink-0 text-left">{spec.label}</span>
-                                            <span className="text-[13px] font-medium text-gray-700 whitespace-pre-line leading-relaxed text-left flex-1">
-                                                {spec.value}
-                                            </span>
+                            
+                            <div className="p-6">
+                                {/* Main Specs Grid - Modern Cards */}
+                                <div className="grid grid-cols-2 gap-4 mb-6">
+                                    {[
+                                        { label: 'Màn hình', value: product.specs?.screen || '6.7"', icon: <Monitor size={20} />, color: 'bg-blue-50 text-blue-600' },
+                                        { label: 'CPU', value: product.specs?.chip || 'Apple A17', icon: <Cpu size={20} />, color: 'bg-purple-50 text-purple-600' },
+                                        { label: 'RAM', value: product.specs?.ram || '8GB', icon: <Box size={20} />, color: 'bg-amber-50 text-amber-600' },
+                                        { label: 'Bộ nhớ', value: product.rom || product.storage || '256GB', icon: <HardDrive size={20} />, color: 'bg-emerald-50 text-emerald-600' }
+                                    ].map((s, idx) => (
+                                        <div key={idx} className="flex flex-col items-center justify-center p-4 rounded-2xl border border-gray-100 bg-white hover:border-[#00917a] hover:shadow-md transition-all group">
+                                            <div className={`w-12 h-12 ${s.color} rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform`}>
+                                                {s.icon}
+                                            </div>
+                                            <span className="text-[11px] font-bold text-gray-400 uppercase mb-1">{s.label}</span>
+                                            <span className="text-[14px] font-black text-[#333] text-center line-clamp-1">{s.value}</span>
                                         </div>
                                     ))}
                                 </div>
-                            </div>
-                            <div className="px-4 pb-6 flex justify-center">
-                                <button className="bg-white border border-gray-300 text-[#333] px-10 py-2.5 rounded-lg text-[13px] font-bold uppercase flex items-center gap-4 hover:bg-gray-100 transition-all shadow-sm active:scale-95 group">
-                                    Xem cấu hình chi tiết <ChevronRight className="rotate-90 group-hover:translate-x-1 transition-transform" size={16} />
+
+                                {/* Preview Specs List */}
+                                <div className="space-y-3 mb-6">
+                                    {product.specs_detailed.slice(0, 5).map((spec, i) => (
+                                        <div key={i} className="flex items-center justify-between py-2 border-b border-dashed border-gray-100 last:border-0">
+                                            <span className="text-[13px] font-bold text-gray-500">{spec.label}</span>
+                                            <span className="text-[13px] font-black text-[#333]">{spec.value}</span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <button 
+                                    onClick={() => setShowSpecsModal(true)}
+                                    className="w-full bg-white border-2 border-gray-200 text-[#333] hover:border-[#00917a] hover:text-[#00917a] py-3 rounded-xl text-[14px] font-black uppercase flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95"
+                                >
+                                    Cấu hình chi tiết <ChevronRight size={18} />
                                 </button>
                             </div>
                         </div>
 
+                        {/* Technical Specs Modal */}
+                        {showSpecsModal && (
+                            <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
+                                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowSpecsModal(false)}></div>
+                                <div className="relative bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 fade-in duration-300">
+                                    <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                                        <div className="flex items-center gap-3">
+                                            <div className="bg-[#00917a] p-2 rounded-lg text-white">
+                                                <Settings size={20} />
+                                            </div>
+                                            <h3 className="text-[18px] font-black text-[#333] uppercase">Thông số kỹ thuật chi tiết</h3>
+                                        </div>
+                                        <button 
+                                            onClick={() => setShowSpecsModal(false)}
+                                            className="w-10 h-10 rounded-full hover:bg-gray-200 flex items-center justify-center text-gray-500 transition-colors"
+                                        >
+                                            <X size={24} />
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="p-6 max-h-[70vh] overflow-y-auto hh-scrollbar">
+                                        <div className="border border-gray-100 rounded-2xl overflow-hidden">
+                                            {product.specs_detailed.map((spec, i) => (
+                                                <div key={i} className={`flex items-start px-6 py-4 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'} border-b border-gray-100 last:border-0`}>
+                                                    <span className="text-[14px] font-bold text-gray-500 w-1/3 shrink-0">{spec.label}</span>
+                                                    <span className="text-[14px] font-black text-[#333] flex-1">{spec.value}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="p-6 bg-gray-50/50 border-t border-gray-100">
+                                        <button 
+                                            onClick={() => setShowSpecsModal(false)}
+                                            className="w-full bg-[#333] text-white py-3.5 rounded-xl font-black uppercase text-[14px] shadow-lg hover:bg-black transition-all active:scale-95"
+                                        >
+                                            Đóng lại
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                     </div>
                 </div>
+
+                {/* VIDEO SECTION - Dynamic Rendering */}
+                {videoUrls.length > 0 && (
+                    <section ref={videoRef} className="mt-10">
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                            <h2 className="text-[18px] font-bold text-[#333] mb-5">
+                                {videoUrls.length > 1 ? `Danh sách Video về ${product.name}` : `Video về ${product.name}`}
+                            </h2>
+                            <div className={`grid gap-6 ${videoUrls.length > 1 ? 'grid-cols-1 md:grid-cols-2' : 'max-w-[900px] mx-auto'}`}>
+                                {videoUrls.map((url, index) => (
+                                    <div key={index} className="video-wrapper">
+                                        <iframe 
+                                            src={url} 
+                                            title={`Video ${product.name} ${index + 1}`}
+                                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                                            allowFullScreen
+                                        ></iframe>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </section>
+                )}
 
                 {/* PRODUCT INFO SECTION - FULL WIDTH BENEATH COLUMNS */}
                 <div className="mt-10">
@@ -996,21 +1270,30 @@ const ProductDetailPage = () => {
                                 </ul>
                             </div>
 
-                            {/* Content Area */}
-                            <div className="space-y-12 max-w-[1200px] mx-auto px-10 pb-20">
-                                <p className="text-[18px] leading-relaxed text-gray-700 text-center">
-                                    <strong className="text-[#333] font-black">{product.name}</strong> là sản phẩm đột phá thuộc phân khúc cao cấp của PhoneSin, tập trung vào trải nghiệm người dùng hoàn mỹ và công nghệ tương lai. 
-                                </p>
-                                <div className="text-center space-y-6">
-                                    <img src={product.image} className="w-full max-w-[1000px] mx-auto rounded-3xl shadow-2xl border border-gray-100 hover:scale-[1.01] transition-transform duration-500" alt="Detail" />
-                                    <p className="text-[15px] italic text-gray-500 font-medium">Hình ảnh thực tế sắc nét của {product.name}</p>
-                                </div>
+                            {/* Content Area - Rendering Real Product Description */}
+                            <div className="space-y-8 max-w-[1200px] mx-auto px-4 md:px-10 pb-20">
+                                <div 
+                                    className="product-description-content"
+                                    dangerouslySetInnerHTML={{ __html: cleanDescription }}
+                                    style={{ 
+                                        fontSize: '17px', 
+                                        lineHeight: '1.8', 
+                                        color: '#374151'
+                                    }}
+                                />
+                                
+                                {/* Fallback if description is very short or missing images */}
+                                {!product.description?.includes('<img') && (
+                                    <div className="text-center space-y-6 mt-10">
+                                        <img src={product.image} className="w-full max-w-[800px] mx-auto rounded-3xl shadow-xl border border-gray-100" alt="Product Detail" />
+                                        <p className="text-[15px] italic text-gray-500 font-medium">Hình ảnh minh họa sản phẩm {product.name}</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
-                        {/* EXPAND/COLLAPSE BUTTON */}
                         <div className={`${!isDescriptionExpanded 
-                            ? 'absolute bottom-0 left-0 w-full flex justify-center pb-10 pt-40 bg-gradient-to-t from-white via-white/95 to-transparent z-20' 
+                            ? 'absolute bottom-0 left-0 w-full flex justify-center pb-10 pt-40 bg-gradient-to-t from-white via-white/95 to-transparent z-20 pointer-events-none' 
                             : 'relative flex justify-center py-10 bg-white border-t border-gray-50 z-20'}`}>
                             <button 
                                 onClick={() => {
@@ -1019,7 +1302,7 @@ const ProductDetailPage = () => {
                                         descriptionRef.current?.scrollIntoView({ behavior: 'smooth' });
                                     }
                                 }}
-                                className="bg-white border-2 border-gray-300 text-[#333] px-20 py-3.5 rounded-xl text-[15px] font-black uppercase flex items-center gap-6 hover:bg-black hover:text-white hover:border-black transition-all shadow-xl active:scale-95 group"
+                                className="bg-white border-2 border-gray-300 text-[#333] px-20 py-3.5 rounded-xl text-[15px] font-black uppercase flex items-center gap-6 hover:bg-black hover:text-white hover:border-black transition-all shadow-xl active:scale-95 group pointer-events-auto"
                             >
                                 {isDescriptionExpanded ? (
                                     <><span>Thu gọn nội dung bài viết</span> <ChevronLeft className="rotate-90" size={20} /></>
@@ -1187,12 +1470,6 @@ const ProductDetailPage = () => {
                                         {/* Name */}
                                         <h3 className="text-[13px] font-bold text-[#333] text-center line-clamp-2 mb-3 min-h-[36px] leading-snug">{p.name}</h3>
 
-                                        {/* Price Row */}
-                                        <div className="flex items-center gap-2 mb-2 flex-wrap justify-center">
-                                            <span className="text-[15px] font-black text-[#cc0000]">{formatPrice(p.priceNum)}</span>
-                                            <span className="text-[12px] text-gray-400 line-through">{formatPrice(originalPrice)}</span>
-                                        </div>
-
                                         {/* Final Price Badge */}
                                         <div className="w-full bg-[#fff0f0] border border-red-100 rounded-lg px-3 py-2 text-center mb-2">
                                             <p className="text-[11px] font-bold text-[#cc0000] uppercase">Giá cuối:</p>
@@ -1220,36 +1497,8 @@ const ProductDetailPage = () => {
                     </div>
                 </section>
 
-                {/* VIDEO SECTION */}
-                <section className="mt-10">
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                        <h2 className="text-[18px] font-bold text-[#333] mb-5">Video về {product.name}</h2>
-                        <div className="flex flex-col sm:flex-row gap-6 items-start">
-                            {/* Video Thumbnail */}
-                            <div className="relative group cursor-pointer shrink-0">
-                                <div className="w-[240px] h-[145px] rounded-xl overflow-hidden relative bg-black">
-                                    <img
-                                        src={product.image}
-                                        alt={`Video ${product.name}`}
-                                        className="w-full h-full object-cover opacity-80 group-hover:opacity-70 transition-opacity"
-                                    />
-                                    {/* Play Button Overlay */}
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <div className="w-14 h-14 bg-white/90 rounded-full flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
-                                            <div className="w-0 h-0 border-t-[10px] border-t-transparent border-b-[10px] border-b-transparent border-l-[18px] border-l-[#cc0000] ml-1.5" />
-                                        </div>
-                                    </div>
-                                    {/* Duration */}
-                                    <div className="absolute bottom-2 right-2 bg-black/80 text-white text-[11px] font-bold px-1.5 py-0.5 rounded">3:24</div>
-                                </div>
-                                {/* Video Title below thumbnail */}
-                                <p className="text-[13px] font-bold text-[#00917a] hover:underline cursor-pointer mt-2 max-w-[240px] leading-snug">
-                                    {product.name} | Titan Durability
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+
+
 
                 {/* NEWS SECTION */}
                 <section className="mt-6">
@@ -1338,13 +1587,37 @@ const ProductDetailPage = () => {
                         {/* Body: Textarea + Star picker */}
                         <div className="flex flex-col lg:flex-row gap-6">
                             {/* Textarea */}
-                            <textarea
-                                rows={4}
-                                placeholder="Nội dung. Tối thiểu 15 ký tự"
-                                value={reviewContent}
-                                onChange={(event) => setReviewContent(event.target.value)}
-                                className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-[14px] text-gray-700 placeholder:text-gray-400 outline-none focus:border-[#00917a] focus:ring-2 focus:ring-emerald-100 transition-all resize-none bg-gray-50/50"
-                            />
+                            <div className="flex-1 flex flex-col gap-3">
+                                <textarea
+                                    rows={4}
+                                    placeholder="Nội dung. Tối thiểu 15 ký tự (Cấm hình ảnh và ngôn từ nhạy cảm)"
+                                    value={reviewContent}
+                                    onChange={(event) => setReviewContent(event.target.value)}
+                                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-[14px] text-gray-700 placeholder:text-gray-400 outline-none focus:border-[#00917a] focus:ring-2 focus:ring-emerald-100 transition-all resize-none bg-gray-50/50"
+                                />
+                                
+                                {/* Image Upload Buttons */}
+                                <div className="flex flex-wrap gap-3">
+                                    {reviewImages.map((img, idx) => (
+                                        <div key={idx} className="relative w-20 h-20 rounded-lg overflow-hidden border border-gray-200 group">
+                                            <img src={img} className="w-full h-full object-cover" alt="Preview" />
+                                            <button 
+                                                onClick={() => setReviewImages(prev => prev.filter((_, i) => i !== idx))}
+                                                className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {reviewImages.length < 3 && (
+                                        <label className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-[#00917a] hover:bg-emerald-50 transition-all text-gray-400 hover:text-[#00917a]">
+                                            <ImageIcon size={20} />
+                                            <span className="text-[10px] font-bold">Thêm ảnh</span>
+                                            <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} multiple />
+                                        </label>
+                                    )}
+                                </div>
+                            </div>
 
                             {/* Star picker */}
                             <div className="flex flex-col items-start lg:items-end justify-center gap-2 shrink-0">
@@ -1352,12 +1625,13 @@ const ProductDetailPage = () => {
                                 <StarRatingPicker value={reviewRating} onChange={setReviewRating} />
                                 <button
                                     type="button"
-                                    onClick={() => submitReview({ comment: reviewContent, rating: reviewRating })}
+                                    onClick={() => submitReview()}
                                     disabled={isSubmittingReview}
                                     className="mt-2 bg-[#00917a] hover:bg-[#00795f] disabled:opacity-60 disabled:cursor-not-allowed transition-all text-white font-black text-[12px] uppercase px-5 py-2 rounded-lg"
                                 >
                                     {isSubmittingReview ? 'Đang gửi...' : 'Gửi đánh giá'}
                                 </button>
+                                <p className="text-[10px] text-gray-400 italic max-w-[150px] text-right mt-1">Lưu ý: Mọi hình ảnh nhạy cảm sẽ bị xóa và khóa tài khoản.</p>
                             </div>
                         </div>
                     </div>
@@ -1421,6 +1695,33 @@ const ProductDetailPage = () => {
                                                     ))}
                                                 </div>
                                                 <p className="text-sm text-gray-700 mt-2">{item.comment || item.title || 'Đánh giá sản phẩm'}</p>
+                                                
+                                                {/* Customer Images */}
+                                                {item.images && item.images.length > 0 && (
+                                                    <div className="flex gap-2 mt-3">
+                                                        {item.images.map((img, idx) => (
+                                                            <div key={idx} className="w-20 h-20 rounded-lg overflow-hidden border border-gray-100 cursor-pointer hover:opacity-80 transition-opacity">
+                                                                <img src={img} className="w-full h-full object-cover" alt="Customer" onClick={() => window.open(img, '_blank')} />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+
+                                                {item.reply && (
+                                                    <div className="mt-4 p-4 bg-[#f1fcf9] border-l-4 border-[#00917a] rounded-r-xl shadow-sm">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <div className="w-6 h-6 rounded-full bg-[#00917a] flex items-center justify-center">
+                                                                <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                                </svg>
+                                                            </div>
+                                                            <span className="text-[12px] font-black text-[#00917a] uppercase tracking-wider">Phản hồi từ PhoneSin</span>
+                                                        </div>
+                                                        <p className="text-[13px] text-gray-600 leading-relaxed font-medium">
+                                                            {item.reply}
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </>
                                         )}
                                         {isOwnReview(item) && editingReviewId !== item._id && (
@@ -1479,6 +1780,8 @@ const ProductDetailPage = () => {
                 product={product}
                 isOpen={showBuyModal}
                 onClose={() => setShowBuyModal(false)}
+                initialVariant={selectedStorage}
+                initialColor={selectedColor}
             />
 
             {wishlistNotice && (

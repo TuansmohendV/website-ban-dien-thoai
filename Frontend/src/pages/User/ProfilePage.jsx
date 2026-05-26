@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useOrders } from '../../context/OrdersContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import api, { getApiErrorMessage } from '../../lib/api';
+import { normalizeOrder } from '../../lib/orders';
 import { 
   BarChart3, 
   ShoppingBag, 
@@ -12,6 +13,8 @@ import {
   User, 
   MessageSquare, 
   Star, 
+  Users,
+  Loader2,
   LogOut,
   ChevronRight,
   Info,
@@ -33,8 +36,9 @@ import {
 
 const ProfilePage = () => {
     const { user, logout, updateProfile } = useAuth();
-    const { orders, cancelOrder, clearCancelledOrders, clearAllOrders } = useOrders();
+    const { orders, cancelOrder, clearCancelledOrders, clearAllOrders, processPayment } = useOrders();
     const { formatPrice } = useLanguage();
+    const location = useLocation();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState('overview');
     const [showOTP, setShowOTP] = useState(false);
@@ -51,9 +55,13 @@ const ProfilePage = () => {
     const [reviewActionLoadingId, setReviewActionLoadingId] = useState('');
     const [reviewStats, setReviewStats] = useState({ total: 0, average: 0 });
     const [searchHistoryItems, setSearchHistoryItems] = useState([]);
-    const [orderHistoryItems, setOrderHistoryItems] = useState([]);
     const [notifications, setNotifications] = useState([]);
     const [addresses, setAddresses] = useState([]);
+    const [orderHistoryYears, setOrderHistoryYears] = useState([]); // Summary of years from DB
+    const totalSpentAllTime = orderHistoryYears.reduce((sum, item) => sum + (item.totalSpent || 0), 0);
+    const [orderHistoryItemsByYear, setOrderHistoryItemsByYear] = useState({}); // Detailed orders per year
+    const [loadingYears, setLoadingYears] = useState({}); // Loading state for each year's details
+    const [expandedYears, setExpandedYears] = useState({}); // Track which years are expanded
     const [addressForm, setAddressForm] = useState({
         label: 'Nha',
         recipientName: '',
@@ -66,6 +74,10 @@ const ProfilePage = () => {
         isDefault: false,
     });
     const [isSavingAddress, setIsSavingAddress] = useState(false);
+    const [referralStats, setReferralStats] = useState(null);
+    const [referralHistory, setReferralHistory] = useState([]);
+    const [myVouchers, setMyVouchers] = useState([]);
+    const [payingOrderId, setPayingOrderId] = useState('');
     const fileInputRef = React.useRef(null);
 
     const [profileData, setProfileData] = useState({
@@ -103,15 +115,26 @@ const ProfilePage = () => {
                         ? 'Nam'
                         : 'Khác',
         }));
+        loadTabData('history');
     }, [user]);
+
+    useEffect(() => {
+        const tab = new URLSearchParams(location.search).get('tab');
+
+        if (tab && ['overview', 'orders', 'vouchers', 'addresses', 'history', 'info', 'referral', 'comments', 'ratings'].includes(tab)) {
+            setActiveTab(tab);
+            loadTabData(tab);
+        }
+    }, [location.search]);
 
     const sidebarItems = [
         { id: 'overview', label: 'Tổng quan', icon: <BarChart3 size={20} /> },
         { id: 'orders', label: 'Đơn hàng của bạn', icon: <ShoppingBag size={20} /> },
-        { id: 'vouchers', label: 'Trung tâm voucher', icon: <Ticket size={20} /> },
+        { id: 'vouchers', label: 'Ví Voucher', icon: <Ticket size={20} /> },
+        { id: 'addresses', label: 'Sổ địa chỉ', icon: <MapPin size={20} /> },
         { id: 'history', label: 'Lịch sử mua hàng', icon: <History size={20} /> },
         { id: 'info', label: 'Thông tin cá nhân', icon: <User size={20} /> },
-        { id: 'referral', label: 'Giới thiệu bạn bè', icon: <Ticket size={20} className="text-red-500" /> },
+        { id: 'referral', label: 'Giới thiệu bạn bè', icon: <Users size={20} /> },
         { id: 'comments', label: 'Quản lý bình luận', icon: <MessageSquare size={20} /> },
         { id: 'ratings', label: 'Quản lý đánh giá', icon: <Star size={20} /> },
         {
@@ -127,8 +150,10 @@ const ProfilePage = () => {
 
     const membershipTiers = [
         { id: 'edu', label: 'Edu', color: 'from-[#60a5fa] to-[#3b82f6]', unlocked: false, desc: 'Dành cho Học sinh - Sinh viên' },
-        { id: 'new', label: 'New', color: 'from-[#059669] to-[#10b981]', unlocked: true, status: 'Đã mua 00đ/01đ', update: '11/04/2026', next: '01đ để lên hạng', isCurrent: true },
-        { id: 'silver', label: 'Silver', color: 'from-[#4b5563] to-[#374151]', unlocked: false, desc: 'Hạng Bạc' }
+        { id: 'new', label: 'New', color: 'from-[#059669] to-[#10b981]', unlocked: true, status: `Đã mua ${formatPrice(totalSpentAllTime)}`, update: new Date().toLocaleDateString('vi-VN'), next: totalSpentAllTime < 10000000 ? `${formatPrice(10000000 - totalSpentAllTime)} để lên hạng` : 'Đã đạt hạng cao', isCurrent: totalSpentAllTime < 50000000 },
+        { id: 'silver', label: 'Silver', color: 'from-[#4b5563] to-[#374151]', unlocked: totalSpentAllTime >= 10000000, status: `Đã mua ${formatPrice(totalSpentAllTime)}`, update: new Date().toLocaleDateString('vi-VN'), next: totalSpentAllTime < 50000000 ? `${formatPrice(50000000 - totalSpentAllTime)} để lên hạng` : 'Đã đạt hạng cao', isCurrent: totalSpentAllTime >= 10000000 && totalSpentAllTime < 100000000 },
+        { id: 'gold', label: 'Gold', color: 'from-amber-400 to-amber-600', unlocked: totalSpentAllTime >= 50000000, status: `Đã mua ${formatPrice(totalSpentAllTime)}`, update: new Date().toLocaleDateString('vi-VN'), next: totalSpentAllTime < 100000000 ? `${formatPrice(100000000 - totalSpentAllTime)} để lên hạng` : 'Đã đạt hạng cao', isCurrent: totalSpentAllTime >= 50000000 && totalSpentAllTime < 100000000 },
+        { id: 'vip', label: 'VIP', color: 'from-slate-900 to-black', unlocked: totalSpentAllTime >= 100000000, status: `Đã mua ${formatPrice(totalSpentAllTime)}`, update: new Date().toLocaleDateString('vi-VN'), next: 'Hạng cao nhất', isCurrent: totalSpentAllTime >= 100000000 }
     ];
 
     const perkCards = [
@@ -140,6 +165,55 @@ const ProfilePage = () => {
         { icon: <Truck className="text-emerald-600" />, title: 'Giao hàng 2h - Miễn phí vận chuyển', desc: 'Áp dụng với đơn hàng trên 300.000đ' },
         { icon: <PhoneCall className="text-emerald-600" />, title: 'Hotline tư vấn đặc quyền', desc: '1900.2091' },
     ];
+
+    const canPayOrder = (order = {}) => {
+        const method = String(order.paymentMethod || order.payment?.backendMethod || '').toUpperCase();
+        const status = String(order.status || '').toLowerCase();
+        const paymentStatus = String(order.paymentStatus || order.payment?.status || '').toLowerCase();
+
+        return ['VNPAY', 'MOMO', 'BANK_TRANSFER'].includes(method) &&
+            paymentStatus !== 'paid' &&
+            !['cancelled', 'delivered'].includes(status);
+    };
+
+    const handlePayOrder = async (order) => {
+        const method = String(order.paymentMethod || order.payment?.backendMethod || '').toUpperCase();
+        const orderId = order.backendId || order.id;
+
+        if (!orderId || !method) {
+            setTabNotice('Không tìm thấy thông tin thanh toán của đơn hàng.');
+            return;
+        }
+
+        try {
+            setPayingOrderId(order.id);
+            setTabNotice('');
+            const payResponse = await processPayment(orderId, method, {
+                returnUrl: `${window.location.origin}/checkout-result`,
+                origin: window.location.origin,
+            });
+
+            if (payResponse?.paymentUrl) {
+                window.location.href = payResponse.paymentUrl;
+            }
+        } catch (error) {
+            setTabNotice(error.message || 'Không thể tạo lại thanh toán lúc này.');
+        } finally {
+            setPayingOrderId('');
+        }
+    };
+
+    const unpaidOrders = orders.filter(canPayOrder);
+
+    const getUnpaidOrderMessage = (order = {}) => {
+        const paymentStatus = String(order.paymentStatus || order.payment?.status || '').toLowerCase();
+
+        if (paymentStatus === 'failed') {
+            return 'Thanh toán của đơn này chưa thành công. Bạn có thể thanh toán lại để đơn tiếp tục được xử lý.';
+        }
+
+        return 'Đơn hàng này chưa thanh toán. Nếu bạn đã thoát khỏi cổng thanh toán, hãy bấm thanh toán lại để hoàn tất giao dịch.';
+    };
 
     const handleUpdateInfo = async (e) => {
         e.preventDefault();
@@ -198,7 +272,7 @@ const ProfilePage = () => {
     };
 
     const loadTabData = async (tabId) => {
-        if (!['vouchers', 'history', 'comments', 'ratings'].includes(tabId)) {
+        if (!['vouchers', 'history', 'comments', 'ratings', 'addresses', 'referral'].includes(tabId)) {
             return;
         }
 
@@ -207,8 +281,8 @@ const ProfilePage = () => {
 
         try {
             if (tabId === 'history') {
-                const response = await api.get('/api/orders/user');
-                setOrderHistoryItems(response.data?.data || []);
+                const response = await api.get('/api/orders/user/years');
+                setOrderHistoryYears(response.data?.data || []);
             }
 
             if (tabId === 'comments') {
@@ -235,7 +309,7 @@ const ProfilePage = () => {
                 setReviewStats({ total, average });
             }
 
-            if (tabId === 'vouchers') {
+            if (tabId === 'addresses') {
                 const response = await api.get('/api/address');
                 const nextAddresses = response.data?.data || [];
                 setAddresses(nextAddresses);
@@ -246,6 +320,18 @@ const ProfilePage = () => {
                         phone: prev.phone || nextAddresses[0].phone || '',
                     }));
                 }
+            }
+            if (tabId === 'vouchers') {
+                const response = await api.get('/api/voucher/my-vouchers');
+                setMyVouchers(response.data?.data || []);
+            }
+            if (tabId === 'referral') {
+                const [statsRes, historyRes] = await Promise.all([
+                    api.get('/api/referral/stats'),
+                    api.get('/api/referral/history')
+                ]);
+                setReferralStats(statsRes.data?.data || null);
+                setReferralHistory(historyRes.data?.data || []);
             }
         } catch (error) {
             setTabNotice(getApiErrorMessage(error, 'Khong tai du lieu cho tab nay.'));
@@ -344,19 +430,22 @@ const ProfilePage = () => {
         }
     };
 
-    const handleDeleteMyReview = async (reviewId) => {
-        if (!window.confirm('Ban chac chan muon xoa danh gia nay?')) {
+    const handleFetchOrdersByYear = async (year) => {
+        if (orderHistoryItemsByYear[year]) {
+            setExpandedYears(prev => ({ ...prev, [year]: !prev[year] }));
             return;
         }
 
+        setLoadingYears(prev => ({ ...prev, [year]: true }));
         try {
-            setReviewActionLoadingId(reviewId);
-            await api.delete(`/api/reviews/${reviewId}`);
-            await loadTabData(activeTab);
+            const response = await api.get(`/api/orders/user?year=${year}`);
+            const normalized = (response.data?.data || []).map(normalizeOrder);
+            setOrderHistoryItemsByYear(prev => ({ ...prev, [year]: normalized }));
+            setExpandedYears(prev => ({ ...prev, [year]: true }));
         } catch (error) {
-            setTabNotice(getApiErrorMessage(error, 'Khong xoa duoc danh gia.'));
+            setTabNotice(getApiErrorMessage(error, `Khong the tai don hang nam ${year}.`));
         } finally {
-            setReviewActionLoadingId('');
+            setLoadingYears(prev => ({ ...prev, [year]: false }));
         }
     };
 
@@ -437,17 +526,23 @@ const ProfilePage = () => {
                         {activeTab === 'overview' && (
                             <div className="space-y-6 animate-in fade-in duration-300">
                                 <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Tổng quan</h2>
+                                {unpaidOrders.length > 0 && (
+                                    <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-amber-700">
+                                        <p className="text-sm font-black">Bạn có {unpaidOrders.length} đơn hàng chưa thanh toán.</p>
+                                        <p className="text-xs font-bold mt-1">Vào mục Đơn hàng của bạn để thanh toán lại và hoàn tất giao dịch.</p>
+                                    </div>
+                                )}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     {/* Spending Card */}
-                                    <div className={`rounded-3xl p-8 border shadow-sm flex items-center gap-6 transition-all duration-500 ${isVip ? 'bg-gradient-to-br from-slate-900 to-black border-yellow-500/50 shadow-yellow-500/20' : 'bg-white border-gray-100'}`}>
-                                        <div className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transform rotate-12 shrink-0 transition-all duration-700 ${isVip ? 'bg-gradient-to-tr from-yellow-600 to-yellow-200 scale-110' : 'bg-gradient-to-tr from-yellow-400 to-yellow-200'}`}>
-                                            <span className="text-white text-3xl">{isVip ? '💎' : '🪙'}</span>
+                                    <div className={`rounded-3xl p-8 border shadow-sm flex items-center gap-6 transition-all duration-500 ${isVip || totalSpentAllTime >= 100000000 ? 'bg-gradient-to-br from-slate-900 to-black border-yellow-500/50 shadow-yellow-500/20' : 'bg-white border-gray-100'}`}>
+                                        <div className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transform rotate-12 shrink-0 transition-all duration-700 ${isVip || totalSpentAllTime >= 100000000 ? 'bg-gradient-to-tr from-yellow-600 to-yellow-200 scale-110' : 'bg-gradient-to-tr from-yellow-400 to-yellow-200'}`}>
+                                            <span className="text-white text-3xl">{isVip || totalSpentAllTime >= 100000000 ? '💎' : '🪙'}</span>
                                         </div>
                                         <div className="space-y-1">
-                                            <p className={`font-bold text-sm uppercase tracking-wider ${isVip ? 'text-yellow-500' : 'text-gray-500'}`}>Tổng chi tiêu</p>
-                                            <p className={`text-[32px] font-black leading-none ${isVip ? 'text-white' : 'text-gray-900'}`}>{isVip ? '150.000.000đ' : '00đ'}</p>
-                                            <p className={`text-xs font-bold mt-2 italic ${isVip ? 'text-yellow-200/60' : 'text-gray-400'}`}>
-                                                {isVip ? 'Bạn đang ở hạng thẻ cao nhất' : <>Cần chi tiêu thêm <span className="text-[#008d71]">01đ</span> để lên hạng <span className="text-[#3b82f6]">SILVER</span></>}
+                                            <p className={`font-bold text-sm uppercase tracking-wider ${isVip || totalSpentAllTime >= 100000000 ? 'text-yellow-500' : 'text-gray-500'}`}>Tổng chi tiêu</p>
+                                            <p className={`text-[32px] font-black leading-none ${isVip || totalSpentAllTime >= 100000000 ? 'text-white' : 'text-gray-900'}`}>{formatPrice(totalSpentAllTime)}</p>
+                                            <p className={`text-xs font-bold mt-2 italic ${isVip || totalSpentAllTime >= 100000000 ? 'text-yellow-200/60' : 'text-gray-400'}`}>
+                                                {totalSpentAllTime >= 100000000 ? 'Bạn đang ở hạng thẻ cao nhất (VIP)' : totalSpentAllTime >= 50000000 ? 'Hạng thành viên: SILVER' : <>Cần chi tiêu thêm <span className="text-[#008d71]">{formatPrice(Math.max(0, 10000000 - totalSpentAllTime))}</span> để lên hạng <span className="text-[#3b82f6]">SILVER</span></>}
                                             </p>
                                         </div>
                                     </div>
@@ -839,20 +934,26 @@ const ProfilePage = () => {
                                             {cancelledCount > 0 && (
                                                 <button
                                                     onClick={() => { if(window.confirm(`Xóa ${cancelledCount} đơn đã hủy?`)) clearCancelledOrders(); }}
-                                                    className="flex items-center gap-2 px-4 py-2 text-xs font-black bg-red-50 text-red-500 border border-red-100 rounded-xl hover:bg-red-500 hover:text-white hover:border-red-500 transition-all uppercase tracking-wide"
+                                                    className="min-h-10 flex items-center justify-center gap-2 px-4 py-2 text-xs font-black bg-red-50 text-red-500 border border-red-100 rounded-xl hover:bg-red-500 hover:text-white hover:border-red-500 transition-all uppercase tracking-normal text-center leading-tight"
                                                 >
-                                                    🗑️ Xóa đơn đã hủy ({cancelledCount})
+                                                    Ẩn đơn đã hủy ({cancelledCount})
                                                 </button>
                                             )}
                                             <button
-                                                onClick={() => { if(window.confirm('Xóa toàn bộ lịch sử đơn hàng? Hành động này không thể hoàn tác.')) clearAllOrders(); }}
-                                                className="flex items-center gap-2 px-4 py-2 text-xs font-black bg-gray-50 text-gray-400 border border-gray-200 rounded-xl hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all uppercase tracking-wide"
+                                                onClick={() => { if(window.confirm('Ẩn toàn bộ lịch sử đơn hàng khỏi giao diện? Dữ liệu vẫn được giữ trong hệ thống.')) clearAllOrders(); }}
+                                                className="min-h-10 flex items-center justify-center gap-2 px-4 py-2 text-xs font-black bg-gray-50 text-gray-400 border border-gray-200 rounded-xl hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all uppercase tracking-normal text-center leading-tight"
                                             >
-                                                Xóa tất cả
+                                                Ẩn tất cả
                                             </button>
                                         </div>
                                     )}
                                 </div>
+                                {unpaidOrders.length > 0 && (
+                                    <div className="rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-amber-700">
+                                        <p className="text-sm font-black">Bạn có {unpaidOrders.length} đơn hàng chưa thanh toán.</p>
+                                        <p className="text-xs font-bold mt-1">Các đơn này sẽ có nút “Thanh toán lại” bên dưới.</p>
+                                    </div>
+                                )}
                                 {orders.length === 0 ? (
                                     <div className="bg-white rounded-3xl py-24 border border-gray-100 shadow-sm flex flex-col items-center justify-center text-center px-4 sm:px-10">
                                         <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-8">
@@ -875,6 +976,7 @@ const ProfilePage = () => {
                                                 cancelled: { label: 'Đã hủy', cls: 'bg-gray-100 text-gray-500' },
                                             };
                                             const st = statusMap[order.status] || { label: order.status, cls: 'bg-gray-100 text-gray-500' };
+                                            const unpaidMessage = canPayOrder(order) ? getUnpaidOrderMessage(order) : '';
                                             return (
                                                 <div key={order.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-all">
                                                     {/* Order Header */}
@@ -885,6 +987,12 @@ const ProfilePage = () => {
                                                         </div>
                                                         <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wide ${st.cls}`}>{st.label}</span>
                                                     </div>
+                                                    {unpaidMessage && (
+                                                        <div className="mx-6 mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-amber-700">
+                                                            <p className="text-sm font-black">Đơn hàng chưa thanh toán</p>
+                                                            <p className="text-xs font-bold mt-1 leading-relaxed">{unpaidMessage}</p>
+                                                        </div>
+                                                    )}
                                                     {/* Items */}
                                                     <div className="px-6 py-4 space-y-3">
                                                         {order.items.map((item, idx) => (
@@ -909,6 +1017,15 @@ const ProfilePage = () => {
                                                             <span className="text-lg font-black text-[#008d71]">{formatPrice(order.totalAmount)}</span>
                                                         </div>
                                                         <div className="flex gap-2">
+                                                            {canPayOrder(order) && (
+                                                                <button
+                                                                    onClick={() => handlePayOrder(order)}
+                                                                    disabled={payingOrderId === order.id}
+                                                                    className="px-4 py-2 text-xs font-black bg-red-600 text-white rounded-xl hover:bg-red-700 transition-all uppercase tracking-wide shadow-sm disabled:opacity-60"
+                                                                >
+                                                                    {payingOrderId === order.id ? 'Đang mở...' : 'Thanh toán'}
+                                                                </button>
+                                                            )}
                                                             {order.status === 'pending' && (
                                                                 <button
                                                                     onClick={() => { if(window.confirm('Hủy đơn hàng này?')) cancelOrder(order.id); }}
@@ -917,14 +1034,12 @@ const ProfilePage = () => {
                                                                     Hủy đơn
                                                                 </button>
                                                             )}
-                                                            {order.status === 'delivered' && (
-                                                                <Link
-                                                                    to={`/invoice/${order.id}`}
-                                                                    className="px-4 py-2 text-xs font-black bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all uppercase tracking-wide"
-                                                                >
-                                                                    Xuất hóa đơn
-                                                                </Link>
-                                                            )}
+                                                            <Link
+                                                                to={`/invoice/${order.id}`}
+                                                                className="px-4 py-2 text-xs font-black bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-900 hover:text-white hover:border-gray-900 transition-all uppercase tracking-wide"
+                                                            >
+                                                                Xuất hóa đơn
+                                                            </Link>
                                                             <Link
                                                                 to={`/orders`}
                                                                 className="px-4 py-2 text-xs font-black bg-[#008d71] text-white rounded-xl hover:bg-[#007a62] transition-all uppercase tracking-wide shadow-sm"
@@ -943,30 +1058,153 @@ const ProfilePage = () => {
                         })()}
 
                         {activeTab === 'history' && (
-                            <div className="space-y-6 animate-in fade-in duration-300">
-                                <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Lịch sử mua hàng</h2>
+                            <div className="space-y-6 animate-in fade-in duration-300" style={{ fontFamily: "Calibri, 'Segoe UI', sans-serif" }}>
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Lịch sử mua hàng</h2>
+                                    <div className="bg-white px-4 py-2 rounded-2xl border border-gray-100 shadow-sm">
+                                        <span className="text-sm font-bold text-gray-400">Dữ liệu từ hệ thống API</span>
+                                    </div>
+                                </div>
+
                                 {tabLoading ? (
-                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Dang tai du lieu...</div>
-                                ) : orderHistoryItems.length === 0 ? (
-                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">Chua co lich su mua hang.</div>
+                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center shadow-sm">
+                                        <div className="animate-pulse flex flex-col items-center gap-4">
+                                            <div className="w-12 h-12 bg-gray-100 rounded-full"></div>
+                                            <div className="h-4 w-32 bg-gray-100 rounded"></div>
+                                        </div>
+                                    </div>
+                                ) : orderHistoryYears.length === 0 ? (
+                                    <div className="bg-white rounded-3xl py-24 border border-gray-100 text-center shadow-sm flex flex-col items-center">
+                                        <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-6">
+                                            <History size={32} className="text-gray-200" />
+                                        </div>
+                                        <p className="text-gray-400 font-bold">Chưa có lịch sử mua hàng trên hệ thống.</p>
+                                    </div>
                                 ) : (
-                                    <div className="space-y-3">
-                                        {orderHistoryItems.map((item) => (
-                                            <div key={item._id} className="bg-white rounded-2xl p-4 border border-gray-100 flex items-center justify-between">
-                                                <div>
-                                                    <p className="font-black text-gray-900">Don hang #{item._id?.slice(-6) || ''}</p>
-                                                    <p className="text-xs text-gray-400">
-                                                        {item.createdAt ? new Date(item.createdAt).toLocaleDateString('vi-VN') : ''}
-                                                        {' · '}
-                                                        {item.items?.length || 0} san pham
-                                                    </p>
-                                                    <p className="text-sm text-[#008d71] font-bold mt-1">
-                                                        {formatPrice(item.totalAmount || 0)}
-                                                    </p>
+                                    <div className="space-y-8">
+                                        {orderHistoryYears.map(({ year, count, totalSpent }) => {
+                                            const isExpanded = expandedYears[year];
+                                            const yearOrders = orderHistoryItemsByYear[year] || [];
+                                            const isYearLoading = loadingYears[year];
+
+                                            return (
+                                                <div key={year} className="space-y-4">
+                                                    {/* Year Header Card */}
+                                                    <div className={`bg-white rounded-3xl p-6 border transition-all duration-300 ${isExpanded ? 'border-[#008d71] shadow-lg shadow-[#008d71]/5' : 'border-gray-100 shadow-sm'}`}>
+                                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+                                                            <div className="flex items-center gap-6">
+                                                                <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-black transition-colors ${isExpanded ? 'bg-[#008d71] text-white' : 'bg-gray-100 text-gray-400'}`}>
+                                                                    {year}
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <h3 className="text-xl font-black text-gray-900">Năm {year}</h3>
+                                                                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                                                                        <span className="text-sm font-bold text-gray-400">
+                                                                            Đã đặt <span className="text-gray-900">{count} đơn hàng</span>
+                                                                        </span>
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-gray-200 hidden sm:block"></span>
+                                                                        <span className="text-sm font-bold text-gray-400">
+                                                                            Tổng chi: <span className="text-[#008d71]">{formatPrice(totalSpent)}</span>
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <button 
+                                                                onClick={() => handleFetchOrdersByYear(year)}
+                                                                disabled={isYearLoading}
+                                                                className={`h-12 px-8 rounded-2xl font-black uppercase tracking-widest text-xs transition-all active:scale-95 flex items-center gap-2 ${
+                                                                    isExpanded 
+                                                                    ? 'bg-gray-900 text-white shadow-xl' 
+                                                                    : 'bg-[#e5f9e0] text-[#008d71] hover:bg-[#d4f2cc]'
+                                                                } disabled:opacity-50`}
+                                                            >
+                                                                {isYearLoading ? (
+                                                                    <span className="animate-pulse">Đang tải...</span>
+                                                                ) : isExpanded ? (
+                                                                    <>Thu gọn lịch sử <ChevronRight size={16} className="rotate-90" /></>
+                                                                ) : (
+                                                                    <>Theo dõi lịch sử <ChevronRight size={16} /></>
+                                                                )}
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Expanded Orders List */}
+                                                    {isExpanded && (
+                                                        <div className="pl-4 sm:pl-10 space-y-4 animate-in slide-in-from-top-4 duration-300">
+                                                            {yearOrders.length === 0 && !isYearLoading ? (
+                                                                <div className="p-4 text-gray-400 font-bold italic">Khong co don hang trong nam nay.</div>
+                                                            ) : (
+                                                                yearOrders.map((order) => {
+                                                                    const statusMap = {
+                                                                        pending: { label: 'Chờ xác nhận', cls: 'bg-amber-100 text-amber-700' },
+                                                                        processing: { label: 'Đang xử lý', cls: 'bg-blue-100 text-blue-700' },
+                                                                        shipping: { label: 'Đang giao', cls: 'bg-indigo-100 text-indigo-700' },
+                                                                        delivered: { label: 'Đã giao', cls: 'bg-green-100 text-green-700' },
+                                                                        cancelled: { label: 'Đã hủy', cls: 'bg-gray-100 text-gray-500' },
+                                                                    };
+                                                                    const st = statusMap[order.status] || {
+                                                                        label: String(order.status || 'pending'),
+                                                                        cls: 'bg-gray-100 text-gray-500',
+                                                                    };
+
+                                                                    return (
+                                                                        <div key={order.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition-all border-l-4 border-l-[#008d71]">
+                                                                            <div className="px-6 py-4 bg-gray-50/50 flex flex-wrap items-center justify-between gap-4 border-b border-gray-100">
+                                                                                <div className="space-y-1">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <ShoppingBag size={14} className="text-gray-400" />
+                                                                                        <span className="font-black text-gray-900 text-[13px]">Mã đơn #{order.id?.slice(-8).toUpperCase()}</span>
+                                                                                    </div>
+                                                                                    <p className="text-[11px] font-bold text-gray-400 pl-6">
+                                                                                        {order.date}
+                                                                                    </p>
+                                                                                </div>
+                                                                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${st.cls}`}>
+                                                                                    {st.label}
+                                                                                </span>
+                                                                            </div>
+
+                                                                            <div className="p-5 space-y-3">
+                                                                                {order.items?.map((item, idx) => (
+                                                                                    <div key={idx} className="flex gap-4">
+                                                                                        <div className="w-14 h-14 bg-gray-50 rounded-xl p-1.5 border border-gray-100 shrink-0">
+                                                                                            <img src={item.image} alt={item.name} className="w-full h-full object-contain" />
+                                                                                        </div>
+                                                                                        <div className="flex-1 flex justify-between items-center min-w-0">
+                                                                                            <div className="min-w-0">
+                                                                                                <h4 className="font-black text-gray-900 text-sm truncate">{item.name}</h4>
+                                                                                                <p className="text-[11px] font-bold text-gray-400 mt-0.5">
+                                                                                                    {item.selectedColor} {item.selectedStorage} · x{item.qty}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <p className="font-black text-gray-900 text-sm pl-4">{formatPrice(item.price)}</p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                ))}
+                                                                            </div>
+
+                                                                            <div className="px-6 py-4 bg-gray-50/30 border-t border-gray-100 flex items-center justify-between">
+                                                                                <div className="flex items-baseline gap-2">
+                                                                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Tổng:</span>
+                                                                                    <span className="text-lg font-black text-[#008d71]">{formatPrice(order.total)}</span>
+                                                                                </div>
+                                                                                <Link
+                                                                                    to="/orders"
+                                                                                    className="text-[11px] font-black text-[#008d71] hover:underline uppercase tracking-wider"
+                                                                                >
+                                                                                    Xem chi tiết
+                                                                                </Link>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <span className="text-xs font-black text-gray-500 uppercase">{item.status || 'pending'}</span>
-                                            </div>
-                                        ))}
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>
@@ -1102,6 +1340,39 @@ const ProfilePage = () => {
 
                         {activeTab === 'vouchers' && (
                             <div className="space-y-6 animate-in fade-in duration-300">
+                                <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Ví Voucher của bạn</h2>
+                                {tabLoading ? (
+                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center flex flex-col items-center gap-4">
+                                        <Loader2 className="animate-spin text-red-600" size={32} />
+                                        <p className="font-bold text-gray-400">Đang tải voucher...</p>
+                                    </div>
+                                ) : myVouchers.length === 0 ? (
+                                    <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center">
+                                        <Ticket className="mx-auto text-gray-200 mb-4" size={48} />
+                                        <p className="font-bold text-gray-400 uppercase italic">Bạn chưa có voucher nào.</p>
+                                        <Link to="/vouchers" className="text-red-600 font-black text-xs uppercase tracking-widest mt-4 inline-block hover:underline">Săn voucher ngay</Link>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {myVouchers.map((v) => (
+                                            <div key={v._id} className="bg-white rounded-2xl p-5 border border-gray-100 flex items-center gap-4 relative overflow-hidden group hover:border-red-200 transition-all">
+                                                <div className="w-16 h-16 bg-red-50 rounded-xl flex items-center justify-center text-red-600 shrink-0">
+                                                    <Ticket size={24} />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className="font-black text-slate-900 truncate uppercase tracking-tight">{v.code}</h4>
+                                                    <p className="text-xs font-bold text-red-600 mb-1">{v.discountType === 'percentage' ? `${v.discountValue}% OFF` : `-${formatPrice(v.discountValue)}`}</p>
+                                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">HSD: {new Date(v.expiryDate).toLocaleDateString('vi-VN')}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'addresses' && (
+                            <div className="space-y-6 animate-in fade-in duration-300">
                                 <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Sổ địa chỉ giao hàng</h2>
                                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                                     <form onSubmit={handleCreateAddress} className="bg-white rounded-2xl p-5 border border-gray-100 space-y-3">
@@ -1117,7 +1388,9 @@ const ProfilePage = () => {
                                     </form>
                                     <div className="space-y-3">
                                         {tabLoading ? (
-                                            <div className="bg-white rounded-2xl p-6 border border-gray-100 text-center">Dang tai du lieu...</div>
+                                            <div className="bg-white rounded-2xl p-6 border border-gray-100 text-center flex justify-center">
+                                                <Loader2 className="animate-spin text-gray-300" />
+                                            </div>
                                         ) : addresses.length === 0 ? (
                                             <div className="bg-white rounded-2xl p-6 border border-gray-100 text-center">Chua co dia chi nao.</div>
                                         ) : (
@@ -1148,6 +1421,73 @@ const ProfilePage = () => {
                                         )}
                                     </div>
                                 </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'referral' && (
+                            <div className="space-y-6 animate-in fade-in duration-300">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-2xl sm:text-[28px] font-black text-gray-900 tracking-tight">Giới thiệu bạn bè</h2>
+                                    <Link to="/referral" className="text-xs font-black text-red-600 uppercase tracking-widest hover:underline flex items-center gap-2">
+                                        Chi tiết chương trình <ChevronRight size={14} />
+                                    </Link>
+                                </div>
+                                
+                                {tabLoading ? (
+                                     <div className="bg-white rounded-3xl py-16 border border-gray-100 text-center flex justify-center">
+                                        <Loader2 className="animate-spin text-red-600" size={32} />
+                                    </div>
+                                ) : (
+                                    <div className="space-y-8">
+                                        {/* Stats Grid */}
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                            <div className="bg-white rounded-2xl p-5 border border-gray-100">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Mã của bạn</p>
+                                                <p className="text-lg font-black text-slate-900 italic tracking-widest">{referralStats?.referralCode || 'PHONESIN...'}</p>
+                                            </div>
+                                            <div className="bg-white rounded-2xl p-5 border border-gray-100 text-center">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Đã giới thiệu</p>
+                                                <p className="text-2xl font-black text-red-600">{referralStats?.completedCount || 0}</p>
+                                            </div>
+                                            <div className="bg-white rounded-2xl p-5 border border-gray-100 text-center hidden sm:block">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Tổng hoa hồng</p>
+                                                <p className="text-2xl font-black text-green-600">{formatPrice(referralStats?.totalEarned || 0)}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* History List */}
+                                        <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden">
+                                            <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between bg-gray-50/50">
+                                                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest">Lịch sử mời</h3>
+                                                <span className="text-[10px] font-bold text-gray-400">{referralHistory.length} người</span>
+                                            </div>
+                                            {referralHistory.length === 0 ? (
+                                                <div className="py-12 text-center text-gray-300 font-bold italic text-sm">Bạn chưa mời ai. Hãy bắt đầu ngay!</div>
+                                            ) : (
+                                                <div className="divide-y divide-gray-50">
+                                                    {referralHistory.map((item) => (
+                                                        <div key={item._id} className="p-4 flex items-center justify-between">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center font-black text-slate-400">
+                                                                    {(item.referee?.fullName || 'U').charAt(0)}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-sm font-black text-slate-900">{item.referee?.fullName || 'Người dùng ẩn'}</p>
+                                                                    <p className="text-[10px] font-bold text-gray-400">{new Date(item.createdAt).toLocaleDateString('vi-VN')}</p>
+                                                                </div>
+                                                            </div>
+                                                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+                                                                item.status === 'completed' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                                                            }`}>
+                                                                {item.status === 'completed' ? `+${formatPrice(item.rewardAmount)}` : 'Chờ xác nhận'}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
