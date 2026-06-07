@@ -34,8 +34,8 @@ export const getAdminDashboard = asyncHandler(async (req, res) => {
 
   // Total revenue
   const revenueData = await Order.aggregate([
-    { $match: { ...createdAtFilter, status: { $in: ['completed', 'delivered'] } } },
-    { $group: { _id: null, totalRevenue: { $sum: '$totalPrice' } } },
+    { $match: { ...createdAtFilter, status: { $in: ['confirmed', 'processing', 'packing', 'shipping', 'delivered'] } } },
+    { $group: { _id: null, totalRevenue: { $sum: '$total' } } },
   ]);
   const totalRevenue = revenueData[0]?.totalRevenue || 0;
 
@@ -51,9 +51,9 @@ export const getAdminDashboard = asyncHandler(async (req, res) => {
     { $unwind: '$items' },
     {
       $group: {
-        _id: '$items.productId',
+        _id: '$items.product',
         totalSold: { $sum: '$items.quantity' },
-        totalRevenue: { $sum: { $multiply: ['$items.quantity', '$items.price'] } },
+        totalRevenue: { $sum: '$items.lineTotal' },
       },
     },
     { $sort: { totalSold: -1 } },

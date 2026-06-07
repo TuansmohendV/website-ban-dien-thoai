@@ -1,209 +1,271 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import {
+    GraduationCap,
+    RefreshCcw,
+    UserCheck,
+    Gem,
+    BatteryCharging,
+    Truck,
+    Gift,
+    Eye,
+    EyeOff,
+    Minus,
+    ArrowLeft
+} from 'lucide-react';
+import api from '../../lib/api';
 
 const RegisterPage = () => {
-  const { register } = useAuth();
-  const navigate = useNavigate();
-  const [showPassword, setShowPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [formData, setFormData] = useState({
-    fullName: '',
-    phone: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-  });
+    const { register } = useAuth();
+    const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErrorMessage('');
+    const [formData, setFormData] = useState({
+        fullName: '',
+        email: '',
+        password: '',
+        confirmPassword: ''
+    });
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
+    
+    const [step, setStep] = useState(1); // 1: input info, 2: verify otp
+    const [otp, setOtp] = useState(['', '', '', '', '', '']);
+    const otpRefs = [useRef(), useRef(), useRef(), useRef(), useRef(), useRef()];
 
-    if (formData.password.length < 6) {
-      setErrorMessage('Mat khau phai co it nhat 6 ky tu.');
-      return;
-    }
+    const handleOtpChange = (index, value) => {
+        if (isNaN(value)) return;
+        const newOtp = [...otp];
+        newOtp[index] = value.substring(value.length - 1);
+        setOtp(newOtp);
+        if (value && index < 5) otpRefs[index + 1].current.focus();
+    };
 
-    if (formData.password !== formData.confirmPassword) {
-      setErrorMessage('Mat khau xac nhan khong khop.');
-      return;
-    }
+    const handleKeyDown = (index, e) => {
+        if (e.key === 'Backspace' && !otp[index] && index > 0) otpRefs[index - 1].current.focus();
+    };
 
-    try {
-      setIsSubmitting(true);
-      await register({
-        fullName: formData.fullName,
-        phone: formData.phone.trim(),
-        email: formData.email.trim(),
-        password: formData.password,
-      });
-      navigate('/');
-    } catch (error) {
-      setErrorMessage(error.message || 'Dang ky tai khoan that bai.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+    const handleSendOTP = async () => {
+        setIsSubmitting(true);
+        setErrorMessage('');
+        try {
+            await api.post('/api/auth/send-otp', { 
+                email: formData.email.trim(),
+                purpose: 'register'
+            });
+            setStep(2);
+        } catch (error) {
+            setErrorMessage(error.response?.data?.message || 'Lỗi khi gửi mã OTP. Vui lòng thử lại.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
-  return (
-    <div className="min-h-screen w-full flex bg-white font-sans overflow-hidden">
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setErrorMessage('');
 
-      <div className="hidden lg:flex lg:w-[45%] relative flex-col justify-end p-20 overflow-hidden bg-slate-950">
-         <img
-            src="https://images.unsplash.com/photo-1556656793-062ff987b50d?q=80&w=2070&auto=format&fit=crop"
-            alt="Premium Tech Store"
-            className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-screen grayscale hover:grayscale-0 transition-all duration-1000 scale-110 hover:scale-100"
-         />
-         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent"></div>
+        if (step === 1) {
+            if (formData.password !== formData.confirmPassword) {
+                setErrorMessage('Mật khẩu nhập lại không khớp.');
+                return;
+            }
+            await handleSendOTP();
+            return;
+        }
 
-         <div className="absolute bottom-[-10%] left-[-10%] w-[60%] h-[60%] bg-blue-600/10 rounded-full blur-[120px] animate-pulse"></div>
+        const otpCode = otp.join('');
+        if (otpCode.length < 6) {
+            setErrorMessage('Vui lòng nhập đầy đủ mã OTP.');
+            return;
+        }
 
-         <div className="relative z-10 space-y-6 max-w-lg">
-            <div className="flex items-center gap-4">
-               <div className="w-14 h-14 bg-red-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-red-600/40 transform rotate-6">
-                  <span className="text-white font-black text-3xl tracking-tighter">PS</span>
-               </div>
-               <h1 className="text-4xl font-black text-white tracking-tight uppercase">PhoneSin</h1>
+        try {
+            setIsSubmitting(true);
+            await api.post('/api/auth/verify-otp', {
+                email: formData.email.trim(),
+                otp: otpCode
+            });
+
+            await register({
+                fullName: formData.fullName,
+                email: formData.email,
+                password: formData.password
+            });
+            navigate('/');
+        } catch (error) {
+            setErrorMessage(error.response?.data?.message || error.message || 'Có lỗi xảy ra. Vui lòng thử lại.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const benefits = [
+        { icon: <GraduationCap size={20} />, text: 'Đặc quyền hạng EDU lên đến 5% giá trị sản phẩm' },
+        { icon: <RefreshCcw size={20} />, text: 'Trợ giá thu cũ lên đời đến 3 triệu' },
+        { icon: <UserCheck size={20} />, text: 'Hạng thành viên càng cao chiết khấu sản phẩm càng nhiều' },
+        { icon: <Gem size={20} />, text: 'Tích điểm thành viên siêu dễ - mua sắm thả ga' },
+        { icon: <BatteryCharging size={20} />, text: 'Thay Pin điện thoại ưu đãi đến 20%' },
+        { icon: <Truck size={20} />, text: 'Miễn phí giao hàng toàn quốc cho đơn hàng từ 300.000đ' },
+        { icon: <Gift size={20} />, text: 'Và vô vàn các ưu đãi thành viên hấp dẫn khác đang chờ bạn' },
+    ];
+
+    return (
+        <div className="min-h-screen w-full flex bg-white font-sans overflow-hidden relative">
+            <Link to="/" className="absolute top-4 right-4 z-50 w-10 h-10 bg-[#008d71] rounded-full flex items-center justify-center hover:bg-[#007a62] transition-all shadow-md group">
+                <Minus size={24} className="text-white" strokeWidth={4} />
+            </Link>
+
+            <div className="hidden lg:flex lg:w-1/2 relative flex-col items-center justify-start py-10 px-10 bg-gradient-to-r from-[#b3eccc] via-[#e5f9e0] to-[#fbe29d] border-r border-gray-100 overflow-hidden">
+                <div className="w-full max-w-[600px] flex flex-col items-center relative z-20">
+                    <div className="bg-white rounded-xl px-12 py-3.5 border-2 border-[#008d71] shadow-sm flex items-center justify-center gap-3 mb-8">
+                        <div className="bg-[#008d71] rounded-lg p-1">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="white"><path d="M17,19H7V5H17M17,1H7C5.89,1 5,1.89 5,3V21C5,22.11 5.89,23 7,23H17C18.11,23 19,22.11 19,21V3C19,1.89 18.11,1 17,1Z" /></svg>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[22px] font-black text-[#008d71] tracking-tighter uppercase">PhoneSin</span>
+                            <span className="text-[18px] font-black text-[#008d71]/80 tracking-tight uppercase">MOBILE</span>
+                        </div>
+                    </div>
+                    <h1 className="text-[62px] font-black text-[#008d71] tracking-tight italic leading-none mb-8 text-center" style={{ textShadow: '5px 0 0 #fff, -5px 0 0 #fff, 0 5px 0 #fff, 0 -5px 0 #fff, 4px 4px 0 #fff, -4px -4px 0 #fff, 4px -4px 0 #fff, -4px 4px 0 #fff, 0px 8px 10px rgba(0,0,0,0.15)' }}>
+                        PhoneSin Member
+                    </h1>
+                    <div className="w-full bg-[#006e58] rounded-[24px] p-10 shadow-2xl relative overflow-hidden mb-8">
+                        <div className="space-y-4 relative z-10">
+                            {benefits.map((benefit, index) => (
+                                <div key={index} className="flex items-center gap-5 text-white">
+                                    <div className="shrink-0 text-white/90">
+                                        {benefit.icon}
+                                    </div>
+                                    <span className="text-[15px] font-bold leading-tight tracking-tight">{benefit.text}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <button className="bg-white border-2 border-gray-100 px-12 py-3.5 rounded-xl text-[#008d71] font-black text-[14px] uppercase tracking-wider hover:shadow-lg transition-all shadow-md active:scale-95">
+                        XEM CHI TIET UU DAI
+                    </button>
+                </div>
+                <div className="absolute bottom-[-50px] left-0 w-full pointer-events-none flex flex-col items-center z-10">
+                    <img src="https://cdn.hoanghamobile.vn/Uploads/2025/06/16/2025-06-16-141858.png" alt="PhoneSin Mascot" className="w-full max-w-[650px] h-auto object-contain drop-shadow-2xl opacity-100" />
+                </div>
             </div>
 
-            <div className="space-y-4">
-               <h2 className="text-5xl font-black text-white leading-[1.1] tracking-tighter">
-                  Gia nhap <span className="text-red-500">cong dong</span> cong nghe hang dau.
-               </h2>
-               <div className="w-20 h-1.5 bg-red-600 rounded-full"></div>
-            </div>
+            <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white overflow-y-auto">
+                <div className="w-full max-w-[650px]">
+                    <div className="mb-10 text-center lg:text-left">
+                        <h3 className="text-[22px] font-black text-[#111] mb-2">
+                            {step === 1 ? 'Tao tai khoan PhoneSin' : 'Xac thuc Email'}
+                        </h3>
+                        <p className="text-[#333] text-[14px] font-medium leading-relaxed">
+                            {step === 1 
+                                ? 'Tham gia cùng cộng đồng PhoneSin để nhận nhiều ưu đãi hấp dẫn'
+                                : `Mã xác thực đã được gửi tới Email: ${formData.email}`}
+                        </p>
+                    </div>
 
-            <p className="text-slate-400 font-medium text-lg leading-relaxed">
-               Dang ky thanh vien de nhan ban tin khuyen mai som nhat va dich vu hau mai tieu chuan 5 sao tu PhoneSin.
-            </p>
-         </div>
-      </div>
-
-      <div className="w-full lg:w-[55%] flex items-center justify-center p-8 md:p-16 lg:p-24 bg-white relative overflow-y-auto">
-
-         <div className="absolute top-0 left-0 w-48 h-48 bg-red-50 rounded-br-full -z-0 opacity-50 block lg:hidden"></div>
-
-         <div className="w-full max-w-[500px] relative z-10 py-10">
-
-            <div className="mb-12 flex lg:hidden items-center gap-3">
-               <div className="w-10 h-10 bg-red-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <span className="text-white font-black text-xl">PS</span>
-               </div>
-               <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase">PhoneSin</h1>
-            </div>
-
-            <header className="mb-10 text-center lg:text-left">
-               <h3 className="text-4xl font-black text-slate-900 mb-3 tracking-tight">Tao tai khoan</h3>
-               <p className="text-slate-500 font-medium text-lg">Cung kien tao tuong lai so cung PhoneSin</p>
-            </header>
-
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
-               <div className="col-span-1 space-y-2">
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest pl-1">Ho va Ten</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.fullName}
-                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                    placeholder="Nguyen Van A"
-                    className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-slate-900 text-sm font-semibold focus:border-red-600 focus:ring-4 focus:ring-red-600/5 outline-none transition-all placeholder:text-slate-300 shadow-sm"
-                  />
-               </div>
-
-               <div className="col-span-1 space-y-2">
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest pl-1">So dien thoai</label>
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="09xx xxx xxx"
-                    className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-slate-900 text-sm font-semibold focus:border-red-600 focus:ring-4 focus:ring-red-600/5 outline-none transition-all placeholder:text-slate-300 shadow-sm"
-                  />
-               </div>
-
-               <div className="col-span-full space-y-2">
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest pl-1">Dia chi Email</label>
-                  <input
-                    type="email"
-                    required
-                    value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="example@phonesin.vn"
-                    className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-slate-900 text-sm font-semibold focus:border-red-600 focus:ring-4 focus:ring-red-600/5 outline-none transition-all placeholder:text-slate-300 shadow-sm"
-                  />
-               </div>
-
-               <div className="col-span-1 space-y-2">
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest pl-1">Mat khau</label>
-                  <div className="relative group">
-                     <input
-                       type={showPassword ? 'text' : 'password'}
-                       required
-                       value={formData.password}
-                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                       placeholder="••••••••"
-                       className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-slate-900 text-sm font-semibold focus:border-red-600 focus:ring-4 focus:ring-red-600/5 outline-none transition-all placeholder:text-slate-300 shadow-sm"
-                     />
-                     <button
-                       type="button"
-                       onClick={() => setShowPassword(!showPassword)}
-                       className="absolute inset-y-0 right-4 flex items-center text-slate-400 hover:text-red-600 transition-colors"
-                     >
-                        {showPassword ? (
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        {step === 1 ? (
+                            <>
+                                <div className="space-y-2">
+                                    <label className="text-[14px] font-bold text-[#444] pl-1">Họ và tên</label>
+                                    <input
+                                        type="text"
+                                        required
+                                        value={formData.fullName}
+                                        onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                                        placeholder="Nhập họ và tên của bạn"
+                                        className="w-full bg-white border border-gray-300 rounded-lg px-5 py-3.5 text-slate-900 text-[15px] font-semibold focus:border-[#008d71] outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[14px] font-bold text-[#444] pl-1">Địa chỉ Email</label>
+                                    <input
+                                        type="email"
+                                        required
+                                        value={formData.email}
+                                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                        placeholder="Nhập địa chỉ email"
+                                        className="w-full bg-white border border-gray-300 rounded-lg px-5 py-3.5 text-slate-900 text-[15px] font-semibold focus:border-[#008d71] outline-none transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[14px] font-bold text-[#444] pl-1">Mật khẩu</label>
+                                    <div className="relative">
+                                        <input
+                                            type={showPassword ? 'text' : 'password'}
+                                            required
+                                            value={formData.password}
+                                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                            placeholder="Tối thiểu 6 ký tự"
+                                            className="w-full bg-white border border-gray-300 rounded-lg px-5 py-3.5 text-slate-900 text-[15px] font-semibold focus:border-[#008d71] outline-none transition-all pr-12"
+                                        />
+                                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#008d71]">
+                                            {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[14px] font-bold text-[#444] pl-1">Nhập lại mật khẩu</label>
+                                    <div className="relative">
+                                        <input
+                                            type={showConfirmPassword ? 'text' : 'password'}
+                                            required
+                                            value={formData.confirmPassword}
+                                            onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                                            placeholder="Xác nhận lại mật khẩu"
+                                            className="w-full bg-white border border-gray-300 rounded-lg px-5 py-3.5 text-slate-900 text-[15px] font-semibold focus:border-[#008d71] outline-none transition-all pr-12"
+                                        />
+                                        <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#008d71]">
+                                            {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                                        </button>
+                                    </div>
+                                </div>
+                            </>
                         ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            <div className="space-y-6">
+                                <div className="flex justify-between gap-2">
+                                    {otp.map((digit, index) => (
+                                        <input
+                                            key={index}
+                                            ref={otpRefs[index]}
+                                            type="text"
+                                            inputMode="numeric"
+                                            value={digit}
+                                            onChange={(e) => handleOtpChange(index, e.target.value)}
+                                            onKeyDown={(e) => handleKeyDown(index, e)}
+                                            className="w-full h-[60px] text-center text-[24px] font-black border-2 border-gray-200 rounded-xl focus:border-[#008d71] outline-none transition-all"
+                                        />
+                                    ))}
+                                </div>
+                                <button type="button" onClick={() => setStep(1)} className="text-[13px] font-bold text-[#008d71] hover:underline flex items-center gap-1">
+                                    <ArrowLeft size={14} /> Thay đổi thông tin
+                                </button>
+                            </div>
                         )}
-                     </button>
-                  </div>
-               </div>
 
-               <div className="col-span-1 space-y-2">
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest pl-1">Xac nhan lai</label>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    value={formData.confirmPassword}
-                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                    placeholder="••••••••"
-                    className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-4 text-slate-900 text-sm font-semibold focus:border-red-600 focus:ring-4 focus:ring-red-600/5 outline-none transition-all placeholder:text-slate-300 shadow-sm"
-                  />
-               </div>
+                        {errorMessage && <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-[13px] font-semibold text-red-600">{errorMessage}</div>}
 
-               {errorMessage && (
-                  <div className="col-span-full rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-sm font-semibold text-red-600">
-                    {errorMessage}
-                  </div>
-               )}
+                        <button type="submit" disabled={isSubmitting} className="w-full bg-[#008d71] text-white rounded-lg h-[54px] font-black uppercase tracking-wider shadow-md hover:bg-[#007a62] transition-all disabled:opacity-70 mt-4">
+                            {isSubmitting ? 'ĐANG XỬ LÝ...' : (step === 1 ? 'TIẾP TỤC' : 'XÁC NHẬN ĐĂNG KÝ')}
+                        </button>
 
-               <div className="col-span-full py-2">
-                  <label className="flex items-center gap-3 cursor-pointer group">
-                     <input type="checkbox" required className="w-5 h-5 accent-red-600 rounded-lg" />
-                     <span className="text-[13px] text-slate-500 font-medium">
-                        Toi dong y voi <span className="text-red-600 font-bold hover:underline">Dieu khoan dich vu</span> va <span className="text-red-600 font-bold hover:underline">Chinh sach bao mat</span> cua PhoneSin.
-                     </span>
-                  </label>
-               </div>
+                        <div className="text-center pt-2">
+                            <div className="text-[14px] text-gray-500 font-medium">
+                                Bạn đã có tài khoản? <Link to="/login" className="text-[#008d71] font-black hover:underline">Đăng nhập</Link>
+                            </div>
+                        </div>
+                    </form>
 
-               <button
-                 type="submit"
-                 disabled={isSubmitting}
-                 className="col-span-full bg-slate-950 text-white rounded-2xl py-4.5 font-black uppercase tracking-[0.25em] shadow-2xl hover:bg-red-600 transition-all hover:scale-[1.02] active:scale-95 shadow-slate-200 disabled:opacity-70"
-               >
-                  {isSubmitting ? 'DANG XU LY...' : 'HOAN TAT DANG KY'}
-               </button>
-            </form>
-
-            <div className="mt-10 pt-8 border-t border-slate-100 italic transition-all">
-               <p className="text-center text-sm font-medium text-slate-500">
-                  Da co tai khoan tai PhoneSin? <Link to="/login" className="text-red-600 font-black hover:underline underline-offset-4 transition-all">Dang nhap ngay</Link>
-               </p>
+                    <div className="mt-12 text-[12px] text-gray-500 text-center lg:text-left leading-relaxed">
+                        Bằng việc tiếp tục, bạn đã đồng ý với <Link to="/policy" className="text-[#008d71] font-bold hover:underline">Chính sách bảo mật</Link> của PhoneSin
+                    </div>
+                </div>
             </div>
-         </div>
-      </div>
-    </div>
-  );
+        </div>
+    );
 };
 
 export default RegisterPage;

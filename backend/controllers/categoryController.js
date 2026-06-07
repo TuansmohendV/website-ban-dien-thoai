@@ -34,13 +34,17 @@ const normalizeCategoryPayload = (body = {}) => {
     payload.isActive = Boolean(body.isActive);
   }
 
+  if (body.isFeatured !== undefined) {
+    payload.isFeatured = Boolean(body.isFeatured);
+  }
+
   return payload;
 };
 
 const buildProductCountGroups = async (includeInactive) => {
   const productMatch = includeInactive
-    ? {}
-    : { $or: [{ status: 'active' }, { status: { $exists: false } }] };
+    ? { isDeleted: { $ne: true } }
+    : { isDeleted: { $ne: true }, $or: [{ status: 'active' }, { status: { $exists: false } }] };
 
   return Product.aggregate([
     { $match: productMatch },
@@ -131,20 +135,46 @@ const attachProductCounts = (categories, productGroups, includeDerived) => {
 };
 
 export const getCategories = asyncHandler(async (req, res) => {
-  const isAdminRequest = req.user?.role === 'admin' || req.user?.isAdmin === true;
-  const includeInactive =
-    isAdminRequest && String(req.query.includeInactive) === 'true';
+  const isAdminRequest = ['admin', 'manager', 'staff'].includes(req.user?.role) || req.user?.isAdmin === true;
+  const includeInactive = isAdminRequest && String(req.query.includeInactive) === 'true';
   const includeDerived = String(req.query.includeDerived) !== 'false';
 
-  const query = includeInactive ? {} : { isActive: true };
-
-  const [categories, productGroups] = await Promise.all([
-    Category.find(query).sort({ createdAt: -1 }).lean(),
+  // Always fetch all categories from DB to ensure 'derived' logic knows which ones exist (even if inactive)
+  const [allDbCategories, productGroups] = await Promise.all([
+    Category.find({ isDeleted: { $ne: true } }).sort({ isFeatured: -1, createdAt: -1 }).lean(),
     buildProductCountGroups(includeInactive),
   ]);
 
+  // Filter which DB categories to actually include in the logic based on isActive status
+  const categoriesToProcess = includeInactive 
+    ? allDbCategories 
+    : allDbCategories.filter(c => c.isActive);
+
+  // But we need ALL DB slugs to avoid creating 'derived' duplicates for inactive categories
+  const allDbSlugs = new Set(allDbCategories.map(c => c.slug || toSlug(c.name)));
+  allDbCategories.forEach(c => allDbSlugs.add(toSlug(c.name)));
+
+  // Identify slugs that are explicitly inactive in the DB
+  const inactiveSlugs = allDbCategories
+    .filter(c => !c.isActive)
+    .map(c => c.slug || toSlug(c.name));
+  
+  allDbCategories.filter(c => !c.isActive).forEach(c => inactiveSlugs.push(toSlug(c.name)));
+
+  // Custom attach logic or modify attachProductCounts to handle knownSlugs better
+  const data = attachProductCounts(categoriesToProcess, productGroups, includeDerived);
+  
+  // Final filter for derived categories: if it's derived but matches an inactive DB category, hide it
+  const filteredData = data.filter(item => {
+    if (!item.isDerived) return true;
+    const slug = item.slug;
+    const existsInDbAsInactive = allDbCategories.some(c => !c.isActive && (c.slug === slug || toSlug(c.name) === slug));
+    return !existsInDbAsInactive;
+  });
+
   res.json({
-    data: attachProductCounts(categories, productGroups, includeDerived),
+    data: filteredData,
+    inactiveSlugs: [...new Set(inactiveSlugs)], // Include inactive slugs for frontend filtering
   });
 });
 
@@ -204,13 +234,19 @@ export const deleteCategory = asyncHandler(async (req, res) => {
     throw new AppError(400, 'ID danh mục không hợp lệ.');
   }
 
-  const category = await Category.findByIdAndDelete(req.params.id);
+  const category = await Category.findById(req.params.id);
 
   if (!category) {
     throw new AppError(404, 'Không tìm thấy danh mục.');
   }
 
+  // Soft delete
+  category.isActive = false;
+  category.isDeleted = true;
+  category.deletedAt = new Date();
+  await category.save();
+
   res.json({
-    message: 'Xóa danh mục thành công.',
+    message: 'Chuyển danh mục vào trạng thái đã ẩn (xoá mềm) thành công.',
   });
 });

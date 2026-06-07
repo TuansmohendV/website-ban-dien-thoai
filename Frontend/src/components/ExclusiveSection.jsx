@@ -19,95 +19,32 @@ const ExclusiveSection = () => {
     return () => window.removeEventListener('resize', updateCount);
   }, []);
 
-  const exclusiveProducts = [
-    {
-      id: 1,
-      name: 'Nubia A78 4GB 128GB (NFC)',
-      price: '2.790.000đ',
-      oldPrice: '3.490.000đ',
-      discount: '-20%',
-      image: 'https://cdn.tgdd.vn/Products/Images/42/322690/nubia-a78-trang-thumb-600x600.jpg',
-      badge: 'ĐỘC QUYỀN',
-      specs: { camera: '50MP', chip: 'T606', pin: '5000mAh' },
-      colors: ['#efefef', '#999', '#000'],
-      promo: 'Giảm 800.000đ khi thanh toán qua thẻ Visa SCB.'
-    },
-    {
-        id: 2,
-        name: 'Tecno Spark 40C 8GB 256GB',
-        price: '3.190.000đ',
-        oldPrice: '3.790.000đ',
-        discount: '-16%',
-        image: 'https://cdn.tgdd.vn/Products/Images/42/313333/tecno-spark-20c-trang-thumb-600x600.jpg',
-        badge: 'ĐỘC QUYỀN',
-        specs: { camera: '50MP', chip: 'G36', pin: '5000mAh' },
-        colors: ['#000', '#eee', '#ddd'],
-        promo: 'Giảm 800.000đ khi thanh toán qua thẻ Visa SCB.'
-      },
-      {
-        id: 3,
-        name: 'Xiaomi Poco M7 Pro 5G 8GB 256GB',
-        price: '5.990.000đ',
-        oldPrice: '6.370.000đ',
-        discount: '-6%',
-        image: 'https://cdn.tgdd.vn/Products/Images/42/305658/xiaomi-redmi-note-13-den-thumb-600x600.jpg',
-        badge: 'ĐỘC QUYỀN',
-        specs: { camera: '108MP', chip: 'Dimensity 6080', pin: '5000mAh' },
-        colors: ['#000', '#ccc', '#666', '#444'],
-        promo: 'Chủ thẻ OCB: Giảm 500.000đ cho hóa đơn 10 triệu'
-      },
-      {
-        id: 4,
-        name: 'Honor X9d 5G 8GB 256GB',
-        price: '9.490.000đ',
-        oldPrice: '9.990.000đ',
-        discount: '-5%',
-        image: 'https://cdn.tgdd.vn/Products/Images/42/320141/honor-x9b-5g-đen-thumb-600x600.jpg',
-        badge: 'ĐỘC QUYỀN',
-        badge2: '2 NĂM BẢO HÀNH',
-        specs: { camera: '108MP', chip: 'SD 6 Gen 1', pin: '5800mAh' },
-        colors: ['#000', '#f1c40f', '#ccc'],
-        promo: 'Giảm 800.000đ khi thanh toán qua thẻ Visa SCB.'
-      },
-      {
-        id: 5,
-        name: 'OPPO Find N3 5G 16GB 512GB',
-        price: '26.990.000đ',
-        oldPrice: '44.190.000đ',
-        discount: '-39%',
-        image: 'https://cdn.tgdd.vn/Products/Images/42/313333/oppo-find-n3-vang-thumb-600x600.jpg',
-        badge: 'ĐỘC QUYỀN',
-        specs: { camera: '48MP', chip: 'SD 8 Gen 2', pin: '4805mAh' },
-        colors: ['#000', '#f1c40f'],
-        promo: 'Giảm 1.000.000đ khi thanh toán qua thẻ Visa SCB.'
-      },
-      {
-        id: 6,
-        name: 'Samsung Galaxy Z Fold 5',
-        price: '34.990.000đ',
-        oldPrice: '40.000.000đ',
-        discount: '-12%',
-        image: 'https://cdn.tgdd.vn/Products/Images/42/306274/samsung-galaxy-s24-ultra-xam-thumb-600x600.jpg',
-        badge: 'NEW',
-        specs: { camera: '50MP', chip: 'SD 8 Gen 2', pin: '4400mAh' },
-        colors: ['#000', '#fff'],
-        promo: 'Ưu dãi thu cũ 2.000.000đ'
-      },
-      {
-        id: 7,
-        name: 'iPhone 15 Pro Max 256GB',
-        price: '29.490.000đ',
-        oldPrice: '34.990.000đ',
-        discount: '-16%',
-        image: 'https://cdn.tgdd.vn/Products/Images/42/305658/iphone-15-pro-max-quang-tu-thumb-600x600.jpg',
-        badge: 'HOT',
-        specs: { camera: '48MP', chip: 'A17 Pro', pin: '4441mAh' },
-        colors: ['#000', '#f1f1f1', '#666'],
-        promo: 'Giảm 1.000.000đ qua thẻ VPBank'
-      }
-  ];
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const maxIndex = Math.max(0, exclusiveProducts.length - visibleCount);
+  // Fetch products from API
+  React.useEffect(() => {
+    let ignore = false;
+    const fetchProducts = async () => {
+      try {
+        const response = await fetch('/api/products?limit=10&isHot=true');
+        const data = await response.json();
+        if (!ignore) {
+          // Map to match the expected structure if needed, or use normalizeProduct if imported
+          // For now, we'll use the raw data and adapt the card
+          setProducts(data.data || []);
+        }
+      } catch (error) {
+        console.error('Error fetching exclusive products:', error);
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    };
+    fetchProducts();
+    return () => { ignore = true; };
+  }, []);
+
+  const maxIndex = Math.max(0, products.length - visibleCount);
 
   const nextSlide = () => {
     setCurrentIndex((prev) => Math.min(prev + 1, maxIndex));
@@ -116,6 +53,8 @@ const ExclusiveSection = () => {
   const prevSlide = () => {
     setCurrentIndex((prev) => Math.max(prev - 1, 0));
   };
+
+  if (products.length === 0 && !loading) return null;
 
   return (
     <div className="w-full mx-auto max-w-[1300px] mb-12">
@@ -144,9 +83,9 @@ const ExclusiveSection = () => {
                 className="flex transition-transform duration-700 ease-in-out -mx-1"
                 style={{ transform: `translateX(-${currentIndex * (100 / visibleCount)}%)` }}
             >
-                {exclusiveProducts.map((product) => (
+                {products.map((product) => (
                     <div 
-                        key={product.id} 
+                        key={product._id || product.id} 
                         className="shrink-0 px-1.5 pb-2 transition-all duration-300"
                         style={{ width: `${100 / visibleCount}%` }}
                     >

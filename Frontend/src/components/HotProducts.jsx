@@ -18,9 +18,12 @@ const HotProducts = ({ category = 'dien-thoai' }) => {
 
     const loadProducts = async () => {
       try {
-        const response = await api.get('/api/products', {
-          params: { limit: 50 },
-        });
+        const params = { limit: 20 };
+        if (category && category !== 'Tất cả') {
+          params.category = category;
+        }
+
+        const response = await api.get('/api/products', { params });
 
         if (!ignore) {
           setProducts((response.data?.data || []).map(normalizeProduct));
@@ -37,12 +40,11 @@ const HotProducts = ({ category = 'dien-thoai' }) => {
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [category]);
 
   const filteredItems = useMemo(() => {
-    const categoryProducts = products.filter((product) => product.category === category);
-    const source = categoryProducts.length > 0 ? categoryProducts : products;
-    return inflateProducts(source, 8, `hot-${category}`);
+    // No fallback to 'products' here. If it's empty, it's empty.
+    return inflateProducts(products, 8, `hot-${category}`);
   }, [category, products]);
 
   const visibleCount = 4;
@@ -65,16 +67,16 @@ const HotProducts = ({ category = 'dien-thoai' }) => {
   }, [current, filteredItems.length, isPaused]);
 
   const titles = {
-    'dien-thoai': 'CAC SAN PHAM HOT NHAT CUA DIEN THOAI',
-    laptop: 'CAC SAN PHAM HOT NHAT CUA LAPTOP',
-    tablet: 'CAC SAN PHAM HOT NHAT CUA TABLET',
-    'dong-ho': 'CAC SAN PHAM HOT NHAT CUA DONG HO THONG MINH',
-    'man-hinh': 'CAC SAN PHAM HOT NHAT CUA MAN HINH',
-    'linh-kien-may-tinh': 'CAC SAN PHAM HOT NHAT CUA LINH KIEN MAY TINH',
-    'am-thanh': 'CAC SAN PHAM HOT NHAT CUA THIET BI AM THANH',
-    'dich-vu': 'CAC SAN PHAM HOT NHAT CUA DICH VU',
+    'dien-thoai': 'CÁC SẢN PHẨM HOT NHẤT CỦA ĐIỆN THOẠI',
+    laptop: 'CÁC SẢN PHẨM HOT NHẤT CỦA LAPTOP',
+    tablet: 'CÁC SẢN PHẨM HOT NHẤT CỦA TABLET',
+    'dong-ho': 'CÁC SẢN PHẨM HOT NHẤT CỦA ĐỒNG HỒ THÔNG MINH',
+    'man-hinh': 'CÁC SẢN PHẨM HOT NHẤT CỦA MÀN HÌNH',
+    'linh-kien-may-tinh': 'CÁC SẢN PHẨM HOT NHẤT CỦA LINH KIỆN MÁY TÍNH',
+    'am-thanh': 'CÁC SẢN PHẨM HOT NHẤT CỦA THIẾT BỊ ÂM THANH',
+    'dich-vu': 'CÁC SẢN PHẨM HOT NHẤT CỦA DỊCH VỤ',
   };
-  const currentTitle = titles[category] || `CAC SAN PHAM HOT NHAT CUA ${category.toUpperCase()}`;
+  const currentTitle = titles[category] || `CÁC SẢN PHẨM HOT NHẤT CỦA ${category.toUpperCase()}`;
 
   if (filteredItems.length === 0) {
     return null;

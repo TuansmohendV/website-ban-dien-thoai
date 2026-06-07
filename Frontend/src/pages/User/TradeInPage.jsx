@@ -8,39 +8,66 @@ const TradeInPage = () => {
   const [isCalculating, setIsCalculating] = useState(false);
   const [result, setResult] = useState(null);
 
-  const brands = ['Apple', 'Samsung', 'Oppo', 'Xiaomi', 'Google'];
-  const models = {
-    'Apple': ['iPhone 15 Pro Max', 'iPhone 15 Pro', 'iPhone 14 Pro Max', 'iPhone 13 Pro Max', 'iPhone 12 Pro Max'],
-    'Samsung': ['Galaxy S24 Ultra', 'Galaxy S23 Ultra', 'Galaxy Z Fold 5', 'Galaxy S22 Ultra'],
-    'Google': ['Pixel 8 Pro', 'Pixel 7 Pro', 'Pixel 6 Pro'],
-    'Xiaomi': ['Xiaomi 14 Ultra', 'Xiaomi 13 Ultra'],
-    'Oppo': ['Find N3', 'Find X6 Pro']
-  };
+  const [brands, setBrands] = useState([]);
+  const [brandModels, setBrandModels] = useState([]);
+  const [isLoadingBrands, setIsLoadingBrands] = useState(true);
 
-  const handleCalculate = (e) => {
+  useEffect(() => {
+    const fetchBrands = async () => {
+      try {
+        const res = await api.get('/api/trade-in/brands');
+        setBrands(res.data.data);
+      } catch (err) {
+        console.error('Failed to fetch brands:', err);
+      } finally {
+        setIsLoadingBrands(false);
+      }
+    };
+    fetchBrands();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedBrand) return;
+    const fetchModels = async () => {
+      try {
+        const res = await api.get(`/api/trade-in/models/${selectedBrand}`);
+        setBrandModels(res.data.data);
+      } catch (err) {
+        console.error('Failed to fetch models:', err);
+      }
+    };
+    fetchModels();
+  }, [selectedBrand]);
+
+  const handleCalculate = async (e) => {
     e.preventDefault();
     if (!selectedModel) return alert('Vui lòng chọn dòng máy!');
     
     setIsCalculating(true);
     setResult(null);
 
-    // Giả lập tính toán
-    setTimeout(() => {
-      let baseValue = 15000000;
-      if (selectedModel.includes('15')) baseValue = 22000000;
-      if (selectedModel.includes('14')) baseValue = 18000000;
-      if (selectedModel.includes('S24')) baseValue = 20000000;
-
-      const conditionMultipliers = { perfect: 1, good: 0.8, scratched: 0.6, broken: 0.3 };
-      const finalValue = baseValue * conditionMultipliers[condition];
+    try {
+      const selectedDevice = brandModels.find(m => m.model === selectedModel);
+      const res = await api.post('/api/trade-in/calculate', {
+        deviceId: selectedDevice._id,
+        conditionAnswers: {
+          screen: condition === 'perfect' ? 'good' : condition === 'good' ? 'scratched' : condition === 'scratched' ? 'scratched' : 'broken',
+          body: 'good', // default for now
+          battery: 'good' // default for now
+        }
+      });
 
       setResult({
-        value: finalValue,
+        value: res.data.data.valuation,
         model: selectedModel,
-        bonus: 2000000 // Trợ giá thêm
+        bonus: 2000000 
       });
+    } catch (err) {
+      console.error('Failed to calculate valuation:', err);
+      alert('Có lỗi xảy ra khi tính giá!');
+    } finally {
       setIsCalculating(false);
-    }, 1200);
+    }
   };
 
   return (
@@ -115,8 +142,8 @@ const TradeInPage = () => {
                                 className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-6 py-4 font-bold focus:border-red-500 focus:bg-white outline-none transition-all shadow-inner appearance-none cursor-pointer"
                             >
                                 <option value="" disabled>--- Chọn dòng máy ---</option>
-                                {models[selectedBrand]?.map(m => (
-                                    <option key={m} value={m}>{m}</option>
+                                {brandModels.map(m => (
+                                    <option key={m._id} value={m.model}>{m.model}</option>
                                 ))}
                             </select>
                         </div>

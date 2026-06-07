@@ -1,19 +1,32 @@
 import React from 'react';
 import { Link, useParams } from 'react-router-dom';
+import api from '../lib/api';
 
 const CategoryNav = () => {
   const { id: activeSlug } = useParams();
-  
-  const categories = [
-    { name: 'Tất cả', slug: 'all', logo: 'https://cdn.hoanghamobile.vn/i/cat/Uploads/2023/11/24/all-products.png' },
-    { name: 'iPhone', slug: 'iphone', logo: 'https://cdn.hoanghamobile.vn/i/cat/Uploads/2023/06/13/ip.png' },
-    { name: 'Samsung', slug: 'samsung', logo: 'https://cdn.hoanghamobile.vn/i/cat/Uploads/2023/06/13/ss.png' },
-    { name: 'Xiaomi', slug: 'xiaomi', logo: 'https://cdn.hoanghamobile.vn/i/cat/Uploads/2023/06/13/mi.png' },
-    { name: 'OPPO', slug: 'oppo', logo: 'https://cdn.hoanghamobile.vn/i/cat/Uploads/2023/06/13/oppo.png' },
-    { name: 'VIVO', slug: 'vivo', logo: 'https://cdn.hoanghamobile.vn/i/cat/Uploads/2023/11/17/vivo.png' },
-    { name: 'Realme', slug: 'realme', logo: 'https://cdn.hoanghamobile.vn/i/cat/Uploads/2023/06/13/realme.png' },
-    { name: 'HONOR', slug: 'honor', logo: 'https://cdn.hoanghamobile.vn/i/cat/Uploads/2024/07/11/honor-cat.png' },
-  ];
+  const [categories, setCategories] = React.useState([
+    { name: 'Tất cả', slug: 'all', logo: 'https://cdn.hoanghamobile.vn/i/cat/Uploads/2023/11/24/all-products.png' }
+  ]);
+
+  React.useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await api.get('/api/categories');
+        const dbCategories = response.data?.data || [];
+        setCategories([
+          { name: 'Tất cả', slug: 'all', logo: 'https://cdn.hoanghamobile.vn/i/cat/Uploads/2023/11/24/all-products.png' },
+          ...dbCategories.map(cat => ({
+            name: cat.name,
+            slug: cat.slug,
+            logo: cat.icon || 'https://cdn.hoanghamobile.vn/i/cat/Uploads/2023/06/13/ip.png'
+          }))
+        ]);
+      } catch (error) {
+        console.error('Failed to fetch categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   return (
     <div className="w-full bg-white py-4 border-b border-gray-100 shadow-sm sticky top-[64px] z-20">

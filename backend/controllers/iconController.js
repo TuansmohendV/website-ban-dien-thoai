@@ -21,11 +21,14 @@ export const createAdminIcon = asyncHandler(async (req, res, next) => {
 
 // Admin: Get icons
 export const getAdminIcons = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, category } = req.query;
+  const { page = 1, limit = 10, category, includeInactive } = req.query;
   const skip = (page - 1) * limit;
 
   const query = {};
   if (category) query.category = category;
+  if (String(includeInactive) !== 'true') {
+    query.isActive = true;
+  }
 
   const icons = await Icon.find(query)
     .limit(limit * 1)
@@ -43,15 +46,18 @@ export const getAdminIcons = asyncHandler(async (req, res) => {
 
 // Admin: Delete icon
 export const deleteAdminIcon = asyncHandler(async (req, res, next) => {
-  const icon = await Icon.findByIdAndDelete(req.params.id);
+  const icon = await Icon.findById(req.params.id);
 
   if (!icon) {
     return next(new AppError('Không tìm thấy icon', 404));
   }
 
+  icon.isActive = false;
+  await icon.save();
+
   res.json({
     status: 'success',
-    message: 'Xóa icon thành công',
+    message: 'Chuyển icon vào trạng thái đã ẩn (xoá mềm) thành công',
   });
 });
 

@@ -71,6 +71,40 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
+    const loginWithFirebase = async (payload) => {
+        try {
+            const response = await api.post('/api/auth/firebase-login', payload);
+            const nextUser = normalizeUser(response.data?.user || {});
+            persistSession({
+                token: response.data?.token,
+                user: nextUser,
+            });
+            setUser(nextUser);
+            return nextUser;
+        } catch (error) {
+            throw new Error(
+                getApiErrorMessage(error, 'Xác thực OTP thành công nhưng không thể đăng nhập hệ thống.')
+            );
+        }
+    };
+
+    const loginWithEmailOTP = async (payload) => {
+        try {
+            const response = await api.post('/api/auth/otp-login', payload);
+            const nextUser = normalizeUser(response.data?.user || {});
+            persistSession({
+                token: response.data?.token,
+                user: nextUser,
+            });
+            setUser(nextUser);
+            return nextUser;
+        } catch (error) {
+            throw new Error(
+                getApiErrorMessage(error, 'Xác thực OTP thành công nhưng không thể đăng nhập hệ thống.')
+            );
+        }
+    };
+
     const register = async (payload) => {
         try {
             const response = await api.post('/api/auth/register', payload);
@@ -84,6 +118,26 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             throw new Error(
                 getApiErrorMessage(error, 'Khong the dang ky tai khoan luc nay.')
+            );
+        }
+    };
+
+    const socialLogin = async (provider) => {
+        try {
+            const response = await api.post('/api/auth/social-login', {
+                provider,
+                accessToken: `mock-${provider}-token`,
+            });
+            const nextUser = normalizeUser(response.data?.user || {});
+            persistSession({
+                token: response.data?.token,
+                user: nextUser,
+            });
+            setUser(nextUser);
+            return nextUser;
+        } catch (error) {
+            throw new Error(
+                getApiErrorMessage(error, `Khong the dang nhap bang ${provider} luc nay.`)
             );
         }
     };
@@ -121,8 +175,13 @@ export const AuthProvider = ({ children }) => {
             setUser(nextUser);
             return nextUser;
         } catch (error) {
+            const details = error?.response?.data?.details;
+            const detailText =
+                Array.isArray(details) && details.length > 0
+                    ? ` (${details.join(', ')})`
+                    : '';
             throw new Error(
-                getApiErrorMessage(error, 'Khong the cap nhat thong tin tai khoan.')
+                `${getApiErrorMessage(error, 'Khong the cap nhat thong tin tai khoan.')}${detailText}`
             );
         }
     };
@@ -143,7 +202,10 @@ export const AuthProvider = ({ children }) => {
             value={{
                 user,
                 login,
+                loginWithFirebase,
+                loginWithEmailOTP,
                 register,
+                socialLogin,
                 logout,
                 refreshProfile,
                 updateProfile,

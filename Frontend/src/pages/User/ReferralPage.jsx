@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Breadcrumbs from '../../components/Breadcrumbs';
+import api from '../../lib/api';
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
 const CopyIcon = ({ className }) => (
@@ -24,16 +25,6 @@ const StarIcon = ({ className }) => (
 const ArrowRightIcon = ({ className }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
 );
-
-// ─── Mock Data ─────────────────────────────────────────────────────────────────
-const REFERRAL_CODE = 'SINPHONEAVA';
-const REFERRAL_LINK = `${window.location.origin}/register?ref=SINPHONEAVA`;
-
-const referralHistory = [
-  { id: 1, name: 'Trần Minh Khoa', date: '02/04/2026', status: 'success', reward: 500000 },
-  { id: 2, name: 'Lê Thị Hoa', date: '28/03/2026', status: 'success', reward: 500000 },
-  { id: 3, name: 'Phạm Quốc Bảo', date: '15/03/2026', status: 'pending', reward: 0 },
-];
 
 const steps = [
   {
@@ -60,27 +51,50 @@ const steps = [
 const ReferralPage = () => {
   const [codeCopied, setCodeCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [stats, setStats] = useState({
+    referralCode: '',
+    totalInvited: 0,
+    pendingCount: 0,
+    completedCount: 0,
+    totalEarned: 0
+  });
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const totalEarned = referralHistory
-    .filter(r => r.status === 'success')
-    .reduce((sum, r) => sum + r.reward, 0);
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [statsRes, historyRes] = await Promise.all([
+          api.get('/api/referral/stats'),
+          api.get('/api/referral/history')
+        ]);
+        setStats(statsRes.data.data);
+        setHistory(historyRes.data.data);
+      } catch (err) {
+        console.error('Failed to load referral data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
+  }, []);
 
-  const successCount = referralHistory.filter(r => r.status === 'success').length;
+  const referralLink = `${window.location.origin}/register?ref=${stats.referralCode}`;
 
   const handleCopyCode = () => {
-    navigator.clipboard.writeText(REFERRAL_CODE);
+    navigator.clipboard.writeText(stats.referralCode);
     setCodeCopied(true);
     setTimeout(() => setCodeCopied(false), 2500);
   };
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(REFERRAL_LINK);
+    navigator.clipboard.writeText(referralLink);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2500);
   };
 
   const formatPrice = (n) =>
-    n.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
+    (n || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24" style={{ fontFamily: "'Inter', sans-serif" }}>
@@ -111,19 +125,25 @@ const ReferralPage = () => {
       <div className="w-full mx-auto px-4 sm:px-8 lg:px-16 xl:px-24 pr-16 md:pr-24 pt-12">
 
         {/* ── Stats ───────────────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-12">
-          {[
-            { label: 'Bạn bè đã mời', value: successCount, suffix: ' người', color: 'text-blue-600' },
-            { label: 'Đang chờ xác nhận', value: referralHistory.length - successCount, suffix: ' người', color: 'text-amber-500' },
-            { label: 'Quà đã nhận', value: formatPrice(totalEarned), suffix: '', color: 'text-green-600' },
-            { label: 'Hạng mức thưởng', value: successCount >= 5 ? 'VIP' : 'Standard', suffix: '', color: 'text-red-600' },
-          ].map((stat, i) => (
-            <div key={i} className="bg-white rounded-3xl p-7 shadow-xl border border-gray-50 text-center">
-              <p className={`text-3xl font-black tracking-tighter ${stat.color}`}>{stat.value}{stat.suffix}</p>
-              <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mt-2">{stat.label}</p>
-            </div>
-          ))}
-        </div>
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <div className="w-10 h-10 border-4 border-red-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-5 mb-12">
+            {[
+              { label: 'Bạn bè đã mời', value: stats.completedCount, suffix: ' người', color: 'text-blue-600' },
+              { label: 'Đang chờ xác nhận', value: stats.pendingCount, suffix: ' người', color: 'text-amber-500' },
+              { label: 'Quà đã nhận', value: formatPrice(stats.totalEarned), suffix: '', color: 'text-green-600' },
+              { label: 'Hạng mức thưởng', value: stats.completedCount >= 5 ? 'VIP' : 'Standard', suffix: '', color: 'text-red-600' },
+            ].map((stat, i) => (
+              <div key={i} className="bg-white rounded-3xl p-7 shadow-xl border border-gray-50 text-center">
+                <p className={`text-3xl font-black tracking-tighter ${stat.color}`}>{stat.value}{stat.suffix}</p>
+                <p className="text-[11px] font-black text-gray-400 uppercase tracking-widest mt-2">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
 
@@ -141,7 +161,7 @@ const ReferralPage = () => {
                     <div className="absolute inset-0 blur-xl bg-red-500/30 rounded-2xl" />
                     <div className="relative bg-white/10 border border-white/20 backdrop-blur-md px-8 py-4 rounded-2xl">
                       <span className="text-3xl font-black text-white tracking-[0.3em] italic">
-                        {REFERRAL_CODE}
+                        {stats.referralCode || 'PHONESIN...'}
                       </span>
                     </div>
                   </div>
@@ -163,7 +183,7 @@ const ReferralPage = () => {
                 <p className="text-[11px] font-black text-gray-400 uppercase tracking-[0.3em]">Hoặc chia sẻ đường dẫn đặc biệt</p>
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="flex-1 h-14 bg-gray-50 border-2 border-gray-50 rounded-2xl flex items-center px-5 overflow-hidden">
-                    <span className="text-sm font-bold text-gray-400 truncate">{REFERRAL_LINK}</span>
+                    <span className="text-sm font-bold text-gray-400 truncate">{referralLink}</span>
                   </div>
                   <button
                     onClick={handleCopyLink}
@@ -182,21 +202,21 @@ const ReferralPage = () => {
                   <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Chia sẻ qua:</span>
                   <button
                     title="Chia sẻ Facebook"
-                    onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(REFERRAL_LINK)}`, '_blank')}
+                    onClick={() => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(referralLink)}`, '_blank')}
                     className="w-11 h-11 bg-blue-600 text-white rounded-2xl flex items-center justify-center hover:scale-110 transition-transform shadow-lg"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
                   </button>
                   <button
                     title="Chia sẻ Zalo"
-                    onClick={() => window.open(`https://zalo.me/share?url=${encodeURIComponent(REFERRAL_LINK)}`, '_blank')}
+                    onClick={() => window.open(`https://zalo.me/share?url=${encodeURIComponent(referralLink)}`, '_blank')}
                     className="w-11 h-11 bg-sky-500 text-white rounded-2xl flex items-center justify-center hover:scale-110 transition-transform shadow-lg font-black text-xs"
                   >
                     Za
                   </button>
                   <button
                     title="Chia sẻ X (Twitter)"
-                    onClick={() => window.open(`https://twitter.com/intent/tweet?text=Mua%20điện%20thoại%20tại%20PhoneSin%20siêu%20rẻ!%20Dùng%20mã%20của%20mình%20nhé&url=${encodeURIComponent(REFERRAL_LINK)}`, '_blank')}
+                    onClick={() => window.open(`https://twitter.com/intent/tweet?text=Mua%20điện%20thoại%20tại%20PhoneSin%20siêu%20rẻ!%20Dùng%20mã%20của%20mình%20nhé&url=${encodeURIComponent(referralLink)}`, '_blank')}
                     className="w-11 h-11 bg-black text-white rounded-2xl flex items-center justify-center hover:scale-110 transition-transform shadow-lg"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4l11.733 16h4.267l-11.733 -16z"/><path d="M4 20l6.768 -6.768m2.464 -2.464l6.768 -6.768"/></svg>
@@ -237,44 +257,46 @@ const ReferralPage = () => {
                   <div className="w-1.5 h-6 bg-red-600 rounded-full" />
                   Lịch sử giới thiệu
                 </h2>
-                <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">{referralHistory.length} người</span>
+                <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">{history.length} người</span>
               </div>
 
-              {referralHistory.length === 0 ? (
+              {history.length === 0 ? (
                 <div className="py-20 text-center">
                   <UsersIcon className="w-12 h-12 text-gray-200 mx-auto mb-4" />
                   <p className="text-gray-400 font-bold uppercase italic text-sm">Bạn chưa giới thiệu ai cả. Hãy bắt đầu ngay!</p>
                 </div>
               ) : (
                 <div>
-                  {referralHistory.map((item, i) => (
+                  {history.map((item, i) => (
                     <div
-                      key={item.id}
-                      className={`flex items-center justify-between gap-4 px-10 py-6 transition-colors hover:bg-gray-50/60 ${i < referralHistory.length - 1 ? 'border-b border-gray-50' : ''}`}
+                      key={item._id}
+                      className={`flex items-center justify-between gap-4 px-10 py-6 transition-colors hover:bg-gray-50/60 ${i < history.length - 1 ? 'border-b border-gray-50' : ''}`}
                     >
                       <div className="flex items-center gap-5">
                         <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center font-black text-slate-500 text-lg">
-                          {item.name.charAt(0)}
+                          {(item.referee?.fullName || 'U').charAt(0)}
                         </div>
                         <div>
-                          <p className="font-black text-slate-900">{item.name}</p>
-                          <p className="text-xs font-bold text-gray-400 italic">{item.date}</p>
+                          <p className="font-black text-slate-900">{item.referee?.fullName || 'Người dùng ẩn'}</p>
+                          <p className="text-xs font-bold text-gray-400 italic">
+                            {new Date(item.createdAt).toLocaleDateString('vi-VN')}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-5">
-                        {item.status === 'success' ? (
-                          <span className="text-green-600 font-black text-sm">+{formatPrice(item.reward)}</span>
+                        {item.status === 'completed' ? (
+                          <span className="text-green-600 font-black text-sm">+{formatPrice(item.rewardAmount)}</span>
                         ) : (
                           <span className="text-amber-500 font-bold text-sm italic">Đang chờ...</span>
                         )}
                         <span
                           className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                            item.status === 'success'
+                            item.status === 'completed'
                               ? 'bg-green-100 text-green-700'
                               : 'bg-amber-100 text-amber-700'
                           }`}
                         >
-                          {item.status === 'success' ? 'Thành công' : 'Chờ xác nhận'}
+                          {item.status === 'completed' ? 'Thành công' : 'Chờ xác nhận'}
                         </span>
                       </div>
                     </div>
@@ -302,7 +324,7 @@ const ReferralPage = () => {
                   { min: 10, max: 19, label: 'Gold', bonus: '1.000.000đ / người', color: 'bg-amber-400' },
                   { min: 20, max: null, label: 'Diamond', bonus: '1.500.000đ / người', color: 'bg-blue-400' },
                 ].map((tier, i) => {
-                  const isActive = successCount >= tier.min && (tier.max === null || successCount <= tier.max);
+                  const isActive = stats.completedCount >= tier.min && (tier.max === null || stats.completedCount <= tier.max);
                   return (
                     <div key={i} className={`flex items-center gap-4 p-4 rounded-2xl transition-all ${isActive ? 'bg-white/10 border border-white/20' : 'opacity-50'}`}>
                       <div className={`w-3 h-3 rounded-full ${tier.color} ${isActive ? 'shadow-lg' : ''}`} />
@@ -321,10 +343,10 @@ const ReferralPage = () => {
                 <div className="bg-red-600/20 border border-red-600/30 rounded-2xl p-5">
                   <p className="text-xs font-black text-red-400 uppercase tracking-widest mb-1">Hạng hiện tại của bạn</p>
                   <p className="text-2xl font-black text-white uppercase italic">
-                    {successCount >= 20 ? 'Diamond' : successCount >= 10 ? 'Gold' : successCount >= 5 ? 'Silver' : 'Standard'}
+                    {stats.completedCount >= 20 ? 'Diamond' : stats.completedCount >= 10 ? 'Gold' : stats.completedCount >= 5 ? 'Silver' : 'Standard'}
                   </p>
                   <p className="text-xs text-white/40 font-bold mt-2">
-                    {successCount >= 20 ? 'Bạn đã đạt hạng cao nhất! 🎉' : `Còn ${successCount >= 10 ? 20 - successCount : successCount >= 5 ? 10 - successCount : 5 - successCount} người để lên hạng tiếp theo`}
+                    {stats.completedCount >= 20 ? 'Bạn đã đạt hạng cao nhất! 🎉' : `Còn ${stats.completedCount >= 10 ? 20 - stats.completedCount : stats.completedCount >= 5 ? 10 - stats.completedCount : 5 - stats.completedCount} người để lên hạng tiếp theo`}
                   </p>
                 </div>
               </div>

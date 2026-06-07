@@ -28,6 +28,11 @@ const brandSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: Date,
   },
   {
     timestamps: true,

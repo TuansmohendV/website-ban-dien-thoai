@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { ChevronRight, ChevronLeft, Zap, Smartphone, Laptop, Tablet, Monitor, MousePointer2, Tv, Watch, Headphones, Home, Settings, Wrench, ClipboardList, Info, Flame, History, RefreshCcw } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { ChevronRight, ChevronLeft, Zap, Smartphone, Laptop, Tablet, Monitor, MousePointer2, Tv, Watch, Headphones, Home, Settings, Wrench, ClipboardList, Info, Flame, History, RefreshCcw, Box } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import HeroCarousel from '../../components/HeroCarousel';
 import ProductCard from '../../components/ProductCard';
@@ -12,6 +12,10 @@ import { inflateProducts, normalizeProduct } from '../../lib/products';
 const HomePage = () => {
     const [timeLeft, setTimeLeft] = useState({ h: 8, m: 0, s: 51 });
     const [backendProducts, setBackendProducts] = useState([]);
+    const [inactiveCategorySlugs, setInactiveCategorySlugs] = useState([]);
+    const [featuredCategorySlugs, setFeaturedCategorySlugs] = useState([]);
+    const [dbCategories, setDbCategories] = useState([]);
+    const [iconLibrary, setIconLibrary] = useState([]);
 
     useEffect(() => {
         const timer = setInterval(() => {
@@ -25,7 +29,7 @@ const HomePage = () => {
         return () => clearInterval(timer);
     }, []);
 
-    const categories = [
+    const staticCategories = [
         { name: 'Điện thoại', icon: <img src="/categories/phone.png" alt="Điện thoại" className="w-[26px] h-[26px] object-contain" /> },
         { name: 'Laptop', icon: <img src="/categories/laptop.png" alt="Laptop" className="w-[26px] h-[26px] object-contain" /> },
         { name: 'Tablet', icon: <img src="/categories/tablet.png" alt="Tablet" className="w-[26px] h-[26px] object-contain" /> },
@@ -39,6 +43,50 @@ const HomePage = () => {
         { name: 'Sửa chữa', icon: <img src="/categories/repair.png" alt="Sửa chữa" className="w-[26px] h-[26px] object-contain" /> },
         { name: 'Dịch vụ', icon: <img src="/categories/service.png" alt="Dịch vụ" className="w-[26px] h-[26px] object-contain" /> },
     ];
+
+    // Helper to generate slug consistently
+    const toSlug = (text) => text.toLowerCase()
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d")
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-');
+
+    // Merged categories: Static ones + Dynamic ones from DB that aren't in static list
+    const categories = useMemo(() => {
+        const activeDbCats = dbCategories.filter(c => !inactiveCategorySlugs.includes(c.slug));
+
+        // Start with static ones that are active
+        const result = staticCategories.filter(sc => {
+            const slug = toSlug(sc.name);
+            return !inactiveCategorySlugs.includes(slug) && !inactiveCategorySlugs.includes(`derived-${slug}`);
+        });
+
+        // Add dynamic ones from DB that don't match any static name
+        activeDbCats.forEach(dc => {
+            const slug = dc.slug;
+            const alreadyExists = result.some(r => toSlug(r.name) === slug);
+            if (!alreadyExists && !dc.isDerived) {
+                // Find icon in library
+                const foundIcon = iconLibrary.find(i => i.id === dc.icon);
+                const iconUrl = foundIcon ? foundIcon.url : dc.icon;
+
+                result.push({
+                    name: dc.name,
+                    icon: iconUrl ? (
+                        <img src={iconUrl} alt={dc.name} className="w-[26px] h-[26px] object-contain" />
+                    ) : (
+                        <Box size={22} className="text-gray-400" />
+                    ),
+                    slug: dc.slug
+                });
+            }
+        });
+
+        return result;
+    }, [dbCategories, inactiveCategorySlugs, iconLibrary]);
 
     const oldMarket = [
         { name: 'Hàng cũ', icon: <img src="/categories/old-store.png" alt="Hàng cũ" className="w-[26px] h-[26px] object-contain" /> },
@@ -66,6 +114,7 @@ const HomePage = () => {
                     setBackendProducts((response.data?.data || []).map(normalizeProduct));
                 }
             } catch (error) {
+                console.error('Failed to load product data:', error);
                 if (!ignore) {
                     setBackendProducts([]);
                 }
@@ -73,6 +122,36 @@ const HomePage = () => {
         };
 
         loadProducts();
+
+        const loadCategoryData = async () => {
+            try {
+                // 1. Load Categories
+                const catResponse = await api.get('/api/categories');
+                const inactiveSlugs = catResponse.data?.inactiveSlugs || [];
+                const allCats = catResponse.data?.data || [];
+                const featuredSlugs = allCats
+                    .filter(c => c.isFeatured)
+                    .map(c => c.slug);
+
+                setInactiveCategorySlugs(inactiveSlugs);
+                setFeaturedCategorySlugs(featuredSlugs);
+                setDbCategories(allCats);
+
+                // 2. Load Icons to map codes
+                const iconResponse = await api.get('/api/icons/public').catch(() => null);
+                if (iconResponse) {
+                    const icons = (iconResponse.data?.data || iconResponse.data?.icons || []).map(icon => ({
+                        id: icon._id || icon.id || '',
+                        url: icon.url || '',
+                        name: icon.name || '',
+                    }));
+                    setIconLibrary(icons);
+                }
+            } catch (error) {
+                console.error('Failed to load category data:', error);
+            }
+        };
+        loadCategoryData();
 
         return () => {
             ignore = true;
@@ -91,7 +170,7 @@ const HomePage = () => {
         };
 
         const filtered = backendProducts.filter(tabs[activeTab] || tabs['Tất cả']);
-        return filtered.length > 0 ? filtered : backendProducts;
+        return filtered;
     }, [activeTab, backendProducts]);
 
     const flashSaleProducts = React.useMemo(
@@ -130,7 +209,7 @@ const HomePage = () => {
     return (
         <div className="bg-[#f0f2f5] min-h-screen pb-20 font-sans">
             <div className="max-w-[1850px] mx-auto flex gap-4 lg:gap-6 pt-3 sm:pt-6 px-3 sm:px-8 relative items-start">
-                
+
                 {/* 1. LEFT POSTER - Refined Height & Premium Look */}
                 <div className="hidden 2xl:block w-[185px] shrink-0 sticky top-[130px] h-[700px] rounded-2xl overflow-hidden shadow-2xl border border-white/50 group">
                     <img src="https://cdn.hoanghamobile.vn/Uploads/2026/03/19/sua-chua-thay-pin-man-hinh-iphone-02.jpg" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="Sửa chữa iPhone" />
@@ -142,28 +221,61 @@ const HomePage = () => {
                     <div>
                         <h3 className="px-3 py-2 text-[13px] font-black uppercase text-gray-400 tracking-wider">Danh mục</h3>
                         <div className="flex flex-col gap-1">
-                            {categories.map((cat, i) => (
-                                <Link 
-                                    key={i} 
-                                    to={`/category/${cat.name.toLowerCase().replace(/ /g, '-').normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d")}`}
-                                    className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl cursor-pointer transition-colors group"
-                                >
-                                    <div className="flex items-center gap-3.5">
-                                        <span className="text-gray-500 group-hover:text-[#007b63] transition-colors">{cat.icon}</span>
-                                        <span className="text-[16px] font-bold text-gray-700">{cat.name}</span>
-                                    </div>
-                                    <ChevronRight size={16} className="text-gray-300 group-hover:text-[#007b63] transition-colors" />
-                                </Link>
-                            ))}
+                            {categories.filter(cat => {
+                                // Standardize slug generation
+                                const slug = cat.name.toLowerCase()
+                                    .replace(/ /g, '-')
+                                    .normalize("NFD")
+                                    .replace(/[\u0300-\u036f]/g, "")
+                                    .replace(/đ/g, "d")
+                                    .replace(/[^a-z0-z-]/g, '');
+
+                                // Hide only if explicitly in inactive list
+                                return !inactiveCategorySlugs.includes(slug) &&
+                                    !inactiveCategorySlugs.includes(`derived-${slug}`);
+                            }).map((cat, i) => {
+                                const slug = cat.name.toLowerCase()
+                                    .replace(/ /g, '-')
+                                    .normalize("NFD")
+                                    .replace(/[\u0300-\u036f]/g, "")
+                                    .replace(/đ/g, "d")
+                                    .replace(/[^a-z0-z-]/g, '');
+
+                                const isFeatured = featuredCategorySlugs.includes(slug) ||
+                                    featuredCategorySlugs.includes(`derived-${slug}`);
+
+                                return (
+                                    <Link
+                                        key={i}
+                                        to={`/category/${cat.name.toLowerCase().replace(/ /g, '-').normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d")}`}
+                                        className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all group ${isFeatured
+                                            ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 scale-[1.03] shadow-md -translate-y-0.5'
+                                            : 'hover:bg-gray-50'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-3.5">
+                                            <span className={`transition-colors ${isFeatured ? 'brightness-110' : 'text-gray-500 group-hover:text-[#007b63]'}`}>
+                                                {cat.icon}
+                                            </span>
+                                            <span className={`text-[16px] font-bold transition-colors ${isFeatured ? 'text-yellow-300 drop-shadow-sm' : 'text-gray-700'
+                                                }`}>
+                                                {cat.name}
+                                            </span>
+                                        </div>
+                                        <ChevronRight size={16} className={`transition-colors ${isFeatured ? 'text-yellow-300' : 'text-gray-300 group-hover:text-[#007b63]'
+                                            }`} />
+                                    </Link>
+                                );
+                            })}
                         </div>
                     </div>
                     <div className="border-t border-gray-50 pt-3">
                         <h3 className="px-3 py-2 text-[13px] font-black uppercase text-gray-400 tracking-wider">Hàng cũ</h3>
                         <div className="flex flex-col gap-1">
                             {oldMarket.map((cat, i) => (
-                                <Link 
-                                    key={i} 
-                                    to={`/category/${cat.name.toLowerCase().replace(/ /g, '-').normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d")}`}
+                                <Link
+                                    key={i}
+                                    to={`/category/${toSlug(cat.name)}`}
                                     className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl cursor-pointer transition-colors group"
                                 >
                                     <div className="flex items-center gap-3.5">
@@ -179,9 +291,9 @@ const HomePage = () => {
                         <h3 className="px-3 py-2 text-[13px] font-black uppercase text-gray-400 tracking-wider">Tin tức</h3>
                         <div className="flex flex-col gap-1">
                             {news.map((cat, i) => (
-                                <Link 
-                                    key={i} 
-                                    to={`/category/${cat.name.toLowerCase().replace(/ /g, '-').normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d")}`}
+                                <Link
+                                    key={i}
+                                    to={`/category/${toSlug(cat.name)}`}
                                     className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl cursor-pointer transition-colors group"
                                 >
                                     <div className="flex items-center gap-3.5">
@@ -197,7 +309,7 @@ const HomePage = () => {
 
                 {/* MAIN RIGHT CONTENT */}
                 <div className="flex-1 flex flex-col gap-6 min-w-0">
-                    
+
                     {/* HERO AREA (Carousel + 4 sub-banners) */}
                     <div className="flex-1 flex flex-col gap-3 min-w-0">
                         <div className="rounded-xl overflow-hidden shadow-sm">
@@ -211,8 +323,8 @@ const HomePage = () => {
                                 { img: 'https://cdn.hoanghamobile.vn/i/home/Uploads/2026/03/06/a17-a07-sp-hot.png', link: '/category/samsung' }
                             ].map((banner, i) => (
                                 <Link to={banner.link} key={i} className="aspect-[1.8/1] bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow border border-gray-100 group relative">
-                                     <img src={banner.img} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="sub banner" />
-                                     <div className="absolute inset-0 bg-black/5 group-hover:bg-transparent transition-colors"></div>
+                                    <img src={banner.img} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt="sub banner" />
+                                    <div className="absolute inset-0 bg-black/5 group-hover:bg-transparent transition-colors"></div>
                                 </Link>
                             ))}
                         </div>
@@ -251,9 +363,9 @@ const HomePage = () => {
                                                 { val: timeLeft.s.toString().padStart(2, '0')[1] },
                                             ].map((item, i) => (
                                                 item.sep ? <span key={i} className="font-black text-[#ff424e] px-0.5">:</span> :
-                                                <span key={i} className="bg-[#ff424e] text-white w-6 h-8 flex items-center justify-center rounded-md font-black text-lg shadow-[inset_0_-2px_4px_rgba(0,0,0,0.3)]">
-                                                    {item.val}
-                                                </span>
+                                                    <span key={i} className="bg-[#ff424e] text-white w-6 h-8 flex items-center justify-center rounded-md font-black text-lg shadow-[inset_0_-2px_4px_rgba(0,0,0,0.3)]">
+                                                        {item.val}
+                                                    </span>
                                             ))}
                                         </div>
                                     </div>
@@ -267,14 +379,13 @@ const HomePage = () => {
                                         { name: 'Laptop/Màn hình' },
                                         { name: 'Phụ kiện công nghệ' },
                                     ].map((tab, i) => (
-                                        <button 
-                                            key={i} 
+                                        <button
+                                            key={i}
                                             onClick={() => setActiveTab(tab.name)}
-                                            className={`px-3 sm:px-5 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-[13px] font-black transition-all border-2 ${
-                                                activeTab === tab.name 
-                                                ? 'bg-[#00917a] text-white border-[#00917a] shadow-md' 
+                                            className={`px-3 sm:px-5 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-[13px] font-black transition-all border-2 ${activeTab === tab.name
+                                                ? 'bg-[#00917a] text-white border-[#00917a] shadow-md'
                                                 : 'bg-white text-[#00917a] border-[#00917a] hover:bg-emerald-50'
-                                            }`}
+                                                }`}
                                         >
                                             {tab.name}
                                         </button>
@@ -284,37 +395,44 @@ const HomePage = () => {
 
                             {/* Flash Sale Product Grid (Scrollable Carousel - Refactored for Smoothness) */}
                             <div className="relative group/carousel">
-                                <div 
+                                <div
                                     ref={flashSaleRef}
                                     className="flex gap-4 overflow-x-auto pb-4 scroll-smooth snap-x snap-mandatory no-scrollbar"
-                                    style={{ 
-                                        scrollbarWidth: 'none', 
+                                    style={{
+                                        scrollbarWidth: 'none',
                                         msOverflowStyle: 'none',
                                         WebkitOverflowScrolling: 'touch'
                                     }}
                                 >
-                                    {flashSaleProducts.map((item, i) => (
-                                        <div key={item.uiKey || item.id || i} className="min-w-[178px] sm:min-w-[210px] md:min-w-[240px] flex-shrink-0 snap-start">
-                                            <ProductCard product={item} />
+                                    {flashSaleProducts.length > 0 ? (
+                                        flashSaleProducts.map((item, i) => (
+                                            <div key={item.uiKey || item.id || i} className="min-w-[178px] sm:min-w-[210px] md:min-w-[240px] flex-shrink-0 snap-start">
+                                                <ProductCard product={item} />
+                                            </div>
+                                        ))
+                                    ) : (
+                                        <div className="w-full py-20 flex flex-col items-center justify-center text-gray-400 gap-3">
+                                            <Box size={48} strokeWidth={1} />
+                                            <p className="font-bold text-lg">Không có sản phẩm nào trong mục này</p>
                                         </div>
-                                    ))}
+                                    )}
                                 </div>
-                                
+
                                 {/* Carousel Navigation - Fixed Precision and Visibility */}
-                                <button 
-                                    onClick={() => flashSaleRef.current.scrollBy({ left: -flashSaleRef.current.offsetWidth/2, behavior: 'smooth' })}
+                                <button
+                                    onClick={() => flashSaleRef.current.scrollBy({ left: -flashSaleRef.current.offsetWidth / 2, behavior: 'smooth' })}
                                     className="hidden sm:flex absolute -left-4 top-[40%] -translate-y-1/2 bg-white/95 backdrop-blur-md w-11 h-11 rounded-full shadow-[0_5px_20px_rgba(0,0,0,0.2)] items-center justify-center opacity-0 group-hover/carousel:opacity-100 z-50 transition-all hover:scale-110 active:scale-90 border border-gray-100"
                                 >
                                     <ChevronLeft size={24} className="text-[#00917a]" strokeWidth={3} />
                                 </button>
-                                <button 
-                                    onClick={() => flashSaleRef.current.scrollBy({ left: flashSaleRef.current.offsetWidth/2, behavior: 'smooth' })}
+                                <button
+                                    onClick={() => flashSaleRef.current.scrollBy({ left: flashSaleRef.current.offsetWidth / 2, behavior: 'smooth' })}
                                     className="hidden sm:flex absolute -right-4 top-[40%] -translate-y-1/2 bg-white/95 backdrop-blur-md w-11 h-11 rounded-full shadow-[0_5px_20px_rgba(0,0,0,0.2)] items-center justify-center opacity-0 group-hover/carousel:opacity-100 z-50 transition-all hover:scale-110 active:scale-90 border border-gray-100"
                                 >
                                     <ChevronRight size={24} className="text-[#00917a]" strokeWidth={3} />
                                 </button>
                             </div>
-                            
+
                             {/* Improved Dots Progress Indicator */}
                             <div className="flex justify-center gap-2 mt-4">
                                 {[...Array(5)].map((_, i) => (
@@ -328,15 +446,15 @@ const HomePage = () => {
 
                     {/* DÀNH CHO BẠN - GIANT MASTER GRID */}
                     <div className="mt-10">
-                            <div className="flex items-center justify-between mb-6 px-1">
-                                <h2 className="text-[20px] font-black text-gray-800 uppercase tracking-tight flex items-center gap-3">
+                        <div className="flex items-center justify-between mb-6 px-1">
+                            <h2 className="text-[20px] font-black text-gray-800 uppercase tracking-tight flex items-center gap-3">
                                 <div className="bg-[#cc0000] w-1.5 h-6 rounded-full"></div>
                                 Dành cho bạn
                             </h2>
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 auto-rows-[auto] grid-flow-dense">
-                            
+
                             {/* Xiaomi 17 Ultra Banner */}
                             <div className="col-span-1 lg:col-span-2 rounded-2xl overflow-hidden shadow-sm relative group cursor-pointer border border-gray-200 hover:border-gray-300 transition-all bg-white flex flex-col h-full">
                                 <div className="flex-1 w-full relative overflow-hidden bg-gray-50/50">
@@ -392,7 +510,7 @@ const HomePage = () => {
                                 <div className="flex-1 w-full relative overflow-hidden">
                                     <img src="https://images.unsplash.com/photo-1605236453806-6ff36851218e?q=80&w=800&auto=format&fit=crop" className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000" alt="Used machine" />
                                     <div className="absolute inset-0 bg-gradient-to-t from-blue-900/90 via-blue-900/40 to-transparent flex flex-col justify-end p-6 items-center text-center">
-                                        <h3 className="text-white font-black text-2xl uppercase italic drop-shadow-xl mb-1">Máy cũ<br/>giá tốt</h3>
+                                        <h3 className="text-white font-black text-2xl uppercase italic drop-shadow-xl mb-1">Máy cũ<br />giá tốt</h3>
                                         <p className="text-yellow-300 font-black text-[24px] uppercase tracking-tighter drop-shadow-md pb-2">Trả góp 0%</p>
                                     </div>
                                 </div>
@@ -406,7 +524,7 @@ const HomePage = () => {
                                     </button>
                                 </div>
                             </div>
-                            
+
                             {/* Other mixed products part 2 */}
                             {accessoryProducts.map((item) => (
                                 <div key={item.uiKey || item.id} className="col-span-1">

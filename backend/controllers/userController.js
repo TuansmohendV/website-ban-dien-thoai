@@ -5,6 +5,8 @@ import Review from '../models/Review.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import AppError from '../utils/appError.js';
 import { normalizePhone } from '../utils/phone.js';
+import { sendEmail } from '../services/emailService.js';
+import Voucher from '../models/Voucher.js';
 
 export const getUserProfile = asyncHandler(async (req, res) => {
   res.json({
@@ -38,7 +40,7 @@ export const getUserStats = asyncHandler(async (req, res) => {
 });
 
 export const getAdminUsers = asyncHandler(async (req, res) => {
-  const users = await User.find({})
+  const users = await User.find({ isDeleted: { $ne: true } })
     .select('-password -resetPasswordToken -resetPasswordExpiresAt')
     .sort({ createdAt: -1 })
     .lean();
@@ -61,6 +63,7 @@ export const getAdminUsers = asyncHandler(async (req, res) => {
       ...user,
       totalOrders: statsByUser.get(String(user._id))?.totalOrders || 0,
       spent: statsByUser.get(String(user._id))?.spent || 0,
+      isVIP: (statsByUser.get(String(user._id))?.spent || 0) >= 20000000 || (statsByUser.get(String(user._id))?.totalOrders || 0) >= 2,
     })),
   });
 });
@@ -184,6 +187,7 @@ export const getAdminUserDetail = asyncHandler(async (req, res) => {
       ...user,
       totalOrders: stats?.totalOrders || 0,
       spent: stats?.spent || 0,
+      isVIP: (stats?.spent || 0) >= 20000000 || (stats?.totalOrders || 0) >= 2,
     },
   });
 });
@@ -302,14 +306,19 @@ export const deleteAdminUser = asyncHandler(async (req, res) => {
     throw new AppError(400, 'Không thể xóa tài khoản đang đăng nhập.');
   }
 
-  const user = await User.findByIdAndDelete(req.params.id);
+  const user = await User.findById(req.params.id);
 
   if (!user) {
     throw new AppError(404, 'Không tìm thấy người dùng.');
   }
 
+  user.isActive = false;
+  user.isDeleted = true;
+  user.deletedAt = new Date();
+  await user.save();
+
   res.json({
-    message: 'Xóa người dùng thành công.',
+    message: 'Chuyển người dùng vào trạng thái đã khóa (xoá mềm) thành công.',
   });
 });
 
@@ -354,10 +363,133 @@ export const updateUserProfile = asyncHandler(async (req, res) => {
   user.gender = req.body.gender || user.gender;
   user.dateOfBirth = req.body.dateOfBirth || user.dateOfBirth;
 
+  // New address fields for Checkout Persistence
+  user.province = req.body.province !== undefined ? req.body.province : user.province;
+  user.district = req.body.district !== undefined ? req.body.district : user.district;
+  user.ward = req.body.ward !== undefined ? req.body.ward : user.ward;
+  user.address = req.body.address !== undefined ? req.body.address : user.address;
+
   await user.save();
 
   res.json({
     message: 'Cập nhật hồ sơ thành công.',
     user,
   });
+});
+
+export const sendPromotionalEmail = asyncHandler(async (req, res) => {
+  const { userId, subject, content } = req.body;
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new AppError(404, 'Không tìm thấy người dùng.');
+  }
+
+  if (!user.email) {
+    throw new AppError(400, 'Người dùng này chưa cập nhật email.');
+  }
+
+  const defaultHtml = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 30px; border: 1px solid #e0e0e0; border-radius: 12px;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <h2 style="color: #2563eb; margin: 0; font-size: 28px;">PhoneSin Mobile</h2>
+        <p style="color: #666; margin: 8px 0 0 0;">Ưu đãi đặc biệt dành cho bạn</p>
+      </div>
+      <p>Chào <b>${user.fullName}</b>,</p>
+      <div style="color: #333; line-height: 1.6;">
+        ${content || 'Chúng tôi có một ưu đãi đặc biệt dành cho bạn. Hãy ghé thăm cửa hàng ngay hôm nay để nhận những phần quà hấp dẫn!'}
+      </div>
+      <div style="text-align: center; margin-top: 30px;">
+        <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}" style="background: #2563eb; color: white; padding: 12px 25px; text-decoration: none; border-radius: 8px; font-weight: bold;">Ghé thăm cửa hàng</a>
+      </div>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 24px 0;" />
+      <p style="font-size: 12px; color: #aaa; text-align: center;">© PhoneSin Mobile - Email gửi tới ${user.email}</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: user.email,
+    subject: subject || 'Ưu đãi đặc biệt từ PhoneSin Mobile',
+    html: defaultHtml,
+  });
+
+  res.json({
+    message: `Đã gửi email ưu đãi tới ${user.email} thành công.`,
+  });
+});
+
+export const linkAccount = asyncHandler(async (req, res) => {
+  const { type, data } = req.body; // type: 'bank' | 'wallet'
+  const user = await User.findById(req.user._id);
+
+  if (!user) {
+    throw new AppError(404, 'Không tìm thấy người dùng.');
+  }
+
+  if (type === 'bank') {
+    // Check if bank account already exists to avoid duplicates
+    const existingIndex = user.linkedAccounts.banks.findIndex(b => b.accountNumber === data.accountNumber && b.bankId === data.bankId);
+    if (existingIndex > -1) {
+      user.linkedAccounts.banks[existingIndex] = { ...user.linkedAccounts.banks[existingIndex], ...data };
+    } else {
+      user.linkedAccounts.banks.push(data);
+    }
+  } else if (type === 'wallet') {
+    const existingIndex = user.linkedAccounts.wallets.findIndex(w => w.walletId === data.walletId && w.phone === data.phone);
+    if (existingIndex > -1) {
+      user.linkedAccounts.wallets[existingIndex] = { ...user.linkedAccounts.wallets[existingIndex], ...data };
+    } else {
+      user.linkedAccounts.wallets.push(data);
+    }
+  } else {
+    throw new AppError(400, 'Loại tài khoản liên kết không hợp lệ.');
+  }
+
+  await user.save();
+
+  res.json({
+    message: 'Liên kết tài khoản thành công.',
+    linkedAccounts: user.linkedAccounts
+  });
+});
+
+export const lookupBankAccount = asyncHandler(async (req, res) => {
+  const { bin, accountNumber } = req.body;
+
+  if (!bin || !accountNumber) {
+    throw new AppError(400, 'Thiếu thông tin ngân hàng hoặc số tài khoản.');
+  }
+
+  try {
+    const response = await fetch('https://api.vietqr.io/v2/lookup', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        bin,
+        accountNumber,
+      }),
+    });
+
+    const result = await response.json();
+
+    if (result.code === '00' && result.data) {
+      res.json({
+        success: true,
+        accountName: result.data.accountName,
+      });
+    } else {
+      res.json({
+        success: false,
+        message: result.desc || 'Không tìm thấy thông tin tài khoản.',
+      });
+    }
+  } catch (error) {
+    console.error('Lookup error:', error);
+    res.json({
+      success: false,
+      message: 'Lỗi khi tra cứu tài khoản.',
+    });
+  }
 });

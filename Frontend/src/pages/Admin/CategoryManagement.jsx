@@ -8,9 +8,14 @@ import {
   Layers,
   X,
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  Eye,
+  EyeOff,
+  Star,
+  Download
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import * as XLSX from 'xlsx';
+import { Link, useLocation } from 'react-router-dom';
 import api, { getApiErrorMessage } from '../../lib/api';
 
 const buildSlug = (value = '') =>
@@ -31,6 +36,8 @@ const mapCategoryForAdmin = (category = {}) => ({
   subCategories: category.subCategories || [],
   icon: category.icon || category.iconCode || '',
   isDerived: Boolean(category.isDerived),
+  isActive: category.isActive !== false,
+  isFeatured: Boolean(category.isFeatured),
 });
 
 const extractIconArray = (payload = {}) => {
@@ -51,6 +58,19 @@ const CategoryManagement = () => {
   const [editingCat, setEditingCat] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({ name: '', slug: '', icon: '' });
+  const location = useLocation();
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const catsPerPage = 10;
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const query = params.get('q');
+    if (query) {
+      setSearchTerm(query);
+    }
+  }, [location.search]);
 
   const loadCategories = useCallback(async () => {
     setIsLoading(true);
@@ -158,25 +178,79 @@ const CategoryManagement = () => {
     }
   };
 
-  const handleDelete = async (cat) => {
+  const handleDelete = (cat) => {
     if (cat.isDerived) {
       alert('Danh mục này đang được suy ra từ sản phẩm trong database. Hãy tạo danh mục chính thức trước khi xóa.');
       return;
     }
 
-    if (window.confirm('Bạn có chắc chắn muốn xóa danh mục này?')) {
-      try {
-        await api.delete(`/api/categories/${cat.id}`);
-        setCategories(categories.filter(c => c.id !== cat.id));
-      } catch (error) {
-        alert(getApiErrorMessage(error, 'Không thể xóa danh mục.'));
-      }
+    if (window.confirm('Bạn có chắc chắn muốn xóa danh mục này khỏi giao diện? (Dữ liệu trong database vẫn còn)')) {
+      setCategories(categories.filter(c => c.id !== cat.id));
+    }
+  };
+
+  const toggleStatus = async (cat) => {
+    if (cat.isDerived) return alert('Không thể ẩn danh mục tự nhận. Hãy tạo danh mục chính thức.');
+    
+    try {
+      const newStatus = !cat.isActive;
+      await api.put(`/api/categories/${cat.id}`, { isActive: newStatus });
+      setCategories(categories.map(c => c.id === cat.id ? { ...c, isActive: newStatus } : c));
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Không thể cập nhật trạng thái.'));
+    }
+  };
+
+  const toggleFeatured = async (cat) => {
+    if (cat.isDerived) return alert('Không thể đánh dấu nổi bật danh mục tự nhận. Hãy tạo danh mục chính thức.');
+    
+    try {
+      const newFeatured = !cat.isFeatured;
+      await api.put(`/api/categories/${cat.id}`, { isFeatured: newFeatured });
+      setCategories(categories.map(c => c.id === cat.id ? { ...c, isFeatured: newFeatured } : c));
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Không thể cập nhật trạng thái nổi bật.'));
     }
   };
 
   const filteredCats = categories.filter(c => 
     c.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredCats.length / catsPerPage);
+  const indexOfLastCat = currentPage * catsPerPage;
+  const indexOfFirstCat = indexOfLastCat - catsPerPage;
+  const displayedCats = filteredCats.slice(indexOfFirstCat, indexOfLastCat);
+
+  // Reset page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
+  const exportToExcel = () => {
+    if (categories.length === 0) {
+      alert('Không có dữ liệu để xuất!');
+      return;
+    }
+
+    const exportData = categories.map(c => ({
+      'ID Danh mục': c.id,
+      'Tên danh mục': c.name,
+      'Đường dẫn (Slug)': c.slug,
+      'Mã Icon': c.icon || 'Chưa gán',
+      'Số sản phẩm': c.productCount || 0,
+      'Trạng thái': c.isActive ? 'Hiện' : 'Ẩn',
+      'Nổi bật': c.isFeatured ? 'Có' : 'Không',
+      'Loại': c.isDerived ? 'Tự động' : 'Tạo thủ công'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Danh mục');
+    
+    XLSX.writeFile(workbook, 'Danh_sach_danh_muc_PhoneSin.xlsx');
+  };
 
   const getIcon = (iconCode) => {
     const found = iconLibrary.find(i => i.id === iconCode);
@@ -200,10 +274,16 @@ const CategoryManagement = () => {
           <h1 className="page-title" style={{ margin: 0, fontSize: '28px', fontWeight: '800', color: '#1e293b' }}>Quản lý Danh mục</h1>
           <p className="page-subtitle" style={{ margin: '5px 0 0', color: '#64748b' }}>Sử dụng mã 4 số từ Thư viện Icon để gán biểu tượng.</p>
         </div>
-        <button className="btn-primary" onClick={() => handleOpenModal()} style={{ padding: '12px 24px', borderRadius: '12px' }}>
-          <Plus size={20} />
-          Thêm danh mục
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button className="btn-outline" onClick={exportToExcel} style={{ backgroundColor: '#10b981', color: 'white', borderColor: '#10b981' }}>
+            <Download size={18} />
+            Xuất Excel
+          </button>
+          <button className="btn-primary" onClick={() => handleOpenModal()} style={{ padding: '12px 24px', borderRadius: '12px' }}>
+            <Plus size={20} />
+            Thêm danh mục
+          </button>
+        </div>
       </div>
 
       <div className="category-content-layout" style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
@@ -229,11 +309,12 @@ const CategoryManagement = () => {
                   <th>Tên danh mục</th>
                   <th>Đường dẫn (Slug)</th>
                   <th>Mã Icon</th>
+                  <th>Thao tác nhanh</th>
                   <th style={{ textAlign: 'right', paddingRight: '20px' }}>Hành động</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredCats.length > 0 ? filteredCats.map((cat) => (
+                {displayedCats.length > 0 ? displayedCats.map((cat) => (
                   <tr key={cat.id}>
                     <td style={{ paddingLeft: '20px' }}>
                       <div className="cat-icon" style={{ backgroundColor: '#eff6ff' }}>
@@ -252,6 +333,34 @@ const CategoryManagement = () => {
                     <td>
                       <span style={{ fontWeight: '700', color: '#2563eb' }}>#{cat.icon || 'Chưa gán'}</span>
                     </td>
+                    <td>
+                      <div className="quick-actions" style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                          className={`qa-btn ${cat.isActive ? 'active' : ''}`} 
+                          title={cat.isActive ? 'Ẩn danh mục' : 'Hiện danh mục'}
+                          onClick={() => toggleStatus(cat)}
+                          style={{
+                            width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #e2e8f0',
+                            background: cat.isActive ? '#eff6ff' : 'white', color: cat.isActive ? '#2563eb' : '#64748b',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+                          }}
+                        >
+                          {cat.isActive ? <Eye size={16} /> : <EyeOff size={16} />}
+                        </button>
+                        <button 
+                          className={`qa-btn ${cat.isFeatured ? 'active' : ''}`} 
+                          title={cat.isFeatured ? 'Bỏ nổi bật' : 'Đánh dấu nổi bật'}
+                          onClick={() => toggleFeatured(cat)}
+                          style={{
+                            width: '32px', height: '32px', borderRadius: '6px', border: '1px solid #e2e8f0',
+                            background: cat.isFeatured ? '#fff7ed' : 'white', color: cat.isFeatured ? '#f59e0b' : '#64748b',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer'
+                          }}
+                        >
+                          <Star size={16} fill={cat.isFeatured ? "#f59e0b" : "none"} />
+                        </button>
+                      </div>
+                    </td>
                     <td style={{ textAlign: 'right', paddingRight: '20px' }}>
                       <div className="actions-cell" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                         <button className="action-btn edit" onClick={() => handleOpenModal(cat)}><Edit size={16} /></button>
@@ -269,6 +378,73 @@ const CategoryManagement = () => {
               </tbody>
             </table>
           </div>
+          
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            padding: '15px 20px', 
+            borderTop: '1px solid #f1f5f9',
+            background: 'white',
+            borderBottomLeftRadius: '16px',
+            borderBottomRightRadius: '16px'
+          }}>
+            <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
+              Hiển thị {filteredCats.length > 0 ? indexOfFirstCat + 1 : 0} - {Math.min(indexOfLastCat, filteredCats.length)} trong {filteredCats.length} danh mục
+            </span>
+            <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f8fafc' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
+              >
+                Trước
+              </button>
+              
+            {/* Luôn hiển thị ít nhất 10 trang đầu tiên */}
+            {(() => {
+              const pages = [];
+              const minPagesToShow = 10;
+              let start = 1;
+              let end = Math.max(minPagesToShow, totalPages);
+              
+              if (totalPages > minPagesToShow && currentPage > 6) {
+                start = Math.max(1, currentPage - 5);
+                end = Math.min(totalPages, start + 9);
+                if (end - start < 9) start = Math.max(1, end - 9);
+              } else if (totalPages > minPagesToShow) {
+                end = 10;
+              }
+
+              for (let i = start; i <= end; i++) {
+                pages.push(
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i)}
+                    style={{ 
+                      minWidth: '40px', height: '40px', borderRadius: '8px', border: '1px solid',
+                      borderColor: currentPage === i ? '#2563eb' : '#e2e8f0',
+                      background: currentPage === i ? '#2563eb' : 'white',
+                      color: currentPage === i ? 'white' : '#64748b',
+                      fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                    }}
+                  >
+                    {i}
+                  </button>
+                );
+              }
+              return pages;
+            })()}
+
+            <button 
+              onClick={() => setCurrentPage(p => Math.min(Math.max(10, totalPages), p + 1))}
+              disabled={currentPage >= Math.max(10, totalPages)}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage >= Math.max(10, totalPages) ? '#f8fafc' : 'white', cursor: currentPage >= Math.max(10, totalPages) ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
+            >
+              Sau
+            </button>
+          </div>
+        </div>
         </div>
 
         {/* Info Grid */}
@@ -386,6 +562,31 @@ const CategoryManagement = () => {
         .action-btn.edit { background: #f1f5f9; color: #475569; }
         .action-btn.delete { background: #fef2f2; color: #ef4444; }
         .action-btn:hover { transform: translateY(-2px); filter: brightness(0.95); }
+
+        .qa-btn {
+          width: 32px;
+          height: 32px;
+          border-radius: 6px;
+          border: 1px solid #e2e8f0;
+          background: white;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          color: #64748b;
+          transition: all 0.2s;
+        }
+
+        .qa-btn:hover {
+          background: #f1f5f9;
+          color: #2563eb;
+        }
+
+        .qa-btn.active {
+          color: #2563eb;
+          border-color: #bfdbfe;
+          background: #eff6ff;
+        }
       `}</style>
     </div>
   );

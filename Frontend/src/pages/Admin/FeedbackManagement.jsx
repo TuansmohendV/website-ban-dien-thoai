@@ -13,7 +13,9 @@ import {
   ExternalLink,
   Flag,
   X,
-  History
+  History,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../lib/api';
 
@@ -31,6 +33,10 @@ const mapReviewForAdmin = (review = {}) => ({
   product: review.product?.name || 'Sản phẩm',
   date: review.createdAt ? new Date(review.createdAt).toLocaleDateString('vi-VN') : '',
   status: moderationLabelMap[review.moderationStatus] || 'Chờ duyệt',
+  isVIP: review.user?.isVIP || false,
+  reply: review.reply || '',
+  replyDate: review.replyDate ? new Date(review.replyDate).toLocaleDateString('vi-VN') : '',
+  images: review.images || [],
 });
 
 const FeedbackManagement = () => {
@@ -39,13 +45,18 @@ const FeedbackManagement = () => {
   const [comments, setComments] = useState([]);
   const [isLoadingComments, setIsLoadingComments] = useState(true);
   const [commentsError, setCommentsError] = useState('');
-  const [notifications, setNotifications] = useState([
-    { id: 1, title: 'Khuyến mãi cuối tuần rực rỡ!', content: 'Giảm giá 50% cho tất cả phụ kiện iPhone...', target: 'Tất cả người dùng', date: '22/04/2026', status: 'Thành công' },
-    { id: 2, title: 'Thông báo bảo trì hệ thống', content: 'Hệ thống sẽ bảo trì từ 12h đêm nay...', target: 'Tất cả người dùng', date: '21/04/2026', status: 'Thành công' },
-  ]);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [replyContent, setReplyContent] = useState('');
+  const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [isLoadingNotifications, setIsLoadingNotifications] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [ratingFilter, setRatingFilter] = useState('Tất cả đánh giá');
   const [statusFilter, setStatusFilter] = useState('Trạng thái: Tất cả');
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const loadComments = useCallback(async () => {
     setIsLoadingComments(true);
@@ -64,9 +75,33 @@ const FeedbackManagement = () => {
     }
   }, []);
 
+  const loadNotifications = useCallback(async () => {
+    setIsLoadingNotifications(true);
+    try {
+      const response = await api.get('/api/admin/broadcasts');
+      const list = (response.data?.data || []).map(b => ({
+        id: b._id,
+        title: b.title,
+        content: b.message,
+        target: b.targetAudience === 'all' ? 'Tất cả người dùng' : 
+                b.targetAudience === 'new_users' ? 'Người dùng mới' : 
+                b.targetAudience === 'active_users' ? 'Người dùng tích cực' : 'Khác',
+        date: new Date(b.createdAt).toLocaleDateString('vi-VN'),
+        status: b.isSent ? 'Đã gửi' : 'Chưa gửi',
+        isSent: b.isSent
+      }));
+      setNotifications(list);
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    } finally {
+      setIsLoadingNotifications(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadComments();
-  }, [loadComments]);
+    loadNotifications();
+  }, [loadComments, loadNotifications]);
 
   // Handle Actions
   const handleApprove = async (id) => {
@@ -87,36 +122,89 @@ const FeedbackManagement = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa vĩnh viễn bình luận này?')) {
-      try {
-        await api.delete(`/api/admin/reviews/${id}`);
-        await loadComments();
-      } catch (error) {
-        alert(getApiErrorMessage(error, 'Không thể xóa bình luận.'));
-      }
+  const handleReset = async (id) => {
+    try {
+      await api.patch(`/api/admin/reviews/${id}`, { moderationStatus: 'pending' });
+      await loadComments();
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Không thể đặt lại trạng thái.'));
     }
   };
 
-  const handleSendNotify = (e) => {
+  const handleDelete = (id) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa bình luận này khỏi giao diện? (Dữ liệu trong database vẫn còn)')) {
+      setComments(comments.filter(c => c.id !== id));
+    }
+  };
+
+  const handleDeleteNotification = (id) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa thông báo này khỏi giao diện? (Dữ liệu trong database vẫn còn)')) {
+      setNotifications(notifications.filter(n => n._id !== id));
+    }
+  };
+
+  const handleSendReply = async () => {
+    if (!replyContent.trim()) {
+      alert('Vui lòng nhập nội dung phản hồi!');
+      return;
+    }
+
+    try {
+      setIsSubmittingReply(true);
+      await api.patch(`/api/admin/reviews/${replyingTo.id}`, { 
+        reply: replyContent,
+        moderationStatus: 'approved' // Tự động duyệt khi phản hồi
+      });
+      alert('Đã gửi phản hồi thành công!');
+      setReplyingTo(null);
+      setReplyContent('');
+      await loadComments();
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Không thể gửi phản hồi.'));
+    } finally {
+      setIsSubmittingReply(false);
+    }
+  };
+
+  const handleSendNotify = async (e) => {
     e.preventDefault();
-    const newNotify = {
-      id: Date.now(),
-      title: e.target.title.value,
-      content: e.target.content.value,
-      target: e.target.target.value,
-      date: new Date().toLocaleDateString('vi-VN'),
-      status: 'Thành công'
+    const title = e.target.title.value;
+    const message = e.target.content.value;
+    const targetLabel = e.target.target.value;
+
+    const targetMap = {
+      'Tất cả người dùng': 'all',
+      'Khách hàng VIP': 'active_users',
+      'Người dùng mới (trong 30 ngày)': 'new_users',
+      'Người dùng chưa mua hàng': 'unpurchased_users'
     };
 
-    if (!newNotify.title || !newNotify.content) {
+    const targetAudience = targetMap[targetLabel] || 'all';
+
+    if (!title || !message) {
       alert('Vui lòng nhập đầy đủ tiêu đề và nội dung!');
       return;
     }
 
-    setNotifications([newNotify, ...notifications]);
-    alert('Thông báo hệ thống đã được gửi thành công!');
-    setShowNotifyModal(false);
+    try {
+      // 1. Create broadcast
+      const createRes = await api.post('/api/admin/broadcasts', {
+        title,
+        message,
+        targetAudience
+      });
+
+      const broadcastId = createRes.data.data.broadcast._id;
+
+      // 2. Send broadcast
+      await api.post(`/api/admin/broadcasts/${broadcastId}/send`);
+
+      alert('Thông báo hệ thống đã được gửi thành công!');
+      setShowNotifyModal(false);
+      await loadNotifications();
+    } catch (error) {
+      alert(getApiErrorMessage(error, 'Không thể gửi thông báo.'));
+    }
   };
 
   // Filter Logic
@@ -141,6 +229,17 @@ const FeedbackManagement = () => {
       return matchesSearch && matchesRating && matchesStatus;
     });
   }, [comments, searchTerm, ratingFilter, statusFilter, activeTab]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil((activeTab === 'history' ? notifications.length : filteredComments.length) / itemsPerPage);
+  const currentItems = (activeTab === 'history' ? notifications : filteredComments).slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchTerm, ratingFilter, statusFilter]);
 
   return (
     <div className="management-container">
@@ -232,37 +331,52 @@ const FeedbackManagement = () => {
                   <th>Hành động</th>
                 </tr>
               </thead>
-              <tbody>
-                {notifications.map(n => (
-                  <tr key={n.id}>
-                    <td>
-                      <div style={{ maxWidth: '300px' }}>
-                        <div style={{ fontWeight: '700', color: '#1e293b', marginBottom: '4px' }}>{n.title}</div>
-                        <div style={{ fontSize: '0.85rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.content}</div>
-                      </div>
-                    </td>
-                    <td><span className="role-badge khách">{n.target}</span></td>
-                    <td><span className="comment-date">{n.date}</span></td>
-                    <td><span className="status-tag đã-duyệt">{n.status}</span></td>
-                    <td>
-                      <button className="action-btn delete" onClick={() => setNotifications(notifications.filter(item => item.id !== n.id))}>
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
+               <tbody>
+                 {activeTab === 'history' ? (
+                   currentItems.map(n => (
+                     <tr key={n.id}>
+                       <td>
+                         <div style={{ maxWidth: '300px' }}>
+                           <div style={{ fontWeight: '700', color: '#1e293b', marginBottom: '4px' }}>{n.title}</div>
+                           <div style={{ fontSize: '0.85rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.content}</div>
+                         </div>
+                       </td>
+                       <td><span className="role-badge khách">{n.target}</span></td>
+                       <td><span className="comment-date">{n.date}</span></td>
+                       <td><span className={`status-tag ${n.isSent ? 'đã-duyệt' : 'chờ-duyệt'}`}>{n.status}</span></td>
+                       <td>
+                         <button className="action-btn delete" onClick={() => handleDeleteNotification(n.id)}>
+                           <Trash2 size={16} />
+                         </button>
+                       </td>
+                     </tr>
+                   ))
+                 ) : null}
+               </tbody>
             </table>
           </div>
         ) : (
           <div className="comments-grid">
-            {filteredComments.length > 0 ? (
-              filteredComments.map((comment) => (
+            {currentItems.length > 0 ? (
+              currentItems.map((comment) => (
                 <div key={comment.id} className={`comment-card ${comment.status === 'Vi phạm' ? 'flagged' : ''}`}>
                   <div className="comment-header">
                     <div className="user-info">
                       <div className="user-avatar-small"><User size={14} /></div>
-                      <span className="user-name">{comment.user}</span>
+                      <span className="user-name">
+                        {comment.user}
+                        {comment.isVIP && (
+                          <span style={{ 
+                            marginLeft: '8px', padding: '2px 8px', borderRadius: '4px', 
+                            background: 'linear-gradient(135deg, #f59e0b, #d97706)', 
+                            color: 'white', fontSize: '0.65rem', fontWeight: '900',
+                            textTransform: 'uppercase', letterSpacing: '0.5px',
+                            boxShadow: '0 2px 4px rgba(217, 119, 6, 0.3)'
+                          }}>
+                            VIP
+                          </span>
+                        )}
+                      </span>
                       <span className="dot">•</span>
                       <span className="comment-date">{comment.date}</span>
                     </div>
@@ -286,19 +400,74 @@ const FeedbackManagement = () => {
 
                   <p className="comment-body">{comment.content}</p>
 
+                  {/* Display Review Images */}
+                  {comment.images && comment.images.length > 0 && (
+                    <div className="flex gap-2 mt-3 mb-3">
+                      {comment.images.map((img, idx) => (
+                        <div key={idx} className="w-16 h-16 rounded-lg overflow-hidden border border-gray-200 cursor-pointer hover:opacity-80">
+                          <img src={img} className="w-full h-full object-cover" alt="Review" onClick={() => window.open(img, '_blank')} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {comment.reply && (
+                    <div className="admin-reply-box" style={{ 
+                      marginTop: '15px', padding: '12px', background: '#f8fafc', 
+                      borderRadius: '8px', borderLeft: '4px solid #2563eb' 
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '800', color: '#1e293b', textTransform: 'uppercase' }}>Phản hồi từ Admin</span>
+                        <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>{comment.replyDate}</span>
+                      </div>
+                      <p style={{ fontSize: '0.85rem', color: '#475569', margin: 0 }}>{comment.reply}</p>
+                    </div>
+                  )}
+
                   <div className="comment-actions">
+                    <button 
+                      className="btn-reply" 
+                      onClick={() => {
+                        setReplyingTo(comment);
+                        setReplyContent(comment.reply);
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px',
+                        background: '#e0f2fe', color: '#0369a1', border: 'none', borderRadius: '8px',
+                        fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem'
+                      }}
+                    >
+                      <Send size={16} /> {comment.reply ? 'Sửa phản hồi' : 'Phản hồi'}
+                    </button>
                     {comment.status === 'Chờ duyệt' && (
                       <button className="btn-approve" onClick={() => handleApprove(comment.id)}>
-                        <CheckCircle2 size={16} /> Duyệt
+                        <CheckCircle2 size={16} /> Duyệt đánh giá
                       </button>
                     )}
-                    {comment.status !== 'Vi phạm' && (
+                    {comment.status === 'Đã duyệt' && (
+                      <button className="btn-reset" onClick={() => handleReset(comment.id)} style={{
+                        display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px',
+                        background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px',
+                        fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem'
+                      }}>
+                        Hoàn tác duyệt
+                      </button>
+                    )}
+                    {comment.status !== 'Vi phạm' ? (
                       <button className="btn-reject" onClick={() => handleFlag(comment.id)}>
                         <XCircle size={16} /> Đánh dấu vi phạm
                       </button>
+                    ) : (
+                      <button className="btn-reset" onClick={() => handleReset(comment.id)} style={{
+                        display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 12px',
+                        background: '#f1f5f9', color: '#475569', border: 'none', borderRadius: '8px',
+                        fontWeight: '600', cursor: 'pointer', fontSize: '0.85rem'
+                      }}>
+                        Bỏ đánh dấu vi phạm
+                      </button>
                     )}
                     <button className="btn-delete" onClick={() => handleDelete(comment.id)}>
-                      <Trash2 size={16} /> Xóa vĩnh viễn
+                      <Trash2 size={16} /> Xóa
                     </button>
                   </div>
                 </div>
@@ -310,6 +479,74 @@ const FeedbackManagement = () => {
             )}
           </div>
         )}
+
+        {/* Pagination Bar */}
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center', 
+          padding: '15px 25px', 
+          borderTop: '1px solid #f1f5f9',
+          background: 'white',
+          borderBottomLeftRadius: '16px',
+          borderBottomRightRadius: '16px'
+        }}>
+          <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: '500' }}>
+            Hiển thị {Math.min((currentPage - 1) * itemsPerPage + 1, (activeTab === 'history' ? notifications.length : filteredComments.length))} - {Math.min(currentPage * itemsPerPage, (activeTab === 'history' ? notifications.length : filteredComments.length))} trên {(activeTab === 'history' ? notifications.length : filteredComments.length)} mục
+          </span>
+          <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+            <button 
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage === 1 ? '#f8fafc' : 'white', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
+            >
+              Trước
+            </button>
+            
+            {/* Luôn hiển thị ít nhất 10 trang đầu tiên */}
+            {(() => {
+              const pages = [];
+              const minPagesToShow = 10;
+              let start = 1;
+              let end = Math.max(minPagesToShow, totalPages);
+              
+              if (totalPages > minPagesToShow && currentPage > 6) {
+                start = Math.max(1, currentPage - 5);
+                end = Math.min(totalPages, start + 9);
+                if (end - start < 9) start = Math.max(1, end - 9);
+              } else if (totalPages > minPagesToShow) {
+                end = 10;
+              }
+
+              for (let i = start; i <= end; i++) {
+                pages.push(
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i)}
+                    style={{ 
+                      minWidth: '40px', height: '40px', borderRadius: '8px', border: '1px solid',
+                      borderColor: currentPage === i ? '#2563eb' : '#e2e8f0',
+                      background: currentPage === i ? '#2563eb' : 'white',
+                      color: currentPage === i ? 'white' : '#64748b',
+                      fontWeight: '700', cursor: 'pointer', transition: 'all 0.2s'
+                    }}
+                  >
+                    {i}
+                  </button>
+                );
+              }
+              return pages;
+            })()}
+
+            <button 
+              onClick={() => setCurrentPage(p => Math.min(Math.max(10, totalPages), p + 1))}
+              disabled={currentPage >= Math.max(10, totalPages)}
+              style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', background: currentPage >= Math.max(10, totalPages) ? '#f8fafc' : 'white', cursor: currentPage >= Math.max(10, totalPages) ? 'not-allowed' : 'pointer', color: '#64748b', fontWeight: '600' }}
+            >
+              Sau
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Notification Modal */}
@@ -347,6 +584,44 @@ const FeedbackManagement = () => {
                 <button type="submit" className="btn-primary"><Send size={18} /> Gửi ngay</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Reply Modal */}
+      {replyingTo && (
+        <div className="modal-overlay" onClick={() => setReplyingTo(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h2>Phản hồi đánh giá</h2>
+              <button className="close-btn" onClick={() => setReplyingTo(null)}><X size={24} /></button>
+            </div>
+            <div className="modal-body">
+              <div style={{ marginBottom: '15px', padding: '10px', background: '#f1f5f9', borderRadius: '8px', fontSize: '0.9rem' }}>
+                <div style={{ fontWeight: 'bold', color: '#1e293b' }}>{replyingTo.user}:</div>
+                <div style={{ color: '#475569' }}>"{replyingTo.content}"</div>
+              </div>
+              <div className="input-group">
+                <label>Nội dung phản hồi của bạn</label>
+                <textarea 
+                  rows="5" 
+                  placeholder="Cảm ơn bạn đã ủng hộ PhoneSin..."
+                  value={replyContent}
+                  onChange={(e) => setReplyContent(e.target.value)}
+                  autoFocus
+                ></textarea>
+              </div>
+              <div className="modal-footer">
+                <button className="btn-outline" onClick={() => setReplyingTo(null)}>Hủy</button>
+                <button 
+                  className="btn-primary" 
+                  onClick={handleSendReply}
+                  disabled={isSubmittingReply}
+                >
+                  {isSubmittingReply ? 'Đang gửi...' : 'Gửi phản hồi'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

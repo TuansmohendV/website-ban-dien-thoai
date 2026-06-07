@@ -158,6 +158,12 @@ const orderSchema = new mongoose.Schema(
       default: 'pending',
     },
     paidAt: Date,
+    inventoryReserved: {
+      type: Boolean,
+      default: false,
+    },
+    inventoryReservedAt: Date,
+    inventoryReleasedAt: Date,
     status: {
       type: String,
       enum: ['pending', 'confirmed', 'processing', 'packing', 'shipping', 'delivered', 'cancelled'],
@@ -184,6 +190,11 @@ const orderSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+orderSchema.index({ createdAt: -1 });
+orderSchema.index({ user: 1, createdAt: -1 });
+orderSchema.index({ guestId: 1, createdAt: -1 });
+orderSchema.index({ status: 1, createdAt: -1 });
 
 const Order = mongoose.model('Order', orderSchema);
 

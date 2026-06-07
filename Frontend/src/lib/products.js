@@ -86,7 +86,21 @@ const getSpecValue = (product, keys = []) => {
 };
 
 export const resolveFrontendCategory = (product = {}) => {
-  const searchableText = [
+  // 0. Ưu tiên dựa vào category từ backend nếu có
+  if (product.category) {
+    const bc = slugifyValue(product.category);
+    if (bc.includes('phone') || bc.includes('mobile') || bc.includes('smartphone') || bc.includes('dien-thoai')) return 'dien-thoai';
+    if (bc.includes('laptop') || bc.includes('notebook')) return 'laptop';
+    if (bc.includes('tablet') || bc.includes('ipad') || bc.includes('may-tinh-bang')) return 'tablet';
+    if (bc.includes('watch') || bc.includes('dong-ho')) return 'dong-ho';
+    if (bc.includes('audio') || bc.includes('sound') || bc.includes('earphone') || bc.includes('speaker') || bc.includes('am-thanh')) return 'am-thanh';
+    if (bc.includes('monitor') || bc.includes('screen') || bc.includes('man-hinh')) return 'man-hinh';
+    if (bc.includes('component') || bc.includes('linh-kien')) return 'linh-kien-may-tinh';
+    if (bc.includes('accessory') || bc.includes('phu-kien')) return 'phu-kien';
+    if (bc.includes('service') || bc.includes('dich-vu')) return 'dich-vu';
+  }
+
+  const searchableText = slugifyValue([
     product.name,
     product.brand,
     product.category,
@@ -94,58 +108,75 @@ export const resolveFrontendCategory = (product = {}) => {
     ...(product.features || []),
   ]
     .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
+    .join(' '));
 
+  // 1. Phụ kiện & Linh kiện (Kiểm tra keyword cụ thể)
   if (
-    /(iphone|samsung|xiaomi|oppo|vivo|realme|nokia|honor|huawei|smartphone|dien-thoai|dien thoai|galaxy|redmi|fold|flip)/.test(
+    /(op-lung|bao-da|dan-man-hinh|cu-sac|cap-sac|sac-du-phong|gay-chup-anh|tripod|tui-chong-nuoc|apple-care|bao-hanh|phu-kien)/.test(
       searchableText
     )
+  ) {
+    return 'phu-kien';
+  }
+
+  // 2. Điện thoại (Smartphone)
+  if (
+    /(iphone|smartphone|dien-thoai|galaxy|redmi|xiaomi|oppo|vivo|realme|nokia|honor|huawei|fold|flip)/.test(
+      searchableText
+    ) && !/(laptop|macbook|ipad|tablet|watch|dong-ho)/.test(searchableText)
   ) {
     return 'dien-thoai';
   }
 
-  if (/(macbook|laptop|notebook|vivobook|zenbook)/.test(searchableText)) {
+  // 3. Laptop
+  if (/(macbook|laptop|notebook|vivobook|zenbook|rog|legion|thinkpad|ideapad)/.test(searchableText)) {
     return 'laptop';
   }
 
-  if (/(ipad|tablet|galaxy tab|tab )/.test(searchableText)) {
+  // 4. Máy tính bảng (Tablet)
+  if (/(ipad|tablet|galaxy-tab|may-tinh-bang|(^|-)tab($|-))/.test(searchableText)) {
     return 'tablet';
   }
 
-  if (/(watch|dong-ho|dong ho|smartwatch|garmin)/.test(searchableText)) {
+  // 5. Đồng hồ
+  if (/(watch|dong-ho|dong ho|smartwatch|garmin|apple watch|galaxy watch)/.test(searchableText)) {
     return 'dong-ho';
   }
 
+  // 6. Âm thanh
   if (
-    /(airpods|tai-nghe|tai nghe|earbud|headphone|loa|speaker|audio|am-thanh|am thanh)/.test(
+    /(airpods|tai-nghe|earbud|headphone|loa|speaker|audio|am-thanh|galaxy-buds)/.test(
       searchableText
     )
   ) {
     return 'am-thanh';
   }
 
-  if (/(man-hinh|man hinh|monitor|display|ultrasharp|proart)/.test(searchableText)) {
+  // 7. Màn hình
+  if (/(man-hinh|monitor|display|ultrasharp|proart)/.test(searchableText)) {
     return 'man-hinh';
   }
 
+  // 8. Linh kiện máy tính
   if (
-    /(chuot|ban-phim|ban phim|keyboard|mouse|ssd|ram|vga|linh-kien|linh kien|component)/.test(
+    /(chuot|ban-phim|keyboard|mouse|ssd|ram|vga|linh-kien|component|mainboard|psu|nguon-may-tinh)/.test(
       searchableText
     )
   ) {
     return 'linh-kien-may-tinh';
   }
 
+  // 9. Gia dụng thông minh (Smart Home)
   if (
-    /(camera|robot|massage|smart home|smart-home|purifier|air fryer|vacuum)/.test(
+    /(camera|robot|massage|smart-home|purifier|air-fryer|vacuum|xiaomi-home|gia-dung)/.test(
       searchableText
     )
   ) {
     return 'smart-home';
   }
 
-  if (/(sim|goi-cuoc|goi cuoc|dich-vu|dich vu|service|data)/.test(searchableText)) {
+  // 10. Dịch vụ (Sim, Thẻ cào...)
+  if (/(sim|goi-cuoc|dich-vu|service|data|nap-the)/.test(searchableText)) {
     return 'dich-vu';
   }
 
@@ -331,7 +362,7 @@ export const normalizeProductDetail = (product = {}, recentReviews = []) => {
           stock: Number(variant.stock || 0),
           image: variant.image || normalizedProduct.image,
         }))
-      : storages.map((storage, index) => ({
+      : (storages.length > 0 ? storages : ['Tiêu chuẩn']).map((storage, index) => ({
           id: `variant-${index}`,
           storage,
           price: normalizedProduct.priceNum,
@@ -374,6 +405,12 @@ export const normalizeProductDetail = (product = {}, recentReviews = []) => {
 export const inflateProducts = (products = [], count = 0, prefix = 'display') => {
   if (!Array.isArray(products) || products.length === 0 || count <= 0) {
     return [];
+  }
+
+  // If we only have 1 product, don't repeat it multiple times as it looks like a bug.
+  // Just return that one product.
+  if (products.length === 1) {
+    return [{ ...products[0], uiKey: `${prefix}-0` }];
   }
 
   return Array.from({ length: count }, (_, index) => ({

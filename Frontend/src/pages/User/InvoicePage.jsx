@@ -16,50 +16,39 @@ const Barcode = () => (
 const InvoicePage = () => {
   const { orderId } = useParams();
   const { formatPrice } = useLanguage();
-  const { orders } = useOrders();
+  const { orders, loading } = useOrders();
   const printRef = useRef(null);
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    if (dateStr.includes('/')) {
-        const parts = dateStr.split('/');
-        if (parts[0].length > 2) return dateStr; // Likely YYYY/MM/DD
-        if (parseInt(parts[0]) > 12) return dateStr; // Likely DD/MM/YYYY already
-    }
-    try {
-      const d = new Date(dateStr.split(',')[0]);
-      if (!isNaN(d.getTime())) {
-        return d.toLocaleDateString('vi-VN');
-      }
-      return dateStr;
-    } catch (e) {
-      return dateStr;
-    }
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+        <div className="w-12 h-12 border-4 border-slate-900 border-t-transparent rounded-full animate-spin mb-4" />
+        <p className="text-sm font-black text-slate-900 uppercase tracking-widest">Đang tải hóa đơn...</p>
+      </div>
+    );
+  }
 
-  const calculateDeliveryDate = (dateStr, city) => {
-    try {
-      const orderD = new Date(dateStr ? dateStr.split(',')[0] : new Date());
-      if (isNaN(orderD.getTime())) return 'Đang cập nhật';
-      let days = 3;
-      if (['Hà Nội', 'Hồ Chí Minh', 'TP. Hồ Chí Minh'].includes(city)) days = 1;
-      else if (['Đà Nẵng'].includes(city)) days = 2;
-      orderD.setDate(orderD.getDate() + days);
-      return orderD.toLocaleDateString('vi-VN');
-    } catch {
-      return 'Đang cập nhật';
-    }
-  };
+
+
+
 
   let realOrder = orders.find(o => o.id === orderId);
 
+  // Check if allowed to print:
+  // 1. If Online payment: Must NOT be 'pending' (Admin must confirm first) and NOT 'cancelled'
+  // 2. If COD: Must be 'delivered'
+  const canPrint = realOrder && (
+    (realOrder.paymentMethod !== 'COD' && realOrder.status !== 'pending' && realOrder.status !== 'cancelled') || 
+    (realOrder.status === 'delivered')
+  );
+
   const invoice = realOrder ? {
-    invoiceNo: `INV-${realOrder.id || realOrder.orderId}`,
+    invoiceNo: `INV-${String(realOrder.id || realOrder.orderId).slice(-8).toUpperCase()}`,
     issueDate: new Date().toLocaleDateString('vi-VN'),
     dueDate: new Date().toLocaleDateString('vi-VN'),
-    orderId: realOrder.id || realOrder.orderId,
-    orderDate: formatDate(realOrder.date),
-    deliveryDate: calculateDeliveryDate(realOrder.date, realOrder.customer?.city),
+    orderId: String(realOrder.id || realOrder.orderId).slice(-8).toUpperCase(),
+    orderDate: realOrder.date,
+    deliveryDate: realOrder.estimatedDelivery || 'Đang cập nhật',
     status: realOrder.status === 'pending' ? 'Chờ xác nhận' : realOrder.status === 'cancelled' ? 'Đã hủy' : 'Đã xác nhận',
     customer: {
       fullName: realOrder.customer.fullName,
@@ -137,11 +126,43 @@ const InvoicePage = () => {
             print-color-adjust: exact !important;
           }
           .no-print { display: none !important; }
+          .security-watermark { display: none !important; }
           @page { size: A4; margin: 12mm; }
+        }
+        
+        .security-overlay {
+          position: fixed;
+          top: 0; left: 0; right: 0; bottom: 0;
+          pointer-events: none;
+          z-index: 9999;
+          overflow: hidden;
+          opacity: 0.03;
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: space-around;
+          align-content: space-around;
+        }
+        .watermark-item {
+          transform: rotate(-30deg);
+          font-size: 24px;
+          font-weight: 900;
+          white-space: nowrap;
+          color: black;
+          user-select: none;
         }
       `}</style>
 
-      <div className="min-h-screen bg-gray-100 py-10 px-4 font-sans" style={{ fontFamily: "'Inter', sans-serif" }}>
+      <div 
+        className="min-h-screen bg-gray-100 py-10 px-4 font-sans select-none relative" 
+        style={{ fontFamily: "'Inter', sans-serif" }}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {/* Security Watermark for Screen (Invisible in Print) */}
+        <div className="security-overlay no-print">
+          {Array.from({ length: 50 }).map((_, i) => (
+            <div key={i} className="watermark-item">PHONESIN - {invoice.invoiceNo}</div>
+          ))}
+        </div>
 
         <div className="no-print w-[794px] max-w-full mx-auto mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -152,13 +173,23 @@ const InvoicePage = () => {
             <p className="text-sm text-gray-400 font-bold">Mã đơn: {invoice.orderId} · Số HĐ: {invoice.invoiceNo}</p>
           </div>
           <div className="flex gap-3 flex-wrap">
-            <button
-              onClick={handlePrint}
-              className="flex items-center gap-2.5 bg-slate-950 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-red-600 transition-all shadow-xl active:scale-95 text-sm"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
-              In / Lưu PDF
-            </button>
+            {canPrint ? (
+              <button
+                onClick={handlePrint}
+                className="flex items-center gap-2.5 bg-slate-950 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-red-600 transition-all shadow-xl active:scale-95 text-sm"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+                In / Lưu PDF
+              </button>
+            ) : (
+              <div 
+                className="flex items-center gap-2.5 bg-gray-200 text-gray-500 px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-sm cursor-not-allowed" 
+                title={realOrder?.status === 'pending' ? "Vui lòng đợi Admin xác nhận đơn hàng trước khi in hóa đơn" : "Chỉ được in hóa đơn khi đã nhận hàng thành công"}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+                In / Lưu PDF
+              </div>
+            )}
           </div>
         </div>
 
@@ -353,13 +384,23 @@ const InvoicePage = () => {
         {/* ── End Screen wrapper ── */}
 
         <div className="no-print w-[794px] max-w-full mx-auto mt-6 flex justify-center gap-4">
-          <button
-            onClick={handlePrint}
-            className="flex items-center gap-2.5 bg-red-600 text-white px-10 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-950 transition-all shadow-xl active:scale-95"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
-            In hóa đơn / Lưu PDF
-          </button>
+          {canPrint ? (
+            <button
+              onClick={handlePrint}
+              className="flex items-center gap-2.5 bg-red-600 text-white px-10 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-slate-950 transition-all shadow-xl active:scale-95"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+              In hóa đơn / Lưu PDF
+            </button>
+          ) : (
+            <div 
+              className="flex items-center gap-2.5 bg-gray-200 text-gray-500 px-10 py-4 rounded-2xl font-black uppercase tracking-widest cursor-not-allowed" 
+              title={realOrder?.status === 'pending' ? "Vui lòng đợi Admin xác nhận đơn hàng trước khi in hóa đơn" : "Chỉ được in hóa đơn khi đã nhận hàng thành công"}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>
+              In hóa đơn / Lưu PDF
+            </div>
+          )}
           <Link to="/orders" className="flex items-center gap-2.5 bg-white border-2 border-gray-200 text-slate-700 px-10 py-4 rounded-2xl font-black uppercase tracking-widest hover:border-black transition-all shadow-sm active:scale-95">
             ← Quay lại đơn hàng
           </Link>

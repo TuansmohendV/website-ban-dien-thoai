@@ -3,11 +3,39 @@ export const AUTH_USER_KEY = 'phonesin_user';
 export const GUEST_ID_KEY = 'phonesin_guest_id';
 export const GUEST_ORDER_IDS_KEY = 'phonesin_guest_orders';
 
-const canUseStorage = () =>
+const SESSION_SCOPED_KEYS = new Set([AUTH_TOKEN_KEY, AUTH_USER_KEY]);
+const LEGACY_SESSION_MIGRATED_KEY = 'phonesin_legacy_session_migrated';
+
+const canUseLocalStorage = () =>
   typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 
+const canUseSessionStorage = () =>
+  typeof window !== 'undefined' && typeof window.sessionStorage !== 'undefined';
+
+const shouldUseSessionStorage = (key) => SESSION_SCOPED_KEYS.has(key);
+
 export const getStorageItem = (key) => {
-  if (!canUseStorage()) {
+  if (shouldUseSessionStorage(key)) {
+    if (!canUseSessionStorage()) {
+      return '';
+    }
+
+    if (canUseLocalStorage() && !sessionStorage.getItem(LEGACY_SESSION_MIGRATED_KEY)) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      localStorage.removeItem(AUTH_USER_KEY);
+      sessionStorage.setItem(LEGACY_SESSION_MIGRATED_KEY, '1');
+    }
+
+    const sessionValue = sessionStorage.getItem(key);
+
+    if (sessionValue) {
+      return sessionValue;
+    }
+
+    return '';
+  }
+
+  if (!canUseLocalStorage()) {
     return '';
   }
 
@@ -15,7 +43,27 @@ export const getStorageItem = (key) => {
 };
 
 export const setStorageItem = (key, value) => {
-  if (!canUseStorage()) {
+  if (shouldUseSessionStorage(key)) {
+    if (!canUseSessionStorage()) {
+      return;
+    }
+
+    if (value === undefined || value === null || value === '') {
+      sessionStorage.removeItem(key);
+      if (canUseLocalStorage()) {
+        localStorage.removeItem(key);
+      }
+      return;
+    }
+
+    sessionStorage.setItem(key, value);
+    if (canUseLocalStorage()) {
+      localStorage.removeItem(key);
+    }
+    return;
+  }
+
+  if (!canUseLocalStorage()) {
     return;
   }
 
@@ -28,7 +76,19 @@ export const setStorageItem = (key, value) => {
 };
 
 export const removeStorageItem = (key) => {
-  if (!canUseStorage()) {
+  if (shouldUseSessionStorage(key)) {
+    if (canUseSessionStorage()) {
+      sessionStorage.removeItem(key);
+    }
+
+    if (canUseLocalStorage()) {
+      localStorage.removeItem(key);
+    }
+
+    return;
+  }
+
+  if (!canUseLocalStorage()) {
     return;
   }
 
@@ -38,7 +98,7 @@ export const removeStorageItem = (key) => {
 const buildRandomPart = () => Math.random().toString(36).slice(2, 10);
 
 export const getGuestId = () => {
-  if (!canUseStorage()) {
+  if (!canUseLocalStorage()) {
     return `guest-${Date.now().toString(36)}`;
   }
 

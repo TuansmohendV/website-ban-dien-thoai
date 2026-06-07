@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import User from '../models/User.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import AppError from '../utils/appError.js';
+import { sendResetOtpEmail } from '../utils/email.js';
 import { normalizePhone } from '../utils/phone.js';
 import { signToken } from '../utils/token.js';
 
@@ -100,6 +101,10 @@ export const loginUser = asyncHandler(async (req, res) => {
     throw new AppError(401, 'Tài khoản hoặc mật khẩu không đúng.');
   }
 
+  if (user.isActive === false) {
+    throw new AppError(403, 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.');
+  }
+
   user.lastLoginAt = new Date();
   await user.save({ validateBeforeSave: false });
 
@@ -128,20 +133,24 @@ export const forgotPassword = asyncHandler(async (req, res) => {
     });
   }
 
-  const resetToken = crypto.randomBytes(32).toString('hex');
-  const hashedToken = crypto
-    .createHash('sha256')
-    .update(resetToken)
-    .digest('hex');
+  const otpCode = `${Math.floor(100000 + Math.random() * 900000)}`;
+  const hashedToken = crypto.createHash('sha256').update(otpCode).digest('hex');
 
   user.resetPasswordToken = hashedToken;
-  user.resetPasswordExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  user.resetPasswordExpiresAt = new Date(Date.now() + 10 * 60 * 1000);
   await user.save({ validateBeforeSave: false });
+
+  if (user.email) {
+    await sendResetOtpEmail({
+      to: user.email,
+      otpCode,
+      expiresAt: user.resetPasswordExpiresAt,
+    });
+  }
 
   res.json({
     message:
-      'Đã tạo yêu cầu reset mật khẩu. Hãy dùng token này để test frontend/backend nội bộ.',
-    resetToken: process.env.NODE_ENV === 'production' ? undefined : resetToken,
+      'Neu tai khoan ton tai, he thong da gui ma OTP khoi phuc mat khau den email dang ky.',
     expiresAt: user.resetPasswordExpiresAt,
   });
 });
@@ -153,7 +162,11 @@ export const resetPassword = asyncHandler(async (req, res) => {
     throw new AppError(400, 'Token và mật khẩu mới phải hợp lệ.');
   }
 
-  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+  const normalizedToken = String(token).trim();
+  const hashedToken = crypto
+    .createHash('sha256')
+    .update(normalizedToken)
+    .digest('hex');
 
   const user = await User.findOne({
     resetPasswordToken: hashedToken,
@@ -233,6 +246,10 @@ export const socialLogin = asyncHandler(async (req, res) => {
     });
   }
 
+  if (user.isActive === false) {
+    throw new AppError(403, 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.');
+  }
+
   user.lastLoginAt = new Date();
   await user.save({ validateBeforeSave: false });
 
@@ -242,10 +259,100 @@ export const socialLogin = asyncHandler(async (req, res) => {
   });
 });
 
+export const firebaseLogin = asyncHandler(async (req, res) => {
+  const { phone: rawPhone, firebaseUid } = req.body;
+
+  if (!rawPhone || !firebaseUid) {
+    throw new AppError(400, 'Vui lòng cung cấp số điện thoại và firebaseUid.');
+  }
+
+  const phone = normalizePhone(rawPhone);
+  let user = await User.findOne({ 
+    $or: [
+      { firebaseUid },
+      { phone }
+    ]
+  });
+
+  if (!user) {
+    // Create new user if not exists
+    user = await User.create({
+      phone,
+      firebaseUid,
+      authProvider: 'firebase',
+      fullName: 'Khách hàng',
+      password: crypto.randomBytes(16).toString('hex'), // Dummy password for local auth compatibility
+    });
+  } else {
+    // Update firebaseUid if not set
+    if (!user.firebaseUid) {
+      user.firebaseUid = firebaseUid;
+      user.authProvider = 'firebase';
+    }
+
+    if (user.isActive === false) {
+      throw new AppError(403, 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.');
+    }
+
+    user.lastLoginAt = new Date();
+    await user.save({ validateBeforeSave: false });
+  }
+
+  res.json({
+    ...buildAuthResponse(user),
+    message: 'Đăng nhập bằng mã OTP thành công.',
+  });
+});
+
+export const otpEmailLogin = asyncHandler(async (req, res) => {
+  const { email: rawEmail } = req.body;
+
+  if (!rawEmail) {
+    throw new AppError(400, 'Vui lòng cung cấp email.');
+  }
+
+  const email = rawEmail.toLowerCase().trim();
+  console.log(`[Auth Debug] Attempting OTP login for: ${email}`);
+  
+  let user;
+  try {
+    user = await User.findOne({ email });
+
+    if (!user) {
+      console.log(`[Auth Debug] User not found, creating new account for: ${email}`);
+      // Create new user if not exists (Register on first login)
+      user = await User.create({
+        email,
+        fullName: 'Khách hàng',
+        password: crypto.randomBytes(16).toString('hex'), // Dummy password
+        authProvider: 'email_otp',
+      });
+    }
+  } catch (error) {
+    console.error(`[Auth Debug] Error finding or creating user:`, error);
+    throw error;
+  }
+
+  if (user.isActive === false) {
+    throw new AppError(403, 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.');
+  }
+
+  user.lastLoginAt = new Date();
+  await user.save({ validateBeforeSave: false });
+
+  const authResponse = buildAuthResponse(user);
+  console.log(`[Auth Debug] OTP login successful for: ${email}`);
+
+  res.json({
+    ...authResponse,
+    message: 'Đăng nhập bằng Email OTP thành công.',
+  });
+});
+
 export const logoutUser = asyncHandler(async (req, res) => {
   // JWT is stateless, so logout is handled on the client side
   // This endpoint confirms the logout action
   res.json({
-    message: 'Đăng xuất thành công.',
+    message: 'Đánh xuất thành công.',
   });
 });

@@ -1,5 +1,8 @@
 import Cart from '../models/Cart.js';
+import Notification from '../models/Notification.js';
+import User from '../models/User.js';
 import Voucher from '../models/Voucher.js';
+import UserVoucher from '../models/UserVoucher.js';
 import asyncHandler from '../utils/asyncHandler.js';
 import AppError from '../utils/appError.js';
 import { recalculateCart } from '../utils/cart.js';
@@ -14,6 +17,7 @@ const normalizeVoucherPayload = (body = {}) => {
   const maxDiscount = Math.max(0, Number(body.maxDiscount) || 0);
   const usageLimit = Math.max(0, Number(body.usageLimit) || 0);
   const usageLimitPerUser = Math.max(0, Number(body.usageLimitPerUser) || 1);
+  const huntLimit = Math.max(0, Number(body.huntLimit) || 0);
 
   return {
     code,
@@ -24,9 +28,12 @@ const normalizeVoucherPayload = (body = {}) => {
     maxDiscount,
     usageLimit,
     usageLimitPerUser,
+    huntLimit,
     expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
     startsAt: body.startsAt ? new Date(body.startsAt) : undefined,
     isActive: body.isActive !== false,
+    isHuntedOnly: body.isHuntedOnly === true,
+    missionTask: String(body.missionTask || '').trim(),
   };
 };
 
@@ -42,12 +49,225 @@ const mapVoucherForAdmin = (voucher) => ({
   status: getVoucherStatus(voucher),
 });
 
+const formatVoucherDiscountText = (voucher) => {
+  if (voucher.discountType === 'percentage') {
+    const maxText = voucher.maxDiscount > 0
+      ? `, tối đa ${voucher.maxDiscount.toLocaleString('vi-VN')}đ`
+      : '';
+    return `giảm ${voucher.discountValue}%${maxText}`;
+  }
+
+  return `giảm ${voucher.discountValue.toLocaleString('vi-VN')}đ`;
+};
+
+const notifyUsersAboutNewVoucher = async (voucher) => {
+  if (!voucher.isActive || voucher.isDeleted) {
+    return 0;
+  }
+
+  const users = await User.find({
+    isActive: true,
+    isDeleted: { $ne: true },
+    role: 'customer',
+  }).select('_id').lean();
+
+  if (users.length === 0) {
+    return 0;
+  }
+
+  const discountText = formatVoucherDiscountText(voucher);
+  const title = voucher.isHuntedOnly
+    ? `Voucher săn mới: ${voucher.code}`
+    : `Voucher mới dành cho bạn: ${voucher.code}`;
+  const message = voucher.isHuntedOnly
+    ? `Hoàn thành nhiệm vụ để nhận mã ${discountText}.`
+    : `Nhập mã ${voucher.code} để được ${discountText}.`;
+
+  await Notification.insertMany(
+    users.map((user) => ({
+      userId: user._id,
+      title,
+      message,
+      type: 'promotion',
+      relatedId: voucher._id,
+      relatedType: 'voucher',
+    })),
+    { ordered: false }
+  );
+
+  return users.length;
+};
+
 export const getAdminVouchers = asyncHandler(async (req, res) => {
-  const vouchers = await Voucher.find({}).sort({ createdAt: -1 }).lean();
+  const includeDeleted = String(req.query.includeDeleted) === 'true';
+  const query = includeDeleted ? {} : { isDeleted: { $ne: true } };
+  const vouchers = await Voucher.find(query).sort({ createdAt: -1 }).lean();
 
   res.json({
     data: vouchers.map(mapVoucherForAdmin),
   });
+});
+
+export const getPublicVouchers = asyncHandler(async (req, res) => {
+  const now = new Date();
+  
+  const vouchers = await Voucher.find({
+    isActive: true,
+    isDeleted: { $ne: true },
+    isHuntedOnly: { $ne: true },
+    $and: [
+      { $or: [{ expiresAt: { $exists: false } }, { expiresAt: { $gt: now } }] },
+      { $or: [{ startsAt: { $exists: false } }, { startsAt: { $lt: now } }] },
+    ],
+  })
+    .sort({ discountValue: -1 })
+    .lean();
+
+  res.json({
+    data: vouchers.map((v) => ({
+      code: v.code,
+      description: v.description,
+      discountType: v.discountType,
+      discountValue: v.discountValue,
+      minOrderValue: v.minOrderValue,
+      maxDiscount: v.maxDiscount,
+      expiresAt: v.expiresAt,
+    })),
+  });
+});
+
+export const getHuntedVouchers = asyncHandler(async (req, res) => {
+  const vouchers = await Voucher.find({
+    isHuntedOnly: true,
+    isActive: true,
+    isDeleted: { $ne: true },
+  }).lean();
+  
+  // If user is logged in, check their hunt status for each voucher
+  let userHuntStatuses = {};
+  if (req.user) {
+    const userVouchers = await UserVoucher.find({ user: req.user._id }).lean();
+    userVouchers.forEach(uv => {
+      userHuntStatuses[uv.voucher.toString()] = uv.status;
+    });
+  }
+
+  res.json({
+    data: vouchers.map(v => ({
+      _id: v._id,
+      code: v.code,
+      description: v.description,
+      discountType: v.discountType,
+      discountValue: v.discountValue,
+      minOrderValue: v.minOrderValue,
+      maxDiscountValue: v.maxDiscount,
+      expiresAt: v.expiresAt,
+      missionTask: v.missionTask,
+      huntLimit: v.huntLimit || 0,
+      huntedCount: v.huntedCount || 0,
+      userStatus: userHuntStatuses[v._id.toString()] || 'none'
+    })),
+  });
+});
+
+export const huntVoucher = asyncHandler(async (req, res) => {
+  const { voucherId, proofImage } = req.body;
+  
+  const voucher = await Voucher.findById(voucherId);
+  if (!voucher || !isVoucherActive(voucher)) {
+    throw new AppError(400, 'Voucher không khả dụng để săn.');
+  }
+
+  // Check hunt limit
+  if (voucher.huntLimit > 0 && voucher.huntedCount >= voucher.huntLimit) {
+    throw new AppError(400, 'Voucher này đã hết lượt săn. Hãy thử voucher khác!');
+  }
+
+  const existing = await UserVoucher.findOne({ user: req.user._id, voucher: voucherId });
+  if (existing) {
+    if (existing.status === 'approved') throw new AppError(400, 'Bạn đã sở hữu voucher này rồi.');
+  }
+
+  // Auto-approve immediately (no admin review needed)
+  if (existing && existing.status === 'rejected') {
+    existing.status = 'approved';
+    existing.proofImage = proofImage || existing.proofImage;
+    existing.huntedAt = new Date();
+    await existing.save();
+  } else if (!existing) {
+    await UserVoucher.create({
+      user: req.user._id,
+      voucher: voucherId,
+      proofImage: proofImage || '',
+      status: 'approved'
+    });
+  }
+
+  // Increment huntedCount
+  await Voucher.findByIdAndUpdate(voucherId, { $inc: { huntedCount: 1 } });
+
+  res.status(201).json({
+    message: '🎉 Chúc mừng! Bạn đã nhận được voucher thành công! Vào Ví Voucher để sử dụng nhé.',
+  });
+});
+
+export const getUserVouchers = asyncHandler(async (req, res) => {
+  console.log('Fetching vouchers for user:', req.user._id);
+  
+  const userVouchers = await UserVoucher.find({ 
+    user: req.user._id, 
+    isUsed: false,
+    status: 'approved' 
+  })
+    .populate('voucher')
+    .lean();
+
+  console.log(`Found ${userVouchers.length} approved vouchers for user.`);
+
+  // We should show the voucher even if it's not "active" for new hunts, 
+  // as long as the user has already successfully hunted it.
+  const filteredData = userVouchers
+    .filter(uv => uv.voucher) // Just ensure the voucher record exists
+    .map(uv => ({
+      _id: uv._id,
+      code: uv.voucher.code,
+      description: uv.voucher.description,
+      discountType: uv.voucher.discountType,
+      discountValue: uv.voucher.discountValue,
+      minOrderValue: uv.voucher.minOrderValue,
+      maxDiscount: uv.voucher.maxDiscount,
+      expiresAt: uv.voucher.expiresAt,
+      earnedAt: uv.huntedAt
+    }));
+
+  res.json({
+    data: filteredData
+  });
+});
+
+// Admin Review APIs
+export const getPendingProofs = asyncHandler(async (req, res) => {
+  const proofs = await UserVoucher.find({ status: 'pending' })
+    .populate('user', 'fullName phone email')
+    .populate('voucher')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  res.json({ data: proofs });
+});
+
+export const reviewProof = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { status, adminNote } = req.body; // status: 'approved' or 'rejected'
+
+  const userVoucher = await UserVoucher.findById(id);
+  if (!userVoucher) throw new AppError(404, 'Không tìm thấy minh chứng.');
+
+  userVoucher.status = status;
+  userVoucher.adminNote = adminNote;
+  await userVoucher.save();
+
+  res.json({ message: `Đã ${status === 'approved' ? 'duyệt' : 'từ chối'} minh chứng này.` });
 });
 
 export const getAdminVoucherDetail = asyncHandler(async (req, res) => {
@@ -74,10 +294,14 @@ export const createAdminVoucher = asyncHandler(async (req, res) => {
   }
 
   const voucher = await Voucher.create(payload);
+  const notifiedUsers = await notifyUsersAboutNewVoucher(voucher);
 
   res.status(201).json({
-    message: 'Tạo mã khuyến mãi thành công.',
+    message: notifiedUsers > 0
+      ? `Tạo mã khuyến mãi thành công và đã gửi thông báo đến ${notifiedUsers} khách hàng.`
+      : 'Tạo mã khuyến mãi thành công.',
     voucher: mapVoucherForAdmin(voucher.toObject()),
+    notifiedUsers,
   });
 });
 
@@ -98,14 +322,19 @@ export const updateAdminVoucher = asyncHandler(async (req, res) => {
 });
 
 export const deleteAdminVoucher = asyncHandler(async (req, res) => {
-  const voucher = await Voucher.findByIdAndDelete(req.params.id);
+  const voucher = await Voucher.findById(req.params.id);
 
   if (!voucher) {
     throw new AppError(404, 'Không tìm thấy mã khuyến mãi.');
   }
 
+  voucher.isActive = false;
+  voucher.isDeleted = true;
+  voucher.deletedAt = new Date();
+  await voucher.save();
+
   res.json({
-    message: 'Xóa mã khuyến mãi thành công.',
+    message: 'Đã ẩn mã khuyến mãi khỏi giao diện (xoá mềm), dữ liệu vẫn còn trong database.',
   });
 });
 
@@ -154,6 +383,20 @@ export const applyVoucher = asyncHandler(async (req, res) => {
 
   if (!voucher || !isVoucherActive(voucher)) {
     throw new AppError(400, 'Mã giảm giá không hợp lệ hoặc đã hết hạn.');
+  }
+
+  if (voucher.isHuntedOnly) {
+    if (!req.user) {
+      throw new AppError(401, 'Vui lòng đăng nhập để sử dụng mã ưu đãi đặc biệt này.');
+    }
+    const userVoucher = await UserVoucher.findOne({ 
+      user: req.user._id, 
+      voucher: voucher._id,
+      status: 'approved' // CHECK STATUS
+    });
+    if (!userVoucher) {
+      throw new AppError(400, 'Mã này yêu cầu bạn phải săn voucher và được Admin duyệt mới có thể sử dụng.');
+    }
   }
 
   if (req.user && voucher.usageLimitPerUser > 0) {

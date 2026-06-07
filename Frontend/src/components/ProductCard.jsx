@@ -3,16 +3,59 @@ import { Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import BuyNowModal from './BuyNowModal';
 
+const IMAGE_FRAME_BY_CATEGORY = {
+  'dien-thoai': {
+    frame: 'w-[72%] max-w-[128px] aspect-[3/4]',
+    image: 'max-h-full max-w-full',
+  },
+  tablet: {
+    frame: 'w-[80%] max-w-[150px] aspect-[4/3]',
+    image: 'max-h-full max-w-full',
+  },
+  laptop: {
+    frame: 'w-[88%] max-w-[180px] aspect-[16/10]',
+    image: 'max-h-full max-w-full',
+  },
+  'man-hinh': {
+    frame: 'w-[90%] max-w-[188px] aspect-[16/9]',
+    image: 'max-h-full max-w-full',
+  },
+  'am-thanh': {
+    frame: 'w-[76%] max-w-[140px] aspect-square',
+    image: 'max-h-full max-w-full',
+  },
+  'phu-kien': {
+    frame: 'w-[74%] max-w-[136px] aspect-square',
+    image: 'max-h-full max-w-full',
+  },
+  'linh-kien-may-tinh': {
+    frame: 'w-[82%] max-w-[150px] aspect-square',
+    image: 'max-h-full max-w-full',
+  },
+  'smart-home': {
+    frame: 'w-[82%] max-w-[154px] aspect-square',
+    image: 'max-h-full max-w-full',
+  },
+};
+
+const getProductImageFrame = (category = '') =>
+  IMAGE_FRAME_BY_CATEGORY[category] || {
+    frame: 'w-[78%] max-w-[146px] aspect-square',
+    image: 'max-h-full max-w-full',
+  };
+
 const ProductCard = ({ product }) => {
   const { formatPrice } = useLanguage();
   const [showBuyModal, setShowBuyModal] = useState(false);
   const productId = product.id || product.routeId || product.backendId;
   const productDiscount = String(product.discount || '').replace(/^-+/, '');
+  const imageFrame = getProductImageFrame(product.category);
   
   return (
     <div className="bg-white rounded-xl p-3 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col relative group border border-gray-100 hover:border-[#009981]/20 h-full">
       
-      {/* Badge Rẻ Số 1 */}
+
+      {/* Badge Rẻ Số 1 (isHot) */}
       {product.isHot && (
         <div className="absolute top-0 left-0 z-20">
             <div className="bg-gradient-to-br from-[#ee0000] to-[#b30000] text-white text-[9px] font-black uppercase px-2 py-1 rounded-br-xl shadow-md border-r border-b border-[#800000]">
@@ -23,19 +66,21 @@ const ProductCard = ({ product }) => {
 
       {/* Discount Badge */}
       {productDiscount && (
-        <div className="absolute top-2 left-2 z-10 bg-[#ee0000] text-white text-[10px] font-black px-1.5 py-0.5 rounded-full shadow-sm">
+        <div className={`absolute z-10 bg-[#ee0000] text-white text-[10px] font-black px-1.5 py-0.5 rounded-full shadow-sm ${product.isHot ? 'top-8 left-2' : 'top-2 left-2'}`}>
           -{productDiscount}
         </div>
       )}
       
       {/* Image + Specs */}
       <Link to={`/product/${productId}`} className="flex items-center h-[180px] mb-3 relative">
-        <div className="flex-1 h-full flex items-center justify-center p-2">
-          <img 
-            src={product.image || product.img} 
-            alt={product.name} 
-            className="max-h-full max-w-full object-contain group-hover:scale-110 transition-transform duration-500" 
-          />
+        <div className="flex-1 h-full flex items-center justify-center p-2 pr-14 overflow-hidden">
+          <div className={`${imageFrame.frame} flex items-center justify-center`}>
+            <img 
+              src={product.image || product.img} 
+              alt={product.name} 
+              className={`${imageFrame.image} object-contain group-hover:scale-105 transition-transform duration-500`} 
+            />
+          </div>
         </div>
         
         {/* Specs column (Retail Style) - Dynamic based on category */}
@@ -51,22 +96,24 @@ const ProductCard = ({ product }) => {
             };
 
             if (product.category === 'dien-thoai') {
-              specItems = [
-                { label: 'Chip', value: product.specs?.chip || 'AI', svg: iconSvg.cpu },
-                { label: 'RAM', value: product.specs?.ram || '12GB', svg: iconSvg.ram },
-                { label: 'Size', value: product.specs?.screen || '6.73"', svg: iconSvg.phone },
-                { label: 'Panel', value: product.specs?.panel || 'AMOLED', svg: iconSvg.display }
+              const specs = [
+                { label: 'Chip', value: product.specs?.chip || product.cpu, svg: iconSvg.cpu },
+                { label: 'RAM', value: product.specs?.ram || product.ram, svg: iconSvg.ram },
+                { label: 'Size', value: product.specs?.screen || product.screenSize, svg: iconSvg.phone },
+                { label: 'Panel', value: product.specs?.panel || product.specs?.displayType, svg: iconSvg.display }
               ];
+              specItems = specs.filter(s => s.value);
             } else if (product.category === 'smart-home') {
-              specItems = []; // Hide for smart-home as per screenshot
+              specItems = []; 
             } else {
-              // Default to monitor specs
-              specItems = [
-                { label: 'Hz', value: product.specs?.hz || '180Hz', svg: iconSvg.refresh },
-                { label: 'Panel', value: product.specs?.panel || 'IPS', svg: iconSvg.display },
-                { label: 'Size', value: product.specs?.size || '24"', svg: iconSvg.phone },
-                { label: 'Res', value: product.specs?.res || 'FHD', svg: iconSvg.display }
+              // Default to monitor/other specs if available
+              const specs = [
+                { label: 'Hz', value: product.specs?.hz || product.refreshRate, svg: iconSvg.refresh },
+                { label: 'Panel', value: product.specs?.panel, svg: iconSvg.display },
+                { label: 'Size', value: product.specs?.size || product.screenSize, svg: iconSvg.phone },
+                { label: 'Res', value: product.specs?.res, svg: iconSvg.display }
               ];
+              specItems = specs.filter(s => s.value);
             }
             
             return specItems.map((s, i) => (
@@ -75,16 +122,35 @@ const ProductCard = ({ product }) => {
                 <span className="text-[8px] font-bold text-gray-600 text-center leading-none mt-1 uppercase tracking-tighter">{s.value}</span>
               </div>
             ));
-          })()}
+          })() }
         </div>
       </Link>
 
       {/* Product Name */}
-      <Link to={`/product/${productId}`} className="min-h-[40px] mb-3">
+      <Link to={`/product/${productId}`} className="min-h-[40px] mb-1">
         <h3 className="text-[13px] font-bold text-gray-800 leading-snug line-clamp-2 hover:text-[#008d71] transition-colors uppercase">
           {product.name}
         </h3>
       </Link>
+
+      {/* Product Status Badges (Now above price) */}
+      <div className="flex flex-wrap gap-1.5 mb-2">
+        {product.isFeatured && (
+          <div className="bg-[#ffc107] text-black text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm border border-yellow-400">
+            Nổi bật
+          </div>
+        )}
+        {product.isBestSeller && (
+          <div className="bg-[#ee0000] text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm border border-red-600">
+            Bán chạy
+          </div>
+        )}
+        {product.isRecommended && (
+          <div className="bg-[#008d71] text-white text-[8px] font-black uppercase px-1.5 py-0.5 rounded shadow-sm border border-[#006b56]">
+            Đề xuất
+          </div>
+        )}
+      </div>
 
       {/* Price Section */}
       <div className="mb-2">

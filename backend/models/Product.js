@@ -36,6 +36,15 @@ const productSchema = new mongoose.Schema(
       enum: ['active', 'inactive'],
       default: 'active',
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
+    deletedAt: Date,
+    isFeatured: { type: Boolean, default: false },
+    isBestSeller: { type: Boolean, default: false },
+    isRecommended: { type: Boolean, default: false },
+    videoUrl: { type: [String], default: [] },
   },
   {
     timestamps: true,

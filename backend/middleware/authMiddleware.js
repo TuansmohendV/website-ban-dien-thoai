@@ -34,11 +34,17 @@ const loadUserFromToken = async (req, strict = true) => {
       '-password -resetPasswordToken -resetPasswordExpiresAt'
     );
 
-    if (!user || !user.isActive) {
+    if (!user) {
       if (strict) {
         throw new AppError(401, 'Phiên đăng nhập không còn hợp lệ.');
       }
+      return null;
+    }
 
+    if (!user.isActive) {
+      if (strict) {
+        throw new AppError(403, 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.');
+      }
       return null;
     }
 
@@ -63,8 +69,12 @@ export const optionalAuth = asyncHandler(async (req, res, next) => {
 });
 
 export const requireAdmin = asyncHandler(async (req, res, next) => {
-  if (req.user?.role !== 'admin' && req.user?.isAdmin !== true) {
-    throw new AppError(403, 'Chỉ tài khoản admin mới có quyền truy cập chức năng này.');
+  const isAdmin = req.user?.role === 'admin' || req.user?.isAdmin === true;
+  const isManager = req.user?.role === 'manager';
+  const isStaff = req.user?.role === 'staff';
+
+  if (!isAdmin && !isManager && !isStaff) {
+    throw new AppError(403, 'Chỉ tài khoản quản trị mới có quyền truy cập chức năng này.');
   }
 
   next();

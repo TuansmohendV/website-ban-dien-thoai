@@ -14,6 +14,7 @@ const SearchPage = () => {
 
   // Filter & Sorting State
   const [filters, setFilters] = useState({
+    category: null,
     brand: null,
     priceRange: 'Tất cả',
     sortBy: 'relate'
@@ -71,13 +72,47 @@ const SearchPage = () => {
       // Sidebar Filters
       if (filters.brand && (p.brandKey || p.brand.toLowerCase()) !== filters.brand.toLowerCase()) return false;
 
+      // Category Filter
+      if (filters.category) {
+        const pCat = String(p.category || '').toLowerCase();
+        const targetCat = String(filters.category).toLowerCase();
+        // Handle variations (e.g., 'Điện thoại' vs 'dien-thoai')
+        const catMap = {
+          'điện thoại': ['dien-thoai', 'điện thoại'],
+          'laptop': ['laptop'],
+          'tablet': ['tablet', 'máy tính bảng'],
+          'đồng hồ': ['dong-ho', 'đồng hồ'],
+          'âm thanh': ['am-thanh', 'âm thanh'],
+          'smart home': ['smart-home', 'smart home'],
+          'phụ kiện': ['phụ kiện', 'phu-kien']
+        };
+        const validCats = catMap[targetCat] || [targetCat];
+        if (!validCats.includes(pCat)) return false;
+      }
+
       // Price Range Filter
       if (filters.priceRange && filters.priceRange !== 'Tất cả') {
-        const price = p.priceNum;
-        if (filters.priceRange === 'Dưới 5 triệu' && price >= 5000000) return false;
-        if (filters.priceRange === 'Dưới 7 triệu' && price >= 7000000) return false;
-        if (filters.priceRange === '1 đến 2 triệu' && (price < 1000000 || price > 2000000)) return false;
-        if (filters.priceRange === '1 đến 3 triệu' && (price < 1000000 || price > 3000000)) return false;
+        const price = p.priceNum || 0;
+        const range = filters.priceRange;
+
+        if (range.includes('Dưới')) {
+          const limit = parseInt(range.replace(/[^\d]/g, '') || '0') * (range.includes('triệu') ? 1000000 : 1000);
+          if (price >= limit) return false;
+        } else if (range.includes('Trên')) {
+          const limit = parseInt(range.replace(/[^\d]/g, '') || '0') * (range.includes('triệu') ? 1000000 : 1000);
+          if (price < limit) return false;
+        } else if (range.includes('đến')) {
+          const parts = range.split('đến');
+          const min = parseInt(parts[0].replace(/[^\d]/g, '') || '0') * (parts[0].includes('triệu') ? 1000000 : 1000);
+          const max = parseInt(parts[1].replace(/[^\d]/g, '') || '0') * (parts[1].includes('triệu') ? 1000000 : 1000);
+          if (price < min || price > max) return false;
+        } else if (range.includes('Từ')) {
+            // Handle 'Từ 200-500k' format
+            const parts = range.replace('Từ ', '').replace(/k/g, '000').split('-');
+            const min = parseInt(parts[0]) || 0;
+            const max = parseInt(parts[1]) || Infinity;
+            if (price < min || price > max) return false;
+        }
       }
 
       return true;
@@ -127,64 +162,13 @@ const SearchPage = () => {
           
           {/* SIDEBAR: FILTERS */}
           <aside className="w-full lg:w-[320px] shrink-0">
-            <div className="sticky top-[130px] bg-white rounded-[24px] overflow-hidden shadow-sm border border-gray-100 divide-y divide-gray-100">
-                
-                {/* Brand Logos Section */}
-                <div>
-                    <div className="p-5 bg-gray-50/50 flex items-center justify-between">
-                        <h3 className="text-[14px] font-black text-gray-800 uppercase italic">Thương hiệu</h3>
-                    </div>
-                    <div className="p-4 grid grid-cols-2 gap-2">
-                        {[
-                            { name: 'Apple', logo: 'https://hoanghamobile.com/Content/web/img/brand-logo-apple.png' },
-                            { name: 'Samsung', logo: 'https://hoanghamobile.com/Content/web/img/brand-logo-samsung.png' },
-                            { name: 'Xiaomi', logo: 'https://hoanghamobile.com/Content/web/img/brand-logo-xiaomi.png' },
-                            { name: 'OPPO', logo: 'https://hoanghamobile.com/Content/web/img/brand-logo-oppo.png' },
-                            { name: 'Vivo', logo: 'https://hoanghamobile.com/Content/web/img/brand-logo-vivo.png' },
-                            { name: 'Realme', logo: 'https://hoanghamobile.com/Content/web/img/brand-logo-realme.png' },
-                            { name: 'Nokia', logo: 'https://hoanghamobile.com/Content/web/img/brand-logo-nokia.png' },
-                            { name: 'Asus', logo: 'https://hoanghamobile.com/Content/web/img/brand-logo-asus.png' }
-                        ].map((b) => (
-                            <button 
-                                key={b.name}
-                                onClick={() => setSingleFilter('brand', b.name)}
-                                className={`h-11 border-2 rounded-xl flex items-center justify-center p-2 transition-all group ${filters.brand === b.name ? 'border-[#008d71] bg-[#f0fcf9]' : 'border-gray-100 hover:border-gray-200 shadow-sm'}`}
-                            >
-                                <span className={`text-[12px] font-bold ${filters.brand === b.name ? 'text-[#008d71]' : 'text-gray-400 group-hover:text-gray-600'}`}>{b.name}</span>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Price Section */}
-                <div>
-                    <div className="p-5 bg-gray-50/50 flex items-center justify-between">
-                        <h3 className="text-[14px] font-black text-gray-800 uppercase italic">Mức giá</h3>
-                    </div>
-                    <div className="p-5 space-y-4">
-                        <div className="space-y-4">
-                            <input type="range" className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-[#008d71]" />
-                            <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100">
-                                <span className="text-[12px] font-bold text-gray-400">0</span>
-                                <span className="text-[12px] font-black text-[#008d71]">100,000,000đ</span>
-                            </div>
-                        </div>
-                        <button className="w-full bg-[#008d71] text-white py-2.5 rounded-xl text-[13px] font-bold uppercase shadow-lg shadow-[#008d71]/20 active:scale-95 transition-all">Áp dụng</button>
-                        <div className="grid grid-cols-1 gap-2 mt-4 pt-2">
-                            {['Dưới 5 triệu', 'Dưới 7 triệu', '1 đến 2 triệu', '1 đến 3 triệu'].map(r => (
-                                <button 
-                                    key={r}
-                                    onClick={() => setSingleFilter('priceRange', r)}
-                                    className={`py-2 px-4 rounded-lg text-[12px] font-bold transition-all text-left border ${filters.priceRange === r ? 'bg-[#008d71] text-white border-[#008d71]' : 'bg-white text-gray-600 border-gray-100 hover:bg-gray-50'}`}
-                                >
-                                    {r}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-            </div>
+            <FilterSidebar 
+              category="search"
+              filters={filters}
+              setFilters={setFilters}
+              onToggleFilter={toggleFilter}
+              onSetSingleFilter={setSingleFilter}
+            />
           </aside>
 
           {/* MAIN COLUMN: SORT & RESULTS */}

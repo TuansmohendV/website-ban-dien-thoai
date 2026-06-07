@@ -20,46 +20,48 @@ const FeaturedMonitorSlider = ({ products: externalProducts = [] }) => {
   const [index, setIndex] = useState(0);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const apiProducts = inflateProducts(externalProducts, 8, 'featured-monitor');
-  const products = apiProducts.map((item) => ({
+  const products = (apiProducts || []).map((item) => ({
     ...item,
-    img: item.image,
-    price: item.priceDisplay,
-    oldPrice: item.oldPriceNum
+    img: item?.image || item?.img || '',
+    price: item?.priceDisplay || (item?.priceNum ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.priceNum) : 'Liên hệ'),
+    oldPrice: item?.oldPriceNum
       ? new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.oldPriceNum)
       : '',
-    discount: `-${item.discount || '0%'}`,
+    discount: item?.discount ? `-${String(item.discount).replace(/^-+/, '')}` : '',
   }));
+
+  const maxIndex = products.length > 0 ? Math.ceil(products.length / 4) - 1 : 0;
+
+  useEffect(() => {
+    if (products.length === 0) return;
+    const timer = setInterval(() => {
+      setIndex(prev => (prev >= maxIndex ? 0 : prev + 1));
+    }, 4000);
+    return () => clearInterval(timer);
+  }, [maxIndex, products.length]);
 
   if (products.length === 0) {
     return null;
   }
 
-  const maxIndex = Math.ceil(products.length / 4) - 1;
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setIndex(prev => (prev >= maxIndex ? 0 : prev + 1));
-    }, 4000);
-    return () => clearInterval(timer);
-  }, [maxIndex]);
-
   return (
-    <div className="mb-10 rounded-3xl overflow-hidden bg-[#e0f2fe] border-4 border-white shadow-xl relative group">
-      {/* Header with Generated Image Background */}
-      <div className="relative h-[120px] sm:h-[150px] w-full flex items-center px-10 overflow-hidden">
-        <img
-          src="/banners/cat-samsung.png"
-          className="absolute inset-0 w-full h-full object-cover"
-          alt="Featured Background"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-white/40 to-transparent" />
+    <div className="mb-10 rounded-3xl overflow-hidden bg-white border border-gray-100 shadow-2xl relative group">
+      {/* Header with Premium Gradient */}
+      <div className="relative h-[100px] sm:h-[130px] w-full flex items-center px-6 sm:px-12 overflow-hidden bg-gradient-to-r from-[#0066cc] via-[#008d71] to-[#00c2a8]">
+        {/* Abstract decorative circles */}
+        <div className="absolute -right-10 -top-10 w-40 h-40 bg-white/10 rounded-full blur-3xl"></div>
+        <div className="absolute -left-10 -bottom-10 w-40 h-40 bg-black/10 rounded-full blur-3xl"></div>
 
-        <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between w-full">
-          <h2 className="text-[28px] sm:text-[40px] font-black text-[#0066cc] uppercase italic tracking-tighter drop-shadow-md">
-            SẢN PHẨM NỔI BẬT
-          </h2>
-          <button className="mt-4 sm:mt-0 px-6 py-2 bg-white text-[#008d71] rounded-full font-bold text-[14px] flex items-center gap-2 shadow-lg hover:scale-105 transition-transform border border-gray-100">
-            Xem thêm <ChevronRight size={18} />
+        <div className="relative z-10 flex flex-col sm:flex-row items-center justify-between w-full gap-4">
+          <div className="flex flex-col">
+            <h2 className="text-[22px] sm:text-[32px] font-black text-white uppercase italic tracking-tighter drop-shadow-lg leading-none">
+              SẢN PHẨM NỔI BẬT
+            </h2>
+            <div className="h-1 w-20 bg-white/50 rounded-full mt-2 hidden sm:block"></div>
+          </div>
+
+          <button className="px-6 py-2.5 bg-white/20 backdrop-blur-md text-white border border-white/30 rounded-full font-bold text-[13px] flex items-center gap-2 hover:bg-white hover:text-[#008d71] transition-all shadow-xl uppercase tracking-wider">
+            Khám phá ngay <ChevronRight size={18} />
           </button>
         </div>
       </div>
@@ -96,14 +98,17 @@ const FeaturedMonitorSlider = ({ products: externalProducts = [] }) => {
                   <span className="text-[12px] text-gray-400 line-through">{p.oldPrice}</span>
                   <span className="text-[12px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded-md">{p.discount}</span>
                 </div>
-                <button 
-                  onClick={() => setSelectedProduct({
-                    id: `p-${idx}`,
-                    name: p.name,
-                    image: p.img,
-                    priceNum: parseInt(p.price.replace(/[^\d]/g, '')),
-                    oldPriceNum: parseInt(p.oldPrice.replace(/[^\d]/g, ''))
-                  })}
+                <button
+                  onClick={() => {
+                    const priceVal = String(p.price || '0').replace(/[^\d]/g, '');
+                    const oldPriceVal = String(p.oldPrice || '0').replace(/[^\d]/g, '');
+                    setSelectedProduct({
+                      ...p,
+                      id: p.id || `p-${idx}`,
+                      priceNum: parseInt(priceVal) || 0,
+                      oldPriceNum: parseInt(oldPriceVal) || 0
+                    });
+                  }}
                   className="mt-4 w-full bg-[#008d71] text-white py-2 rounded-xl text-[12px] font-bold uppercase transition-all hover:bg-[#007b63] hover:shadow-lg active:scale-95"
                 >
                   MUA NGAY
@@ -114,7 +119,7 @@ const FeaturedMonitorSlider = ({ products: externalProducts = [] }) => {
         </div>
       </div>
 
-      <BuyNowModal 
+      <BuyNowModal
         product={selectedProduct}
         isOpen={!!selectedProduct}
         onClose={() => setSelectedProduct(null)}
@@ -135,43 +140,63 @@ const CategoryPage = () => {
   const categoryMetadata = {
     'dien-thoai': {
       title: 'Điện thoại',
+      backendCategories: ['Smartphone', 'Điện thoại', 'Dien thoai', 'Mobile', 'dien-thoai'],
       desc: 'Xu hướng điện thoại di động AI đang bùng nổ với những công nghệ vượt bậc như camera AI chụp ảnh thông minh, nhận diện khuôn mặt siêu tốc, trợ lý ảo cá nhân hóa... Trong đó, các hãng lớn như Apple, Samsung đã và đang cạnh tranh để biến smartphone trở thành "trợ lý" đắc lực trong cuộc sống hàng ngày.'
     },
     'laptop': {
       title: 'Laptop / Máy tính xách tay',
+      backendCategories: ['Laptop', 'Máy tính xách tay'],
       desc: 'Khám phá thế giới Laptop đỉnh cao từ MacBook, ASUS, Dell, HP đến các dòng Gaming mạnh mẽ. Dù bạn là sinh viên, nhân viên văn phòng hay game thủ chuyên nghiệp, PhoneSin luôn có lựa chọn hoàn hảo hỗ trợ học tập và làm việc hiệu quả nhất.'
     },
     'tablet': {
       title: 'Máy tính bảng / Tablet',
+      backendCategories: ['Tablet', 'Máy tính bảng'],
       desc: 'Sự kết hợp hoàn hảo giữa điện thoại và máy tính. iPad, Samsung Galaxy Tab và các dòng máy tính bảng Android mang đến trải nghiệm giải trí, đồ họa và ghi chú tuyệt vời với màn hình sắc nét và bút cảm ứng linh hoạt.'
     },
     'dong-ho': {
       title: 'Đồng hồ thông minh / Smartwatch',
+      backendCategories: ['Smartwatch', 'Đồng hồ'],
       desc: 'Theo dõi sức khỏe, nhịp tim, giấc ngủ và nhận thông báo tức thì với Apple Watch, Samsung Galaxy Watch, Garmin... Phụ kiện thời trang không thể thiếu cho lối sống hiện đại và năng động.'
     },
     'am-thanh': {
       title: 'Thiết bị Âm thanh',
+      backendCategories: ['Audio', 'Sound', 'Tai nghe', 'Loa'],
       desc: 'Tận hưởng âm nhạc đỉnh cao với các dòng tai nghe True Wireless, tai nghe chống ồn Sony, Marshall, Apple AirPods và loa Bluetooth công suất lớn. Mang cả rạp hát về không gian của bạn.'
-    },
-    'tivi-dien-may': {
-      title: 'Tivi / Thiết bị điện máy',
-      desc: 'Nâng tầm không gian sống với Smart TV 4K, OLED, QLED từ Samsung, LG, Sony, Coocaa. Hình ảnh sống động, âm thanh vòm đỉnh cao và kho ứng dụng giải trí không giới hạn.'
     },
     'man-hinh': {
       title: 'Màn hình máy tính',
+      backendCategories: ['Monitor', 'Màn hình'],
       desc: 'Màn hình đồ họa chuẩn màu, màn hình Gaming 144Hz, 240Hz sắc nét. Tăng cường hiệu suất làm việc và trải nghiệm giải trí với dải màu rộng và độ phân giải cao.'
     },
     'linh-kien-may-tinh': {
       title: 'Linh kiện máy tính',
+      backendCategories: ['Component', 'Linh kiện'],
       desc: 'Xây dựng cấu hình PC mơ ước với đầy đủ linh kiện từ CPU, VGA, RAM, Mainboard đến ổ cứng SSD tốc độ cao. PhoneSin cung cấp linh kiện chính hãng từ các thương hiệu hàng đầu thế giới với mức giá cạnh tranh nhất.'
     },
     'smart-home': {
       title: 'Thiết bị nhà thông minh (smart home)',
-      desc: 'Nhà thông minh (Smart Home) là ngôi nhà được trang bị hệ thống các thiết bị điện tử có khả năng kết nối Internet và được điều khiển tự động hoặc bán tự động từ xa thông qua smartphone, máy tính bảng hoặc giọng nói. Mục tiêu của Smart Home là tự động hóa các công việc thường ngày, giúp bạn tiết kiệm thời gian, tăng cường an ninh và tận hưởng một cuộc sống tiện nghi, hiện đại hơn.'
+      backendCategories: ['Smart Home'],
+      desc: 'Nhà thông minh (Smart Home) là ngôi nhà được trang bị hệ thống các thiết bị điện tử có khả năng kết nối Internet và được điều khiển tự động hoặc bán tự động từ xa thông qua smartphone, máy tính bảng hoặc giọng nói.'
+    },
+    'phu-kien': {
+      title: 'Phụ kiện',
+      backendCategories: ['Accessory', 'Phụ kiện'],
+      desc: 'Ốp lưng, bao da, cáp sạc, tai nghe và các phụ kiện chính hãng khác.'
     },
     'dich-vu': {
       title: 'Dịch vụ & Gói cước',
+      backendCategories: ['Service', 'Dịch vụ'],
       desc: 'Cung cấp các gói sim, thẻ cào, gói cước data tốc độ cao và các dịch vụ tiện ích khác dành cho điện thoại.'
+    },
+    'tivi-dien-may': {
+      title: 'TiVi, Điện máy',
+      backendCategories: ['TV', 'Tivi', 'TiVi', 'Điện máy', 'tivi-dien-may', 'Appliance', 'Gia dụng'],
+      desc: 'Nâng tầm không gian sống với các dòng Smart TV 4K, 8K đỉnh cao từ Samsung, Sony, LG. PhoneSin còn cung cấp các thiết bị điện máy gia dụng hiện đại như máy giặt, tủ lạnh, giúp cuộc sống của bạn tiện nghi và thông minh hơn.'
+    },
+    'tivi,-dien-may': {
+      title: 'TiVi, Điện máy',
+      backendCategories: ['TV', 'Tivi', 'TiVi', 'Điện máy', 'tivi-dien-may', 'Appliance', 'Gia dụng'],
+      desc: 'Nâng tầm không gian sống với các dòng Smart TV 4K, 8K đỉnh cao từ Samsung, Sony, LG. PhoneSin còn cung cấp các thiết bị điện máy gia dụng hiện đại như máy giặt, tủ lạnh, giúp cuộc sống của bạn tiện nghi và thông minh hơn.'
     }
   };
 
@@ -204,141 +229,206 @@ const CategoryPage = () => {
     refreshRate: null,
     camera: 'Tất cả',
     specialFeatures: 'Tất cả',
+    category: null,
     sortBy: 'highlight'
   });
 
   // 3. Phân trang
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 12; // 3 hàng x 4 cột
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const itemsPerPage = 12;
 
   // Reset page khi bộ lọc thay đổi
   useEffect(() => {
     setCurrentPage(1);
   }, [filters]);
 
-  // Cập nhật brand nếu slug thay đổi (chỉ khi là brand hợp lệ)
+  // Cập nhật brand nếu slug thay đổi
   useEffect(() => {
     const newBrand = slug && validBrands.includes(slug.toLowerCase()) ? slug.toLowerCase() : null;
     setFilters(prev => ({ ...prev, brand: newBrand }));
   }, [slug]);
+
+  const parsePriceRange = (range) => {
+    if (!range || range === 'Tất cả') return {};
+    const isTrieu = range.includes('triệu');
+    const multiplier = isTrieu ? 1000000 : 1000;
+
+    if (range.includes('Dưới')) {
+      const max = parseInt(range.replace(/[^\d]/g, '') || '0') * multiplier;
+      return { maxPrice: max - 1 };
+    }
+    if (range.includes('Trên')) {
+      const min = parseInt(range.replace(/[^\d]/g, '') || '0') * multiplier;
+      return { minPrice: min };
+    }
+    if (range.includes('đến')) {
+      const parts = range.split('đến');
+      const min = parseInt(parts[0].replace(/[^\d]/g, '') || '0') * multiplier;
+      const max = parseInt(parts[1].replace(/[^\d]/g, '') || '0') * multiplier;
+      return { minPrice: min, maxPrice: max };
+    }
+    if (range.includes('Từ')) {
+      const parts = range.replace('Từ ', '').replace(/k/g, '000').split('-');
+      return { minPrice: parseInt(parts[0]) || 0, maxPrice: parseInt(parts[1]) || undefined };
+    }
+    return {};
+  };
 
   useEffect(() => {
     let ignore = false;
 
     const loadProducts = async () => {
       try {
-        const response = await api.get('/api/products', {
-          params: { limit: 50 },
-        });
+        setIsLoading(true);
+        const params = { 
+          page: currentPage, 
+          limit: itemsPerPage,
+          sortBy: filters.sortBy 
+        };
 
-        if (!ignore) {
-          setBackendProducts((response.data?.data || []).map(normalizeProduct));
+        // 1. Brand context
+        if (filters.brand) {
+          params.brand = filters.brand;
+        } else if (slugBrand) {
+          params.brand = slugBrand;
         }
-      } catch (error) {
+
+        // 2. Category context
+        const selectedCat = filters.category || slug;
+        const meta = categoryMetadata[selectedCat];
+        if (meta && meta.backendCategories) {
+          params.category = meta.backendCategories.join(',');
+        } else if (selectedCat && !slugBrand) {
+           params.category = selectedCat;
+        }
+
+        // 3. Price range
+        const priceParams = parsePriceRange(filters.priceRange);
+        if (priceParams.minPrice) params.minPrice = priceParams.minPrice;
+        if (priceParams.maxPrice) params.maxPrice = priceParams.maxPrice;
+
+        // 4. Specs filters (Server-side)
+        if (filters.ram && filters.ram !== 'Tất cả') params.ram = filters.ram;
+        if (filters.rom && filters.rom !== 'Tất cả') params.rom = filters.rom;
+        if (filters.network && filters.network !== 'Tất cả') params.network = filters.network;
+        if (filters.nfc && filters.nfc !== 'Tất cả') params.nfc = filters.nfc;
+        if (filters.refreshRate && filters.refreshRate !== 'Tất cả') params.refreshRate = filters.refreshRate;
+        if (filters.screenSize && filters.screenSize !== 'Tất cả') params.screenSize = filters.screenSize;
+        if (filters.batteryTier && filters.batteryTier !== 'Tất cả') params.battery = filters.batteryTier;
+        if (filters.os && filters.os !== 'Tất cả') params.os = filters.os;
+        if (filters.camera && filters.camera !== 'Tất cả') params.camera = filters.camera;
+        if (filters.screenStandard && filters.screenStandard !== 'Tất cả') params.screenStandard = filters.screenStandard;
+        if (filters.memoryCard && filters.memoryCard !== 'Tất cả') params.memoryCard = filters.memoryCard;
+        if (filters.specialFeatures && filters.specialFeatures !== 'Tất cả') params.specialFeatures = filters.specialFeatures;
+        if (filters.storage && filters.storage !== 'Tất cả') params.storage = filters.storage;
+        if (filters.cpu && filters.cpu !== 'Tất cả') params.cpu = filters.cpu;
+        if (filters.gpu && filters.gpu !== 'Tất cả') params.gpu = filters.gpu;
+
+        const response = await api.get('/api/products', { params });
+        if (!ignore) {
+          const rawProducts = response.data?.data || [];
+          setBackendProducts(rawProducts.map(normalizeProduct));
+          setTotalPages(response.data?.pagination?.totalPages || 1);
+          setTotalItems(response.data?.pagination?.total || 0);
+        }
+      } catch (err) {
         if (!ignore) {
           setBackendProducts([]);
+          setTotalPages(1);
         }
+      } finally {
+        if (!ignore) setIsLoading(false);
       }
     };
 
     loadProducts();
+    return () => { ignore = true; };
+  }, [slug, filters, currentPage]);
 
-    return () => {
-      ignore = true;
-    };
-  }, []);
+  // Use products directly from backend (already filtered and paginated)
+  const filteredProducts = backendProducts;
 
-  // 4. Logic lọc và sắp xếp
-  const filteredProducts = useMemo(() => {
-    let result = backendProducts.filter(p => {
-      // 4.1 Filter by Category/Brand Slug
+
+  // 4.5 Dynamic Filter Counts
+  const filterCounts = useMemo(() => {
+    const counts = { brand: {}, priceRange: {}, ram: {}, rom: {}, cpu: {}, network: {}, refreshRate: {}, screenSize: {} };
+    const normalize = (val) => String(val || '').replace(/\s/g, '').toLowerCase();
+
+    // Pool products by current category context
+    const categoryPool = backendProducts.filter(p => {
       if (categoryMetadata[slug]) {
-        if (p.category !== slug) return false;
-      } else if (validBrands.includes(slug?.toLowerCase())) {
-        if ((p.brandKey || p.brand.toLowerCase()) !== slug.toLowerCase()) return false;
-      } else if (slug !== 'dien-thoai') {
-        // Fallback for unknown slugs or main entry points
-        if (p.category !== 'dien-thoai') return false; 
+        return p.category === slug ||
+          p.backendCategory?.toLowerCase() === categoryMetadata[slug].backendCategory?.toLowerCase();
       }
-
-      // 4.2 Filter by Sidebar Selections
-      if (filters.brand && (p.brandKey || p.brand.toLowerCase()) !== filters.brand.toLowerCase()) return false;
-
-      // 4.3 Price Range Filtering (Smart Parser)
-      if (filters.priceRange && filters.priceRange !== 'Tất cả') {
-        const price = p.priceNum;
-        const range = filters.priceRange;
-
-        if (range.startsWith('Dưới')) {
-          const limit = parseInt(range.replace(/[^\d]/g, '')) * (range.includes('triệu') ? 1000000 : 1000);
-          if (price >= limit) return false;
-        } else if (range.startsWith('Trên')) {
-          const limit = parseInt(range.replace(/[^\d]/g, '')) * (range.includes('triệu') ? 1000000 : 1000);
-          if (price < limit) return false;
-        } else if (range.includes('đến')) {
-          const parts = range.split('đến');
-          const min = parseInt(parts[0].replace(/[^\d]/g, '')) * (parts[0].includes('triệu') ? 1000000 : 1000);
-          const max = parseInt(parts[1].replace(/[^\d]/g, '')) * (parts[1].includes('triệu') ? 1000000 : 1000);
-          if (price < min || price >= max) return false;
-        } else if (range.includes('-')) { // For ranges like 0-200k
-          const parts = range.split('-');
-          const min = parseInt(parts[0].replace(/[^\d]/g, '')) * (parts[0].includes('k') ? 1000 : 1000000);
-          const max = parseInt(parts[1].replace(/[^\d]/g, '')) * (parts[1].includes('k') ? 1000 : 1000000);
-          if (price < min || price > max) return false;
-        }
-      }
-
-      // 4.4 Technical Specs Filtering
-      const normalize = (val) => String(val || '').replace(/\s/g, '').toLowerCase();
-
-      if (filters.ram && normalize(p.ram || p.specs?.ram) !== normalize(filters.ram)) return false;
-      if (filters.rom && normalize(p.rom || p.specs?.rom) !== normalize(filters.rom)) return false;
-      if (filters.network && normalize(p.network) !== normalize(filters.network)) return false;
-      if (filters.nfc && (p.nfc ? 'Có' : 'Không') !== filters.nfc) return false;
-      if (filters.refreshRate && normalize(p.refreshRate) !== normalize(filters.refreshRate)) return false;
-      if (filters.cpu && normalize(p.cpu || p.specs?.chip) !== normalize(filters.cpu)) return false;
-      
-      if (filters.availability && filters.availability !== 'Tất cả') {
-        if (filters.availability === 'Hàng mới' && p.isOld) return false;
-        if (filters.availability === 'Hàng cũ' && !p.isOld) return false;
-        if (filters.availability === 'Hàng sắp về' && !p.isComingSoon) return false;
-      }
-
-      if (filters.batteryTier && filters.batteryTier !== 'Tất cả') {
-        const b = p.batteryValue || 0;
-        if (filters.batteryTier === 'Dưới 4000mAh' && b >= 4000) return false;
-        if (filters.batteryTier === '4000mAh - 5000mAh' && (b < 4000 || b > 5000)) return false;
-        if (filters.batteryTier === 'Trên 5000mAh' && b <= 5000) return false;
-      }
-
+      if (slug && validBrands.includes(slug.toLowerCase())) return (p.brandKey || p.brand || '').toLowerCase() === slug.toLowerCase();
       return true;
     });
 
-    if (filters.sortBy === 'priceAsc' || filters.sortBy === 'price') {
-      result.sort((a, b) => a.priceNum - b.priceNum);
-    } else if (filters.sortBy === 'priceDesc') {
-      result.sort((a, b) => b.priceNum - a.priceNum);
-    } else if (filters.sortBy === 'newest') {
-      result.sort((a, b) => String(b.createdAt || b.id).localeCompare(String(a.createdAt || a.id)));
-    } else if (filters.sortBy === 'bestseller') {
-      result.sort((a, b) => (b.soldCount || 0) - (a.soldCount || 0));
-    }
+    categoryPool.forEach(p => {
+      // Brands
+      const b = p.brand;
+      if (b) counts.brand[b] = (counts.brand[b] || 0) + 1;
 
-    return result;
-  }, [backendProducts, filters, slug]);
+      // Specs
+      const ram = p.ram || p.specs?.ram;
+      if (ram) counts.ram[ram] = (counts.ram[ram] || 0) + 1;
+      const rom = p.rom || p.specs?.rom;
+      if (rom) counts.rom[rom] = (counts.rom[rom] || 0) + 1;
+      const cpu = p.cpu || p.specs?.chip;
+      if (cpu) counts.cpu[cpu] = (counts.cpu[cpu] || 0) + 1;
+      const rr = p.refreshRate || p.specs?.refreshRate;
+      if (rr) counts.refreshRate[rr] = (counts.refreshRate[rr] || 0) + 1;
 
-  // 5. Cắt sản phẩm cho trang hiện tại
-  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
-  const currentProducts = filteredProducts.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+      // Price Ranges
+      const price = p.priceNum || 0;
+      const config = categoryMetadata[slug] || { priceRanges: [] };
+      (config.priceRanges || []).forEach(range => {
+        const isTrieu = range.includes('triệu');
+        const M = isTrieu ? 1000000 : 1000;
+        let match = false;
+        if (range.includes('Dưới')) match = price < (parseInt(range.replace(/[^\d]/g, '')) * M);
+        else if (range.includes('Trên')) match = price >= (parseInt(range.replace(/[^\d]/g, '')) * M);
+        else if (range.includes('đến')) {
+          const pts = range.split('đến');
+          match = price >= (parseInt(pts[0].replace(/[^\d]/g, '')) * M) && price <= (parseInt(pts[1].replace(/[^\d]/g, '')) * M);
+        }
+        if (match) counts.priceRange[range] = (counts.priceRange[range] || 0) + 1;
+      });
+    });
+
+    return counts;
+  }, [backendProducts, slug]);
+
 
   const toggleFilter = (key, value) => {
     setFilters(prev => ({
       ...prev,
       [key]: prev[key] === value ? null : value
     }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      brand: null,
+      priceRange: 'Tất cả',
+      os: null,
+      ram: null,
+      rom: null,
+      batteryTier: 'Tất cả',
+      network: null,
+      nfc: false,
+      memoryCard: 'Tất cả',
+      screenSize: 'Tất cả',
+      screenStandard: null,
+      refreshRate: null,
+      camera: 'Tất cả',
+      specialFeatures: 'Tất cả',
+      category: null,
+      sortBy: 'highlight'
+    });
   };
 
   const setSingleFilter = (key, value) => {
@@ -348,7 +438,10 @@ const CategoryPage = () => {
     }));
   };
 
+  const currentProducts = filteredProducts;
+
   const [currentBanner, setCurrentBanner] = useState(0);
+
 
   const bannerMap = {
     'dich-vu': [
@@ -459,115 +552,180 @@ const CategoryPage = () => {
 
   return (
     <div className="bg-[#f0f2f5] min-h-screen pb-20 font-sans">
-        {/* Mobile Filter Toggle Button */}
-        <div className="lg:hidden sticky top-[128px] z-40 px-4 py-3 bg-[#f0f2f5]/80 backdrop-blur-md">
-          <button 
-            onClick={() => setShowMobileFilters(!showMobileFilters)}
-            className="w-full h-12 bg-white border border-gray-200 rounded-xl flex items-center justify-center gap-2 shadow-sm font-bold text-gray-700 active:scale-95 transition-all"
-          >
-            <Filter size={18} className="text-[#008d71]" />
-            Bộ lọc & Tìm kiếm
-            {Object.values(filters).filter(v => v !== null && v !== 'Tất cả' && v !== 'relate' && v !== false).length > 0 && (
-              <span className="ml-1 w-5 h-5 bg-[#008d71] text-white text-[11px] rounded-full flex items-center justify-center">
-                {Object.values(filters).filter(v => v !== null && v !== 'Tất cả' && v !== 'relate' && v !== false).length}
-              </span>
-            )}
-          </button>
+      {/* Mobile Filter Toggle Button */}
+      <div className="lg:hidden sticky top-[128px] z-40 px-4 py-3 bg-[#f0f2f5]/80 backdrop-blur-md">
+        <button
+          onClick={() => setShowMobileFilters(!showMobileFilters)}
+          className="w-full h-12 bg-white border border-gray-200 rounded-xl flex items-center justify-center gap-2 shadow-sm font-bold text-gray-700 active:scale-95 transition-all"
+        >
+          <Filter size={18} className="text-[#008d71]" />
+          Bộ lọc & Tìm kiếm
+          {Object.values(filters).filter(v => v !== null && v !== 'Tất cả' && v !== 'relate' && v !== false).length > 0 && (
+            <span className="ml-1 w-5 h-5 bg-[#008d71] text-white text-[11px] rounded-full flex items-center justify-center">
+              {Object.values(filters).filter(v => v !== null && v !== 'Tất cả' && v !== 'relate' && v !== false).length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      <div className="w-full max-w-[1920px] mx-auto flex flex-col lg:flex-row gap-6 pt-6 px-4 sm:px-6 relative items-start">
+
+        {/* LEFT POSTER - Hidden on most screens */}
+        <div className="hidden 2xl:block w-[185px] shrink-0 sticky top-[130px] h-[700px] rounded-2xl overflow-hidden shadow-2xl border border-white/50 group">
+          <img src="https://cdn.hoanghamobile.vn/Uploads/2026/03/19/sua-chua-thay-pin-man-hinh-iphone-02.jpg" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="Banner Trái" />
+          <div className="absolute inset-0 bg-black/5 group-hover:bg-transparent transition-colors"></div>
         </div>
 
-        <div className="w-full max-w-[1920px] mx-auto flex flex-col lg:flex-row gap-6 pt-6 px-4 sm:px-6 relative items-start">
-          
-          {/* LEFT POSTER - Hidden on most screens */}
-          <div className="hidden 2xl:block w-[185px] shrink-0 sticky top-[130px] h-[700px] rounded-2xl overflow-hidden shadow-2xl border border-white/50 group">
-            <img src="https://cdn.hoanghamobile.vn/Uploads/2026/03/19/sua-chua-thay-pin-man-hinh-iphone-02.jpg" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt="Banner Trái" />
-            <div className="absolute inset-0 bg-black/5 group-hover:bg-transparent transition-colors"></div>
+        <div className="flex-1 min-w-0 w-full">
+          <Breadcrumbs />
+
+          {/* 1. Category Hero Banner Slider */}
+          <div className="w-full h-[200px] md:h-[320px] rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl mb-8 mt-4 relative group border-4 border-white bg-white">
+            <div
+              className="flex transition-transform duration-700 cubic-bezier(0.4, 0, 0.2, 1) h-full"
+              style={{ transform: `translateX(-${currentBanner * 100}%)` }}
+            >
+              {categoryBanners.map((src, idx) => (
+                <div key={idx} className="w-full h-full shrink-0 flex items-center justify-center bg-white">
+                  <img
+                    src={src}
+                    className="w-full h-full object-contain transition-opacity duration-500"
+                    alt={`Banner ${idx + 1}`}
+                    loading="lazy"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+              {categoryBanners.map((_, idx) => (
+                <button key={idx} onClick={() => setCurrentBanner(idx)} className={`h-1.5 rounded-full transition-all duration-300 ${currentBanner === idx ? 'bg-[#008d71] w-8' : 'bg-gray-200 w-1.5'}`} />
+              ))}
+            </div>
           </div>
 
-          <div className="flex-1 min-w-0 w-full">
-            <Breadcrumbs />
-
-            {/* 1. Category Hero Banner Slider */}
-            <div className="w-full h-[200px] md:h-[320px] rounded-[24px] md:rounded-[32px] overflow-hidden shadow-2xl mb-8 mt-4 relative group border-4 border-white bg-white">
-              <div
-                className="flex transition-transform duration-700 cubic-bezier(0.4, 0, 0.2, 1) h-full"
-                style={{ transform: `translateX(-${currentBanner * 100}%)` }}
-              >
-                {categoryBanners.map((src, idx) => (
-                  <div key={idx} className="w-full h-full shrink-0 flex items-center justify-center bg-white">
-                    <img
-                      src={src}
-                      className="w-full h-full object-contain transition-opacity duration-500"
-                      alt={`Banner ${idx + 1}`}
-                      loading="lazy"
-                    />
-                  </div>
-                ))}
-              </div>
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
-                {categoryBanners.map((_, idx) => (
-                  <button key={idx} onClick={() => setCurrentBanner(idx)} className={`h-1.5 rounded-full transition-all duration-300 ${currentBanner === idx ? 'bg-[#008d71] w-8' : 'bg-gray-200 w-1.5'}`} />
-                ))}
-              </div>
-            </div>
-
-            <div className="flex flex-col lg:flex-row gap-8">
-              {/* 2. Sidebar Filters - Responsive Drawer for Mobile */}
-              <div className={`
+          <div className="flex flex-col lg:flex-row gap-8">
+            {/* 2. Sidebar Filters - Responsive Drawer for Mobile */}
+            <div className={`
                 ${showMobileFilters ? 'fixed inset-0 z-[100] p-4 bg-black/60 backdrop-blur-sm overflow-y-auto block' : 'hidden'} 
                 lg:relative lg:block lg:inset-auto lg:p-0 lg:bg-transparent lg:z-0 lg:w-[320px] shrink-0
               `}>
-                <div className="relative bg-white lg:bg-transparent rounded-3xl p-4 sm:p-6 lg:p-0 shadow-2xl lg:shadow-none min-h-screen lg:min-h-0">
-                  <div className="flex lg:hidden justify-between items-center mb-6">
-                    <h3 className="text-xl font-bold">Bộ lọc sản phẩm</h3>
-                    <button onClick={() => setShowMobileFilters(false)} className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">&times;</button>
-                  </div>
-                  <FilterSidebar
-                    category={slug}
-                    filters={filters}
-                    setFilters={setFilters}
-                    onToggleFilter={toggleFilter}
-                    onSetSingleFilter={setSingleFilter}
-                  />
-                  <div className="lg:hidden sticky bottom-0 pt-4 pb-2 bg-white mt-4 border-t border-gray-100">
-                    <button 
-                      onClick={() => setShowMobileFilters(false)}
-                      className="w-full h-14 bg-[#008d71] text-white rounded-xl font-bold shadow-lg shadow-[#008d71]/30 active:scale-95 transition-all"
-                    >
-                      ÁP DỤNG BỘ LỌC
-                    </button>
-                  </div>
+              <div className="relative bg-white lg:bg-transparent rounded-3xl p-4 sm:p-6 lg:p-0 shadow-2xl lg:shadow-none min-h-screen lg:min-h-0">
+                <div className="flex lg:hidden justify-between items-center mb-6">
+                  <h3 className="text-xl font-bold">Bộ lọc sản phẩm</h3>
+                  <button onClick={() => setShowMobileFilters(false)} className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center text-gray-500">&times;</button>
+                </div>
+                <FilterSidebar
+                  category={slug}
+                  filters={filters}
+                  setFilters={setFilters}
+                  onToggleFilter={toggleFilter}
+                  onSetSingleFilter={setSingleFilter}
+                  counts={filterCounts}
+                />
+                <div className="lg:hidden sticky bottom-0 pt-4 pb-2 bg-white mt-4 border-t border-gray-100">
+                  <button
+                    onClick={() => setShowMobileFilters(false)}
+                    className="w-full h-14 bg-[#008d71] text-white rounded-xl font-bold shadow-lg shadow-[#008d71]/30 active:scale-95 transition-all"
+                  >
+                    ÁP DỤNG BỘ LỌC
+                  </button>
                 </div>
               </div>
+            </div>
 
-              {/* 3. Product Area */}
-              <div className="flex-1 w-full overflow-hidden">
-                {/* Sort Bar */}
-                  <div className="bg-white/60 backdrop-blur-md rounded-2xl p-3 flex flex-wrap items-center gap-3 mb-6 shadow-sm border border-white/40">
+            {/* 3. Product Area */}
+            <div className="flex-1 w-full overflow-hidden">
+              {/* Quick Filter Pills (Modern E-commerce style) */}
+              <div className="flex flex-wrap gap-2 mb-6 pb-2 overflow-x-auto no-scrollbar">
+                <span className="text-[13px] font-bold text-gray-400 self-center mr-2 uppercase tracking-tighter">Lọc nhanh:</span>
+                {[
+                  { label: 'Dưới 2 triệu', key: 'priceRange', value: 'Dưới 2 triệu' },
+                  { label: '2 - 5 triệu', key: 'priceRange', value: '2 đến 5 triệu' },
+                  { label: '5 - 10 triệu', key: 'priceRange', value: '5 đến 10 triệu' },
+                  { label: '10 - 20 triệu', key: 'priceRange', value: '10 đến 20 triệu' },
+                  { label: 'Apple', key: 'brand', value: 'Apple' },
+                  { label: 'Samsung', key: 'brand', value: 'Samsung' },
+                  { label: 'Xiaomi', key: 'brand', value: 'Xiaomi' }
+                ].map((pill, i) => (
+                  <button
+                    key={i}
+                    onClick={() => toggleFilter(pill.key, pill.value)}
+                    className={`px-4 py-2 rounded-full text-[13px] font-bold transition-all whitespace-nowrap border ${
+                      filters[pill.key] === pill.value 
+                        ? 'bg-[#008d71] text-white border-[#008d71] shadow-md' 
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-[#008d71] hover:text-[#008d71]'
+                    }`}
+                  >
+                    {pill.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Active Filter Chips */}
+              {Object.entries(filters).some(([k, v]) => v !== null && v !== 'Tất cả' && k !== 'sortBy' && v !== false) && (
+                <div className="flex flex-wrap items-center gap-2 mb-6 p-4 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                  <span className="text-[13px] font-bold text-gray-400 mr-2 uppercase tracking-tighter">Đang chọn:</span>
+                  {Object.entries(filters).map(([key, value]) => {
+                    if (value === null || value === 'Tất cả' || key === 'sortBy' || value === false) return null;
+                    return (
+                      <div key={key} className="flex items-center gap-2 bg-[#008d71]/10 text-[#008d71] px-3 py-1.5 rounded-full text-[13px] font-bold border border-[#008d71]/20 group">
+                        <span>{String(value)}</span>
+                        <button 
+                          onClick={() => toggleFilter(key, value)}
+                          className="w-4 h-4 rounded-full bg-[#008d71] text-white flex items-center justify-center text-[10px] hover:bg-red-500 transition-colors"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
+                  <button 
+                    onClick={clearFilters}
+                    className="text-[12px] font-bold text-red-500 hover:underline ml-2"
+                  >
+                    Xóa tất cả
+                  </button>
+                </div>
+              )}
+
+              {/* Sort Bar */}
+              <div className="bg-white/60 backdrop-blur-md rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 mb-6 shadow-sm border border-white/40">
+                <div className="flex items-center gap-3">
                   <span className="text-[14px] text-gray-500 ml-2 font-medium">Sắp xếp:</span>
-                  <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                  <div className="flex flex-wrap gap-2">
                     {[
                       { id: 'relate', label: 'Liên quan' },
                       { id: 'newest', label: 'Mới nhất' },
                       { id: 'bestseller', label: 'Bán chạy' },
-                    { id: 'price', label: 'Giá tiền', icon: <ChevronsUpDown size={14} className="ml-2" /> }
-                  ].map(opt => (
-                    <button
-                      key={opt.id}
-                      onClick={() => setFilters(f => ({ ...f, sortBy: opt.id }))}
-                      className={`flex-1 sm:flex-none px-4 sm:px-8 py-2.5 bg-white border border-gray-200 rounded-lg text-[14px] flex items-center justify-center transition-all min-w-[120px] sm:min-w-[130px] shadow-sm ${filters.sortBy === opt.id
-                        ? 'text-[#008d71] font-bold border-[#008d71]'
-                        : 'text-gray-800 hover:border-[#008d71] active:bg-gray-50'
-                        }`}
-                    >
-                      {opt.label}
-                      {opt.icon}
-                    </button>
-                  ))}
+                      { id: 'price', label: 'Giá tiền', icon: <ChevronsUpDown size={14} className="ml-2" /> }
+                    ].map(opt => (
+                      <button
+                        key={opt.id}
+                        onClick={() => setFilters(f => ({ ...f, sortBy: opt.id }))}
+                        className={`px-4 sm:px-6 py-2 bg-white border border-gray-200 rounded-lg text-[13px] flex items-center justify-center transition-all shadow-sm ${filters.sortBy === opt.id
+                          ? 'text-[#008d71] font-bold border-[#008d71]'
+                          : 'text-gray-800 hover:border-[#008d71]'
+                          }`}
+                      >
+                        {opt.label}
+                        {opt.icon}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {Object.values(filters).some(v => v !== null && v !== 'Tất cả' && v !== 'relate' && v !== false) && (
+                  <button
+                    onClick={clearFilters}
+                    className="text-[12px] font-bold text-red-500 hover:text-red-600 bg-red-50 px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5"
+                  >
+                    <Filter size={14} /> XÓA BỘ LỌC
+                  </button>
+                )}
               </div>
 
               <div className="mb-4">
-                <RecommendedProducts />
+                <RecommendedProducts category={slug} />
               </div>
 
               {/* Category Discovery (Laptop specific) */}
@@ -637,15 +795,49 @@ const CategoryPage = () => {
               </div>
 
               {/* FEATURED PRODUCTS (SẢN PHẨM NỔI BẬT - Slider Version) */}
-              {slug === 'man-hinh' && (
-                <FeaturedMonitorSlider products={currentProducts.length > 0 ? currentProducts : backendProducts} />
+              {slug === 'man-hinh' && currentProducts.length > 0 && (
+                <FeaturedMonitorSlider products={currentProducts} />
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {currentProducts.map((p) => (
-                  <ProductCard key={p.id} product={p} />
-                ))}
-              </div>
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 bg-white/40 backdrop-blur-sm rounded-3xl border border-white/60 shadow-inner min-h-[400px]">
+                  <div className="w-16 h-16 border-4 border-[#008d71]/20 border-t-[#008d71] rounded-full animate-spin mb-6"></div>
+                  <p className="text-[#008d71] font-black uppercase tracking-[0.2em] animate-pulse">Đang tải sản phẩm...</p>
+                </div>
+              ) : currentProducts.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {currentProducts.map((p) => (
+                    <ProductCard key={p.id} product={p} />
+                  ))}
+                </div>
+              ) : (
+
+                <div className="flex flex-col items-center py-10">
+                  <div className="bg-white p-10 rounded-3xl shadow-sm border border-gray-100 flex flex-col items-center text-center w-full max-w-2xl">
+                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
+                      <Filter size={28} className="text-gray-300" />
+                    </div>
+                    <h3 className="text-xl font-black text-gray-800 mb-2">Hic! Không tìm thấy sản phẩm phù hợp</h3>
+                    <p className="text-gray-500 text-sm">Tuy nhiên, bạn có thể tham khảo các mẫu điện thoại đang cực "Hot" dưới đây:</p>
+                  </div>
+
+                  {/* Suggestions when empty */}
+                  {backendProducts.length > 0 && (
+                    <div className="mt-12 w-full">
+                      <div className="flex items-center gap-3 mb-8 justify-center">
+                        <div className="h-px w-10 bg-gray-200"></div>
+                        <h2 className="text-xs font-black text-gray-400 tracking-[0.2em] uppercase text-center">GỢI Ý CHO BẠN</h2>
+                        <div className="h-px w-10 bg-gray-200"></div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                        {backendProducts.slice(0, 4).map((p) => (
+                          <ProductCard key={p.id} product={p} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Pagination */}
               <div className="mt-10 flex justify-center">

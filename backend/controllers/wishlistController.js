@@ -17,12 +17,16 @@ export const addWishlistItem = asyncHandler(async (req, res, next) => {
     return next(new AppError('Không tìm thấy sản phẩm', 404));
   }
 
-  let wishlistItem = await Wishlist.findOne({ userId, productId });
+  let wishlistItem = await Wishlist.findOne({ userId, productId, isDeleted: { $ne: true } });
   if (wishlistItem) {
     return next(new AppError('Sản phẩm đã có trong danh sách yêu thích', 409));
   }
 
-  wishlistItem = await Wishlist.create({ userId, productId });
+  wishlistItem = await Wishlist.findOneAndUpdate(
+    { userId, productId },
+    { $set: { userId, productId, isDeleted: false }, $unset: { deletedAt: '' } },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
 
   res.status(201).json({
     status: 'success',
@@ -37,13 +41,13 @@ export const getWishlist = asyncHandler(async (req, res) => {
   const userId = req.user._id;
   const skip = (page - 1) * limit;
 
-  const items = await Wishlist.find({ userId })
+  const items = await Wishlist.find({ userId, isDeleted: { $ne: true } })
     .populate('productId', 'name image price rating')
     .limit(limit * 1)
     .skip(skip)
     .sort({ createdAt: -1 });
 
-  const total = await Wishlist.countDocuments({ userId });
+  const total = await Wishlist.countDocuments({ userId, isDeleted: { $ne: true } });
 
   res.json({
     status: 'success',
@@ -55,7 +59,7 @@ export const getWishlist = asyncHandler(async (req, res) => {
 // Get wishlist count
 export const getWishlistCount = asyncHandler(async (req, res) => {
   const userId = req.user._id;
-  const count = await Wishlist.countDocuments({ userId });
+  const count = await Wishlist.countDocuments({ userId, isDeleted: { $ne: true } });
 
   res.json({
     status: 'success',
@@ -68,7 +72,11 @@ export const removeWishlistItem = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
   const userId = req.user._id;
 
-  const item = await Wishlist.findOneAndDelete({ _id: id, userId });
+  const item = await Wishlist.findOneAndUpdate(
+    { _id: id, userId, isDeleted: { $ne: true } },
+    { $set: { isDeleted: true, deletedAt: new Date() } },
+    { new: true }
+  );
 
   if (!item) {
     return next(new AppError('Không tìm thấy item trong danh sách yêu thích', 404));
